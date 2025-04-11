@@ -6306,7 +6306,7 @@ tchk_builtin_ty_spec(struct typechk *tchk,
     TODO("");
     break;
   case BUILTIN_TYPE_SPEC_TY_VA_LIST:
-    return *tchk->target->tys.va_list_var_ty;
+    return *tchk->target->variadic_info.va_list_var_ty;
   case BUILTIN_TYPE_SPEC_TY_TD_VAR_TY:
     return *ty_spec->td_var_ty;
   }
@@ -6372,7 +6372,7 @@ typechk_create(const struct target *target, const struct compile_args *args,
                        .span = MK_INVALID_TEXT_SPAN2()});
 
   entry->var_ty = arena_alloc_init(t->arena, sizeof(*entry->var_ty),
-                                   target->tys.va_list_var_ty);
+                                   target->variadic_info.va_list_var_ty);
 
 #define BUILTIN_TY(...)
 #define BUILTIN_FN(name, ...)                                                  \

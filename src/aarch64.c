@@ -25,7 +25,8 @@ const struct target AARCH64_MACOS_TARGET = {
     TARGET_LP_SZ_LP64,
     // x0..x30 excluding x18
     {
-        .va_list_var_ty = &TD_VAR_TY_VOID_POINTER
+        .va_list_var_ty = &TD_VAR_TY_VOID_POINTER,
+        .flags = TARGET_VARIADIC_INFO_FLAG_NONE
     },
     {
         .ssp = 9,
@@ -66,7 +67,8 @@ const struct target AARCH64_LINUX_TARGET = {
     // x0..x30 excluding x18
     {
         // TODO:
-        .va_list_var_ty = &TD_VAR_TY_UNKNOWN
+        .va_list_var_ty = &TD_VAR_TY_UNKNOWN,
+        .flags = TARGET_VARIADIC_INFO_FLAG_VA_LIST_BYREF
     },
     {
         .ssp = 9,

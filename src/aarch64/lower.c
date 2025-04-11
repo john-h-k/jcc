@@ -219,7 +219,7 @@ static void try_contain_binary_op(struct ir_func *func, struct ir_op *op) {
   if (supports_lhs_contained &&
       (lhs->ty == IR_OP_TY_CNST &&
        (ir_var_ty_is_integral(&lhs->var_ty) ||
-        (ir_var_ty_is_fp(&lhs->var_ty) && lhs->cnst.flt_value == 0.0)) &&
+        (ir_var_ty_is_fp(&lhs->var_ty) && lhs->cnst.flt_value == 0.0l)) &&
        fits_in_alu_imm(lhs->cnst.int_value))) {
     if (ir_binary_op_is_comparison(op->binary_op.ty)) {
       // flip operands and operation
@@ -233,7 +233,7 @@ static void try_contain_binary_op(struct ir_func *func, struct ir_op *op) {
   } else if (supports_rhs_contained &&
              (rhs->ty == IR_OP_TY_CNST &&
               (ir_var_ty_is_integral(&rhs->var_ty) ||
-               (ir_var_ty_is_fp(&rhs->var_ty) && rhs->cnst.flt_value == 0.0)) &&
+               (ir_var_ty_is_fp(&rhs->var_ty) && rhs->cnst.flt_value == 0.0l)) &&
               fits_in_alu_imm(rhs->cnst.int_value))) {
     op->binary_op.rhs = ir_alloc_contained_op(func, rhs, op);
   }

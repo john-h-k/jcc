@@ -1674,6 +1674,23 @@ static struct ir_op *build_ir_for_call(struct ir_func_builder *irb,
       struct ir_op *lhs_addr = build_ir_for_addressof(irb, stmt, lhs);
       struct ir_op *rhs_op = build_ir_for_expr(irb, stmt, rhs);
 
+      if (irb->unit->target->variadic_info.flags &
+          TARGET_VARIADIC_INFO_FLAG_VA_LIST_BYREF) {
+        struct td_var_ty td_load_ty =
+            td_var_ty_get_underlying(irb->tchk, &rhs->var_ty);
+        struct ir_var_ty load_ty =
+            ir_var_ty_for_td_var_ty(irb->unit, &td_load_ty);
+
+        struct ir_op *load =
+            ir_append_op(irb->func, *stmt, IR_OP_TY_LOAD, load_ty);
+        load->load = (struct ir_op_load){
+          .ty = IR_OP_LOAD_TY_ADDR,
+          .addr = rhs_op
+        };
+
+        rhs_op = load;
+      }
+
       struct ir_op *store =
           ir_append_op(irb->func, *stmt, IR_OP_TY_STORE, IR_VAR_TY_NONE);
       store->store = (struct ir_op_store){
@@ -2279,10 +2296,7 @@ static struct ir_op *build_ir_for_va_arg(struct ir_func_builder *irb,
   struct ir_var_ty var_ty = ir_var_ty_for_td_var_ty(irb->unit, &va_arg->var_ty);
 
   struct ir_op *op = ir_append_op(irb->func, *stmt, IR_OP_TY_VA_ARG, var_ty);
-  op->va_arg = (struct ir_op_va_arg){
-    .arg_ty = var_ty,
-    .list_addr = list_addr
-  };
+  op->va_arg = (struct ir_op_va_arg){.arg_ty = var_ty, .list_addr = list_addr};
 
   return op;
 }

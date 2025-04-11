@@ -620,6 +620,211 @@ static void lower_fp_cnst(struct ir_func *func, struct ir_op *op) {
   op->mov = (struct ir_op_mov){.value = int_mov};
 }
 
+// FIXME: use RAX value to only save required XMM registers + more registers for
+// APX
+#define REG_SAVE_SIZE (6 * 8 + 8 * 16)
+#define REG_SAVE_FP_OFFSET (6 * 8)
+
+static struct ir_lcl *lower_va_args(struct ir_func *func) {
+  DEBUG_ASSERT(REG_SAVE_SIZE % 8 == 0, "because we use type I64 for alignment, "
+                                       "REG_SAVE_SIZE must be divisible by 8");
+  size_t save_sz = REG_SAVE_SIZE / 8;
+
+  struct ir_var_ty *el_ty =
+      arena_alloc_init(func->arena, sizeof(*el_ty), &IR_VAR_TY_I64);
+  struct ir_var_ty save_ty = {.ty = IR_VAR_TY_TY_ARRAY,
+                              .array = {
+                                  // TODO: make constant ptr
+                                  .underlying = el_ty,
+                                  .num_elements = save_sz,
+                              }};
+
+  struct ir_lcl *lcl = ir_add_local(func, &save_ty);
+
+  struct ir_op *base = ir_insert_after_op(func, func->first->first->last,
+                                           IR_OP_TY_ADDR, IR_VAR_TY_POINTER);
+  base->addr = (struct ir_op_addr){.ty = IR_OP_ADDR_TY_LCL, .lcl = lcl};
+
+  struct ir_op *last = base;
+
+  // need to save all the registers in args
+  for (size_t i = 0; i < 6; i++) {
+    struct ir_op *addr;
+
+    if (i) {
+      addr =
+          ir_insert_after_op(func, last, IR_OP_TY_ADDR_OFFSET, IR_VAR_TY_POINTER);
+      addr->addr_offset =
+          (struct ir_op_addr_offset){.base = base, .offset = i * 8};
+    } else {
+      addr = base;
+    }
+
+    struct ir_op *value =
+          ir_insert_after_op(func, addr, IR_OP_TY_MOV, IR_VAR_TY_I64);
+    value->flags |= IR_OP_FLAG_PARAM | IR_OP_FLAG_FIXED_REG;
+    value->mov = (struct ir_op_mov){
+      .value = NULL
+    };
+    value->reg = (struct ir_reg){.ty = IR_REG_TY_INTEGRAL, .idx = i};
+
+    struct ir_op *save =
+          ir_insert_after_op(func, value, IR_OP_TY_STORE, IR_VAR_TY_NONE);
+    save->store = (struct ir_op_store){.ty = IR_OP_STORE_TY_ADDR, .addr = addr, .value = value};
+
+    last = save;
+  }
+
+  for (size_t i = 0; i < 8; i++) {
+    // TODO: save vector
+
+    struct ir_op *addr =
+        ir_insert_after_op(func, last, IR_OP_TY_ADDR_OFFSET, IR_VAR_TY_POINTER);
+    addr->addr_offset =
+        (struct ir_op_addr_offset){.base = base, .offset = REG_SAVE_FP_OFFSET + i * 16};
+
+    struct ir_op *value =
+          ir_insert_after_op(func, addr, IR_OP_TY_MOV, IR_VAR_TY_F64);
+    value->flags |= IR_OP_FLAG_PARAM | IR_OP_FLAG_FIXED_REG;
+    value->mov = (struct ir_op_mov){
+      .value = NULL
+    };
+    value->reg = (struct ir_reg){.ty = IR_REG_TY_FP, .idx = i};
+
+    struct ir_op *save =
+          ir_insert_after_op(func, value, IR_OP_TY_STORE, IR_VAR_TY_NONE);
+    save->store = (struct ir_op_store){.ty = IR_OP_STORE_TY_ADDR, .addr = addr, .value = value};
+
+    last = save;
+  }
+
+  return lcl;
+}
+
+static void lower_va_start(struct ir_func *func, struct ir_lcl *save_lcl,
+                           struct ir_op *op) {
+  // The va_start macro initializes the structure as follows:
+  //
+  //   * gp_offset
+  //     - The element holds the offset in bytes from reg_save_area to the place
+  //     where the next available general purpose argument register is saved. In
+  //     case all argument registers have been exhausted, it is set to the value
+  //     48 (6 * 8).
+  //
+  //   * fp_offset
+  //     - The element holds the offset in bytes from reg_save_area to the place
+  //     where the next available floating point argument register is saved. In
+  //     case all argument registers have been exhausted, it is set to the value
+  //     304 (6 * 8 + 16 * 16)
+  //
+  //   * reg_save_area
+  //     - The element points to the start of the register save area.
+  //
+  //   * overflow_arg_area
+  //     - This pointer is used to fetch arguments passed on the stack. It is
+  //     initialized with the address of the first argument passed on the stack,
+  //     if any, and then always updated to point to the start of the next
+  //     argument on the stack.
+
+  DEBUG_ASSERT(save_lcl, "expected save_lcl to exist (maybe "
+                         "IR_FUNC_FLAG_USES_VA_ARGS was not set correctly)");
+
+  struct ir_lcl *stack_base = ir_add_local(func, &IR_VAR_TY_POINTER);
+  stack_base->alloc_ty = IR_LCL_ALLOC_TY_FIXED;
+  stack_base->alloc = (struct ir_lcl_alloc){.offset = 0};
+
+  stack_base->flags |= IR_LCL_FLAG_PARAM;
+
+  struct ir_op *addr = op->va_start.list_addr;
+
+  struct ir_op *sp = ir_replace_op(func, op, IR_OP_TY_ADDR, IR_VAR_TY_POINTER);
+  sp->addr = (struct ir_op_addr){.ty = IR_OP_ADDR_TY_LCL, .lcl = stack_base};
+
+  struct ir_op *last = NULL;
+  {
+    // list->gp_offset = 0
+
+    struct ir_op *zero =
+        ir_insert_after_op(func, sp, IR_OP_TY_CNST, IR_VAR_TY_I32);
+    ir_mk_integral_constant(func->unit, zero,
+                            IR_VAR_PRIMITIVE_TY_I32,8);
+    // ir_mk_zero_constant(func->unit, zero, &IR_VAR_TY_I32);
+
+    struct ir_op *store_gp_offset =
+        ir_insert_after_op(func, zero, IR_OP_TY_STORE, IR_VAR_TY_NONE);
+    store_gp_offset->store = (struct ir_op_store){
+        .ty = IR_OP_STORE_TY_ADDR, .addr = addr, .value = zero};
+
+    last = store_gp_offset;
+  }
+
+  {
+    // list->fp_offset = REG_SAVE_FP_OFFSET
+
+    struct ir_op *fp_offset_value =
+        ir_insert_after_op(func, sp, IR_OP_TY_CNST, IR_VAR_TY_I32);
+    ir_mk_integral_constant(func->unit, fp_offset_value,
+                            IR_VAR_PRIMITIVE_TY_I32, REG_SAVE_FP_OFFSET);
+
+    struct ir_op *addr_fp_offset =
+        ir_insert_after_op(func, last, IR_OP_TY_ADDR_OFFSET, IR_VAR_TY_POINTER);
+    addr_fp_offset->addr_offset =
+        (struct ir_op_addr_offset){.base = addr, .offset = 4};
+
+    struct ir_op *store_fp_offset = ir_insert_after_op(
+        func, addr_fp_offset, IR_OP_TY_STORE, IR_VAR_TY_NONE);
+    store_fp_offset->store = (struct ir_op_store){.ty = IR_OP_STORE_TY_ADDR,
+                                                  .addr = addr_fp_offset,
+                                                  .value = fp_offset_value};
+
+    last = store_fp_offset;
+  }
+
+  {
+    // list->overflow_arg_area = fp
+
+    struct ir_op *overflow_arg_addr =
+        ir_insert_after_op(func, last, IR_OP_TY_ADDR_OFFSET, IR_VAR_TY_POINTER);
+    overflow_arg_addr->addr_offset =
+        (struct ir_op_addr_offset){.base = addr, .offset = 8};
+
+    struct ir_op *store_overflow_arg = ir_insert_after_op(
+        func, overflow_arg_addr, IR_OP_TY_STORE, IR_VAR_TY_NONE);
+    store_overflow_arg->store = (struct ir_op_store){
+        .ty = IR_OP_STORE_TY_ADDR, .addr = overflow_arg_addr, .value = sp};
+
+    last = store_overflow_arg;
+  }
+
+  {
+    // list->reg_save_area = fp - reg_save_size
+
+    struct ir_op *reg_save_value =
+        ir_insert_after_op(func, last, IR_OP_TY_ADDR, IR_VAR_TY_POINTER);
+    reg_save_value->addr =
+        (struct ir_op_addr){.ty = IR_OP_ADDR_TY_LCL, .lcl = save_lcl};
+
+    // TODO: having addr_offset support negative values would be useful here
+
+    struct ir_op *reg_save_addr = ir_insert_after_op(
+        func, reg_save_value, IR_OP_TY_ADDR_OFFSET, IR_VAR_TY_POINTER);
+    reg_save_addr->addr_offset =
+        (struct ir_op_addr_offset){.base = addr, .offset = 16};
+
+    struct ir_op *store_reg_save =
+        ir_insert_after_op(func, reg_save_addr, IR_OP_TY_STORE, IR_VAR_TY_NONE);
+    store_reg_save->store = (struct ir_op_store){.ty = IR_OP_STORE_TY_ADDR,
+                                                 .addr = reg_save_addr,
+                                                 .value = reg_save_value};
+
+    last = store_reg_save;
+  }
+}
+
+static void lower_va_arg(UNUSED struct ir_func *func, UNUSED struct ir_op *op) {
+  TODO("x64 va_arg");
+}
+
 void x64_lower(struct ir_unit *unit) {
   struct ir_glb *glb = unit->first_global;
   while (glb) {
@@ -633,6 +838,11 @@ void x64_lower(struct ir_unit *unit) {
       break;
     case IR_GLB_TY_FUNC: {
       struct ir_func *func = glb->func;
+
+      struct ir_lcl *save_lcl = NULL;
+      if (func->flags & IR_FUNC_FLAG_USES_VA_ARGS) {
+        save_lcl = lower_va_args(func);
+      }
 
       struct ir_basicblock *basicblock = func->first;
       while (basicblock) {
@@ -648,6 +858,12 @@ void x64_lower(struct ir_unit *unit) {
             case IR_OP_TY_UNDF:
             case IR_OP_TY_PHI:
             case IR_OP_TY_RET:
+              break;
+            case IR_OP_TY_VA_START:
+              lower_va_start(func, save_lcl, op);
+              break;
+            case IR_OP_TY_VA_ARG:
+              lower_va_arg(func, op);
               break;
             case IR_OP_TY_CNST: {
               if (op->cnst.ty == IR_OP_CNST_TY_FLT) {

@@ -38,7 +38,7 @@ Working with RISC-V requires installing a RISC-V linker.
 
 #### Things that don't work yet
 
-1. `va_list` and variadic function implementation. Calling them works fine
+1. `va_arg` outside of macOS arm64 and `va_list` on linux arm64
 2. Atomics
 3. Linking on musl-based distros. This is relatively simple and should work soon
 4. Digraphs (plan to add) and trigraphs (plan to add but only with an explicit argument, as with most compilers)

@@ -1,6 +1,6 @@
 #include "x64.h"
 
-#include "ir/ir.h"
+#include "disasm.h"
 #include "linux/elf.h"
 #include "linux/link.h"
 #include "macos/link.h"
@@ -8,6 +8,7 @@
 #include "target.h"
 #include "typechk.h"
 #include "x64/codegen.h"
+#include "x64/emit.h"
 #include "x64/lower.h"
 
 #if !defined(JCC_ALL) && !defined(JCC_X64)
@@ -17,12 +18,54 @@ const struct target X64_LINUX_TARGET = {.target_id = TARGET_ID_NOT_SUPPORTED};
 
 #else
 
+const static struct td_var_ty X64_VA_LIST_TAG_TY = {
+    .ty = TD_VAR_TY_TY_AGGREGATE,
+    .aggregate = {
+        .ty = TD_TY_AGGREGATE_TY_STRUCT,
+        .name = MK_USTR(""),
+        .num_fields = 4,
+        .fields =
+            (struct td_struct_field[4]){
+                [0] =
+                    {
+                        .identifier = MK_USTR("gp_offset"),
+                        .var_ty = {.ty = TD_VAR_TY_TY_WELL_KNOWN,
+                                   .well_known = WELL_KNOWN_TY_UNSIGNED_INT},
+                    },
+                [1] =
+                    {
+                        .identifier = MK_USTR("fp_offset"),
+                        .var_ty = {.ty = TD_VAR_TY_TY_WELL_KNOWN,
+                                   .well_known = WELL_KNOWN_TY_UNSIGNED_INT},
+                    },
+                [2] =
+                    {
+                        .identifier = MK_USTR("overflow_arg_area"),
+                        .var_ty = {.ty = TD_VAR_TY_TY_POINTER,
+                                   .pointer = {.underlying = &TD_VAR_TY_VOID}},
+                    },
+                [3] =
+                    {
+                        .identifier = MK_USTR("reg_save_area"),
+                        .var_ty = {.ty = TD_VAR_TY_TY_POINTER,
+                                   .pointer = {.underlying = &TD_VAR_TY_VOID}},
+                    },
+
+            }}};
+
+const static struct td_var_ty X64_VA_LIST_TY = {
+    .ty = TD_VAR_TY_TY_ARRAY,
+    .array = {
+        .size = 1,
+        // FIXME:
+        .underlying = CONST_CAST((struct td_var_ty *)&X64_VA_LIST_TAG_TY)
+    }
+};
+
 const struct target X64_MACOS_TARGET = {
     TARGET_ID_X64_MACOS,
     TARGET_LP_SZ_LP64,
-    {
-        .va_list_var_ty = &TD_VAR_TY_VOID_POINTER
-    },
+    {.va_list_var_ty = &X64_VA_LIST_TY, .flags = TARGET_VARIADIC_INFO_FLAG_VA_LIST_BYREF},
     {
         .ssp = 7,
         .gp_registers = {.max_reg_size = 8,
@@ -56,10 +99,7 @@ const struct target X64_MACOS_TARGET = {
 const struct target X64_LINUX_TARGET = {
     TARGET_ID_X64_LINUX,
     TARGET_LP_SZ_LP64,
-    {
-        // TODO:
-        .va_list_var_ty = &TD_VAR_TY_UNKNOWN
-    },
+    {.va_list_var_ty = &X64_VA_LIST_TY, .flags = TARGET_VARIADIC_INFO_FLAG_VA_LIST_BYREF},
     {
         .ssp = 7,
         .gp_registers = {.max_reg_size = 8,

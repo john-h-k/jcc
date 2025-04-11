@@ -387,6 +387,7 @@ int main(int argc, char **argv) {
   signal(SIGABRT, signal_handle);
 
   // we want to use the user's locale i think?
+  // TODO: remove this
   LSAN_IGNORE(setlocale(LC_ALL, ""));
 
 #if SAN && OS_APPLE
