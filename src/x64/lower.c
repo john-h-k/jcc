@@ -680,11 +680,12 @@ static struct ir_lcl *lower_va_args(struct ir_func *func) {
     last = save;
   }
 
-  // FIXME: the SysV spec has enough space and pretends there are 16 SIMD registers used for stack
-  // but in reality it only uses 8?
-  // we will save them all just in case, but is this needed?
+  // FIXME: the SysV spec has enough space and pretends there are 16 SIMD
+  // registers used for stack but in reality it only uses 8?
+  // we can't easily save the upper 16 because that includes the spill reg and
+  // LSRA expects that to be available
   // FIXME: use `rax` to determine how many of these to save
-  for (size_t i = info.num_fp_used; i < 16; i++) {
+  for (size_t i = info.num_fp_used; i < 8; i++) {
     // TODO: save vector
 
     struct ir_op *addr =
@@ -776,8 +777,7 @@ static void lower_va_start(struct ir_func *func, struct ir_lcl *save_lcl,
     // list->fp_offset = REG_SAVE_FP_OFFSET + <num fp registers used by named
     // args * 16>
 
-    size_t fp_offset =
-        REG_SAVE_FP_OFFSET + MIN(16 * 16, info.num_fp_used * 16);
+    size_t fp_offset = REG_SAVE_FP_OFFSET + MIN(16 * 16, info.num_fp_used * 16);
 
     DEBUG_ASSERT(fp_offset == REG_FP_USED || info.stack_size == 0,
                  "stack used but not all fp reg?");
@@ -787,8 +787,8 @@ static void lower_va_start(struct ir_func *func, struct ir_lcl *save_lcl,
     ir_mk_integral_constant(func->unit, fp_offset_value,
                             IR_VAR_PRIMITIVE_TY_I32, fp_offset);
 
-    struct ir_op *addr_fp_offset =
-        ir_insert_after_op(func, fp_offset_value, IR_OP_TY_ADDR_OFFSET, IR_VAR_TY_POINTER);
+    struct ir_op *addr_fp_offset = ir_insert_after_op(
+        func, fp_offset_value, IR_OP_TY_ADDR_OFFSET, IR_VAR_TY_POINTER);
     addr_fp_offset->addr_offset =
         (struct ir_op_addr_offset){.base = addr, .offset = 4};
 

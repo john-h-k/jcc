@@ -79,31 +79,31 @@ const static struct td_var_ty AARCH64_VA_LIST_TAG_TY =
              (struct td_struct_field[5]){
                  [0] =
                      {
-                         .identifier = MK_USTR("__stack"),
+                         .identifier = MK_USTR("stack"),
                          .var_ty = {.ty = TD_VAR_TY_TY_POINTER,
                                     .pointer = {.underlying = &TD_VAR_TY_VOID}},
                      },
                  [1] =
                      {
-                         .identifier = MK_USTR("__gr_top"),
+                         .identifier = MK_USTR("gr_top"),
                          .var_ty = {.ty = TD_VAR_TY_TY_POINTER,
                                     .pointer = {.underlying = &TD_VAR_TY_VOID}},
                      },
                  [2] =
                      {
-                         .identifier = MK_USTR("__vr_top"),
+                         .identifier = MK_USTR("vr_top"),
                          .var_ty = {.ty = TD_VAR_TY_TY_POINTER,
                                     .pointer = {.underlying = &TD_VAR_TY_VOID}},
                      },
                  [3] =
                      {
-                         .identifier = MK_USTR("__gr_offs"),
+                         .identifier = MK_USTR("gr_offs"),
                          .var_ty = {.ty = TD_VAR_TY_TY_WELL_KNOWN,
                                     .well_known = WELL_KNOWN_TY_UNSIGNED_INT},
                      },
                  [4] =
                      {
-                         .identifier = MK_USTR("__vr_offs"),
+                         .identifier = MK_USTR("vr_offs"),
                          .var_ty = {.ty = TD_VAR_TY_TY_WELL_KNOWN,
                                     .well_known = WELL_KNOWN_TY_UNSIGNED_INT},
                      },
