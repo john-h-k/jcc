@@ -204,6 +204,9 @@ fi
 arch=${arch:-$(arch)}
 arch=${arch/arm64/aarch64}
 
+os=${os:-$(uname)}
+os=$(echo "$os" | awk '{print tolower($0)}')
+
 if [[ "$arch" == "rv32i" && -z "$RUNNER" ]]; then
   ensure_exists riscy "RUNNER not provided for arch $arch, but could not find default runner 'riscy'"
 
@@ -490,8 +493,15 @@ run_tests() {
       target_arch=$(grep -i "arch" "$file" | head -1 | sed -n 's/^\/\/ arch: //p')
       target_arch=${target_arch/arm64/atarget_arch64}
 
+      target_os=$(grep -i "os" "$file" | head -1 | sed -n 's/^\/\/ os: //p')
+
       if [[ -n $target_arch && $target_arch != "$arch" ]]; then
         send_status skip "$prefix'$file' skipped due to architecture (test: $target_arch, runner: $arch)"
+        continue
+      fi
+
+      if [[ -n $target_os && $target_os != "$os" ]]; then
+        send_status skip "$prefix'$file' skipped due to os (test: $target_os, runner: $os)"
         continue
       fi
 

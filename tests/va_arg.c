@@ -1,5 +1,6 @@
 // expected value: 220
 // arch: aarch64
+// os: darwin
 
 #include <stdarg.h>
 
