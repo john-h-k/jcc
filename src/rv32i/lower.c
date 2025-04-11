@@ -314,7 +314,12 @@ struct ir_func_info rv32i_lower_func_ty(struct ir_func *func,
 
   *new_func_ty.ret_ty = ret_ty;
 
-  struct ir_call_info call_info = {.ret = ret_info, .stack_size = nsaa};
+  struct ir_call_info call_info = {
+      .ret = ret_info,
+      .stack_size = nsaa,
+      .num_gp_used = ngrn,
+      .num_fp_used = nsrn
+  };
 
   CLONE_AND_FREE_VECTOR(func->arena, params, new_func_ty.num_params,
                         new_func_ty.params);
@@ -565,21 +570,39 @@ static struct ir_lcl *lower_va_args(struct ir_func *func) {
 
 static void lower_va_start(struct ir_func *func, struct ir_lcl *save_lcl,
                            struct ir_op *op) {
+  // pointer to fp - <reg save size> if not all gp used
+  // else fp + <stack used by named args>
 
   struct ir_op *addr = op->va_start.list_addr;
 
-  struct ir_op *sp = ir_replace_op(func, op, IR_OP_TY_ADDR, IR_VAR_TY_POINTER);
-  sp->addr = (struct ir_op_addr){
-    .ty = IR_OP_ADDR_TY_LCL,
-    .lcl = save_lcl
-  };
+  struct ir_op *value;
+  if (func->call_info.num_gp_used < 8) {
+    // fp - <reg save size>
+    // (which is just the save_lcl because ABI requires the save to be directly after SP)
 
-  struct ir_op *store = ir_insert_after_op(func, sp, IR_OP_TY_STORE, IR_VAR_TY_NONE);
+    value = ir_replace_op(func, op, IR_OP_TY_ADDR, IR_VAR_TY_POINTER);
+    value->addr = (struct ir_op_addr){.ty = IR_OP_ADDR_TY_LCL, .lcl = save_lcl};
+  } else if (func->call_info.stack_size) {
+    // fp + <stack used by named args>
+
+    struct ir_op *sp = ir_replace_op(func, op, IR_OP_TY_ADDR, IR_VAR_TY_POINTER);
+    sp->addr = (struct ir_op_addr){.ty = IR_OP_ADDR_TY_LCL, .lcl = save_lcl};
+
+    value =
+        ir_insert_after_op(func, sp, IR_OP_TY_ADDR_OFFSET, IR_VAR_TY_POINTER);
+    value->addr_offset = (struct ir_op_addr_offset){
+        .base = sp, .offset = func->call_info.stack_size};
+  } else {
+    // fp
+    value = ir_replace_op(func, op, IR_OP_TY_ADDR, IR_VAR_TY_POINTER);
+    value->addr = (struct ir_op_addr){.ty = IR_OP_ADDR_TY_LCL, .lcl = save_lcl};
+  }
+
+  struct ir_op *store =
+      ir_insert_after_op(func, value, IR_OP_TY_STORE, IR_VAR_TY_NONE);
   store->store = (struct ir_op_store){
-    .ty = IR_OP_STORE_TY_ADDR,
-    .addr = addr,
-    .value = sp
-  };
+      .ty = IR_OP_STORE_TY_ADDR, .addr = addr, .value = value};
+
 }
 
 static void lower_va_arg(UNUSED struct ir_func *func, UNUSED struct ir_op *op) {

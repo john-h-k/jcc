@@ -340,6 +340,9 @@ struct ir_call_info {
 
   struct ir_param_info *ret;
 
+  size_t num_gp_used;
+  size_t num_fp_used;
+
   size_t num_variadics;
   enum ir_call_info_flags flags;
 
