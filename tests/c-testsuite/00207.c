@@ -1,4 +1,4 @@
-// skip: not yet implemented
+// skip: not yet implemented - VLAs
 
 #include <stdio.h>
 

@@ -302,6 +302,10 @@ aggregator() {
 
   echo ""
 
+  IFS=$'\n' fails=($(sort <<<"${fails[*]}"))
+  IFS=$'\n' skips=($(sort <<<"${skips[*]}"))
+  unset IFS
+
   if [ ${#fails[@]} -ne 0 ]; then
     echo -e ""
 
