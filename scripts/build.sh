@@ -227,7 +227,7 @@ configure() {
     no_san_flag=$( [ -n "$no_san" ] && echo "-DNO_SAN=1" || echo "" )
     if ! (cmake $fresh $no_san_flag -DARCHITECTURES="$archs" -DCMAKE_C_COMPILER="$cc" -G "$generator" -DCMAKE_C_FLAGS="$flags" -DCMAKE_BUILD_TYPE=$mode ..); then
         echo -e "${BOLDRED}Configuring build failed!${RESET}"
-        exit -1
+        return -1
     fi
 }
 
@@ -243,7 +243,7 @@ build() {
 
     if ! cmake --build . --parallel "$num_proc"; then
         echo -e "${BOLDRED}Build failed!${RESET}"
-        exit -1
+        return -1
     fi
 
     # we are now in build dir (should make this clearer)
@@ -427,9 +427,11 @@ bootstrap() {
     # fi
 
     # actual build
-    if ! _stage_build cc 0 --mode release; then
+    if ! _stage_build cc 0; then
         exit -1
     fi
+
+    export MallocNanoZone=0
 
     [ "$stage" -gt 0 ] || return 0
 

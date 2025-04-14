@@ -447,7 +447,7 @@ void json_writer_clear(struct json_writer *writer) {
 }
 
 void json_writer_write_null(struct json_writer *writer,
-                            UNUSED struct json_null_t null) {
+                            UNUSED json_null_t null) {
   if (writer->needs_sep) {
     vector_push_back(writer->buffer, &(char){','});
   }

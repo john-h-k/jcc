@@ -72,7 +72,10 @@ const struct target AARCH64_MACOS_TARGET = {
 //
 // typedef __builtin_va_list __va_list
 
-const static struct td_var_ty AARCH64_VA_LIST_TAG_TY =
+// NOTE: we use `strlen` as a constant through `MK_USTR` - this is not technically ANSI C?
+// maybe should remove
+
+const static struct td_var_ty AARCH64_VA_LIST_TY =
     {.ty = TD_VAR_TY_TY_AGGREGATE,
      .aggregate = {
          .ty = TD_TY_AGGREGATE_TY_STRUCT,
@@ -118,7 +121,7 @@ const struct target AARCH64_LINUX_TARGET = {
     TARGET_LP_SZ_LP64,
     // x0..x30 excluding x18
     {// TODO:
-     .va_list_var_ty = &AARCH64_VA_LIST_TAG_TY,
+     .va_list_var_ty = &AARCH64_VA_LIST_TY,
      .flags = TARGET_VARIADIC_INFO_FLAG_NONE},
     {
         .ssp = 9,

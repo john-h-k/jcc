@@ -4,19 +4,11 @@
 #include "ap_val.h"
 #include "hashtbl.h"
 
-struct json_null_t {
+typedef struct {
   char placeholder;
-};
-#define JSON_NULL ((struct json_null_t){0})
+} json_null_t;
 
-enum json_value_ty {
-  JSON_VALUE_TY_NULL,
-  JSON_VALUE_TY_BOOL,
-  JSON_VALUE_TY_NUMBER,
-  JSON_VALUE_TY_STRING,
-  JSON_VALUE_TY_ARRAY,
-  JSON_VALUE_TY_OBJECT,
-};
+#define JSON_NULL ((json_null_t){0})
 
 struct json_array {
   struct json_value *values;
@@ -28,6 +20,15 @@ struct json_object {
   // value: `struct json_value`
   // empty object CAN (but is not guaranteed to) have NULL value here
   struct hashtbl *fields;
+};
+
+enum json_value_ty {
+  JSON_VALUE_TY_NULL,
+  JSON_VALUE_TY_BOOL,
+  JSON_VALUE_TY_NUMBER,
+  JSON_VALUE_TY_STRING,
+  JSON_VALUE_TY_ARRAY,
+  JSON_VALUE_TY_OBJECT,
 };
 
 struct json_value {
@@ -68,11 +69,11 @@ struct json_result {
   };
 };
 
-const char *json_value_ty_name(enum json_value_ty ty);
-
 struct json_result json_parse(ustr_t str);
 void json_print_result(FILE *file, const struct json_result *result);
 void json_print_value(FILE *file, const struct json_value *value);
+
+const char *json_value_ty_name(enum json_value_ty ty);
 
 struct json_writer;
 
@@ -80,23 +81,23 @@ struct json_writer *json_writer_create(void);
 void json_writer_free(struct json_writer **writer);
 
 void json_writer_write_null(struct json_writer *writer,
-                            UNUSED struct json_null_t null);
+                            UNUSED json_null_t null);
 void json_writer_write_bool(struct json_writer *writer, bool value);
 
 void json_writer_write_integer(struct json_writer *writer, long long value);
 void json_writer_write_double(struct json_writer *writer, double value);
 
-void json_writer_write_string(struct json_writer *writer,
-                              ustr_t value);
+void json_writer_write_string(struct json_writer *writer, ustr_t value);
 
 void json_writer_write_begin_obj(struct json_writer *writer);
-void json_writer_write_field_name(struct json_writer *writer,
-                                  ustr_t name);
+void json_writer_write_field_name(struct json_writer *writer, ustr_t name);
 void json_writer_write_end_obj(struct json_writer *writer);
 
 void json_writer_write_begin_arr(struct json_writer *writer);
 void json_writer_write_end_arr(struct json_writer *writer);
+
 ustr_t json_writer_get_buf(struct json_writer *writer);
+
 void json_writer_clear(struct json_writer *writer);
 
 #define JSON_OBJECT(writer, name, block)                                       \
@@ -121,24 +122,36 @@ void json_writer_clear(struct json_writer *writer);
 
 #define JSON_WRITE(writer, value)                                              \
   _Generic((value),                                                            \
-      struct json_null_t: json_writer_write_null,                              \
+                                                                               \
+      /* Null */                                                               \
+      json_null_t: json_writer_write_null,                              \
+                                                                               \
+      /* Bool */                                                               \
       bool: json_writer_write_bool,                                            \
+                                                                               \
+      /* Integer */                                                            \
       size_t: json_writer_write_integer,                                       \
-      long: json_writer_write_integer,                                    \
+      long: json_writer_write_integer,                                         \
       long long: json_writer_write_integer,                                    \
       unsigned: json_writer_write_integer,                                     \
       int: json_writer_write_integer,                                          \
+                                                                               \
+      /* Floating-point */                                                     \
       double: json_writer_write_double,                                        \
-      ustr_t: json_writer_write_string)((writer), (value))
+                                                                               \
+      /* String */                                                             \
+      ustr_t: json_writer_write_string)                                        \
+                                                                               \
+      ((writer), (value))
 
 #define JSON_WRITE_FIELD_NAME(writer, name)                                    \
   do {                                                                         \
-    json_writer_write_field_name((writer), MK_USTR((name)));                  \
+    json_writer_write_field_name((writer), MK_USTR((name)));                   \
   } while (0)
 
 #define JSON_WRITE_FIELD(writer, name, value)                                  \
   do {                                                                         \
-    json_writer_write_field_name((writer), MK_USTR((name)));                  \
+    json_writer_write_field_name((writer), MK_USTR((name)));                   \
     JSON_WRITE((writer), (value));                                             \
   } while (0)
 

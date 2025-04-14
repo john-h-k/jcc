@@ -3987,7 +3987,7 @@ static void build_init_list_layout_entry(struct ir_unit *iru,
     el_size = ir_var_ty_info(iru, &ir_el_ty).size;
     break;
   default:
-    BUG("bad type for init list");
+    BUG("bad type for init list (%s)", tchk_type_name(iru->tchk, var_ty));
   }
 
   size_t num_elements = init_list->num_inits;
@@ -4023,12 +4023,8 @@ static void build_init_list_layout_entry(struct ir_unit *iru,
     switch (init->init->ty) {
     case TD_INIT_TY_EXPR: {
       if (init->init->expr.ty == TD_EXPR_TY_COMPOUND_LITERAL &&
-          !td_var_ty_is_scalar_ty(&init->init->expr.var_ty)) {
+          !td_var_ty_is_scalar_ty(&member_ty)) {
         // again broken if cast needed
-        DEBUG_ASSERT(
-            td_var_ty_eq(iru->tchk, &member_ty, &init->init->expr.var_ty),
-            "todo handle non equal tys");
-
         build_init_list_layout_entry(
             iru, &init->init->expr.compound_literal.init_list, &member_ty,
             init_offset, inits);
@@ -4086,6 +4082,33 @@ build_ir_for_var_value_unary_op(struct ir_var_builder *irb,
 
 static struct ir_var_value build_ir_for_var_value_addr(
     struct ir_var_builder *irb, const struct td_expr *addr,
+    const struct td_expr *offset, const struct td_var_ty *var_ty);
+
+static struct ir_var_value
+build_ir_for_compound_literal_addr(struct ir_var_builder *irb,
+                                   const struct td_expr *addr,
+                                   const struct td_expr *offset) {
+  struct ir_var_ty glb_var_ty =
+      ir_var_ty_for_td_var_ty(irb->unit, &addr->compound_literal.var_ty);
+  struct ir_glb *glb = ir_add_global(irb->unit, IR_GLB_TY_DATA, &glb_var_ty,
+                                     IR_GLB_DEF_TY_DEFINED, NULL);
+
+  struct ir_var_value var_value = build_ir_for_var_value_addr(
+      irb, addr, offset, &addr->compound_literal.var_ty);
+
+  glb->var = arena_alloc(irb->arena, sizeof(*glb->var));
+  *glb->var = (struct ir_var){.unit = irb->unit,
+                              .ty = IR_VAR_TY_DATA,
+                              .var_ty = glb->var_ty,
+                              .value = var_value};
+
+  return (struct ir_var_value){.ty = IR_VAR_VALUE_TY_ADDR,
+                               .var_ty = IR_VAR_TY_POINTER,
+                               .addr = {.glb = glb, .offset = 0}};
+}
+
+static struct ir_var_value build_ir_for_var_value_addr(
+    struct ir_var_builder *irb, const struct td_expr *addr,
     const struct td_expr *offset, const struct td_var_ty *var_ty) {
   switch (addr->ty) {
   case TD_EXPR_TY_UNARY_OP: {
@@ -4112,6 +4135,9 @@ static struct ir_var_value build_ir_for_var_value_addr(
               .var_ty = ir_var_ty_for_td_var_ty(irb->unit, var_ty),
               .int_value = offset_of};
         }
+      } else if (addr->unary_op.expr->ty == TD_EXPR_TY_COMPOUND_LITERAL) {
+        return build_ir_for_compound_literal_addr(irb, addr->unary_op.expr,
+                                                  offset);
       }
 
       return build_ir_for_var_value_addr(irb, addr->unary_op.expr, offset,
@@ -4242,27 +4268,16 @@ static struct ir_var_value build_ir_for_var_value_addr(
   }
 
   case TD_EXPR_TY_COMPOUND_LITERAL: {
-    // struct ir_var_ty glb_var_ty =
-    //     ir_var_ty_for_td_var_ty(irb->unit, &addr->var_ty);
-    // struct ir_glb *glb = ir_add_global(irb->unit, IR_GLB_TY_DATA, &glb_var_ty,
-    //                                    IR_GLB_DEF_TY_DEFINED, "tmp");
+    if (var_ty->ty == TD_VAR_TY_TY_POINTER && addr->compound_literal.var_ty.ty == TD_VAR_TY_TY_ARRAY) {
+      // decay, take address
+      return build_ir_for_compound_literal_addr(irb, addr, offset);
+    }
 
     return build_ir_for_var_value_init_list(
-        irb, &addr->compound_literal.init_list, &addr->var_ty);
-
-    // struct ir_var_value var_value = build_ir_for_var_value_init_list(
-    //     irb, &addr->compound_literal.init_list, &addr->var_ty);
-
-    // glb->var = arena_alloc(irb->arena, sizeof(*glb->var));
-    // *glb->var = (struct ir_var){.unit = irb->unit,
-    //                             .ty = IR_VAR_TY_DATA,
-    //                             .var_ty = glb->var_ty,
-    //                             .value = var_value};
-    // return glb;
+        irb, &addr->compound_literal.init_list, &addr->compound_literal.var_ty);
   }
 
   case TD_EXPR_TY_VAR: {
-
     const struct td_var *var = &addr->var;
 
     struct var_key key = get_var_key(var, NULL);
@@ -4449,6 +4464,12 @@ build_ir_for_var_value_expr(struct ir_var_builder *irb,
   switch (expr->ty) {
   // TODO: some of this is no longer needed as typechk can resolve
   // sizeof/alignof/etc
+  case TD_EXPR_TY_COMPOUND_LITERAL:
+    if (expr->compound_literal.var_ty.ty == TD_VAR_TY_TY_ARRAY) {
+      return build_ir_for_var_value_addr(irb, expr, 0,
+                                         var_ty);
+    }
+    BUG("non array compound literal?");
   case TD_EXPR_TY_VAR:
     return build_ir_for_var_value_var(irb, expr, var_ty);
   case TD_EXPR_TY_UNARY_OP:

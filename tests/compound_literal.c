@@ -12,13 +12,14 @@ struct foo {
   int c;
 };
 
+struct baz {
+  struct bar *p;
+};
+
+struct baz global = {.p = (struct bar[2]){{"hello"}, {"world"}}};
+
 int main() {
-  struct foo f = (struct foo){
-    .a = 100,
-    .b = (struct bar){
-      .value = "hello"
-    }
-  };
+  struct foo f = (struct foo){.a = 100, .b = (struct bar){.value = "hello"}};
 
   if (f.a != 100) {
     return 1;
@@ -33,12 +34,7 @@ int main() {
   }
 
   struct foo *p = &f;
-  p = &(struct foo){
-    .a = 200,
-    .b = (struct bar){
-      .value = "world"
-    }
-  };
+  p = &(struct foo){.a = 200, .b = (struct bar){.value = "world"}};
 
   if (p->a != 200) {
     return 4;
@@ -53,9 +49,7 @@ int main() {
   }
 
   p = &f;
-  *p = (struct foo){
-    .c = 1
-  };
+  *p = (struct foo){.c = 1};
 
   if (f.a) {
     return 7;
@@ -67,5 +61,13 @@ int main() {
 
   if (f.c != 1) {
     return 9;
+  }
+
+  if (global.p[0].value[0] != 'h') {
+    return 10;
+  }
+
+  if (global.p[1].value[0] != 'w') {
+    return 11;
   }
 }

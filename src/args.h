@@ -103,7 +103,8 @@ struct arg {
 #define C_STANDARD_ENUM_LIST                                                   \
   ENUM_FN(COMPILE_C_STANDARD_C11, "c11")                                       \
   ENUM_FN(COMPILE_C_STANDARD_C17, "c17")                                       \
-  ENUM_FN(COMPILE_C_STANDARD_C23, "c23")
+  ENUM_FN(COMPILE_C_STANDARD_C23, "c23")                                       \
+  ENUM_FN(COMPILE_C_STANDARD_C2Y, "c2y")
 
 #define LANGUAGE_ENUM_LIST                                                     \
   ENUM_FN(COMPILE_LANGUAGE_C, "c")                                             \

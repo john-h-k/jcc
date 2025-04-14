@@ -867,4 +867,7 @@ void debug_print_td(struct typechk *tchk, struct hashtbl *log_symbols,
 void hash_td_var(struct hasher *hasher, const void *o);
 bool eq_td_var(const void *l, const void *r);
 
+char *tchk_type_name(struct typechk *tchk,
+                            const struct td_var_ty *var_ty);
+
 #endif
