@@ -1,6 +1,4 @@
-// skip: generates file we dont delete
-// arch: aarch64
-// actually supports all except rv32i but no syntax for that
+// arch-skip: rv32i
 
 #include <stdio.h>
 

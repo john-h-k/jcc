@@ -1,4 +1,4 @@
-// skip: not yet implemented (__builtin_expect)
+// skip: not yet implemented - __builtin_expect + GNU statements
 
 /* Check some way in where code suppression caused various
    miscompilations.  */

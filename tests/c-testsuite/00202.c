@@ -1,4 +1,4 @@
-// skip: not yet implemented (preprocessor concat punctuators)
+// skip: not yet implemented - preprocessor concat punctuators
 
 #include <stdio.h>
 

@@ -1,4 +1,4 @@
-// skip: push_macro/pop_macro not implemented
+// skip: not yet implemented - push_macro/pop_macro
 #include <stdio.h>
 
 int main()
