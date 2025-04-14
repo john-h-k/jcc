@@ -412,7 +412,7 @@ run_tests() {
 
           for file in "${files[@]}"; do
             asm=$(tmpname "$pid.$(basename "$file").s")
-            timeout -k $BUILD_TIMEOUT $BUILD_TIMEOUT "$JCC" $flags "${args[@]}" "${group_args[@]}" -S -o "$asm" -std="${std:-c23}" -tm "$tm" "$file" \
+            timeout -k $BUILD_TIMEOUT $BUILD_TIMEOUT "$JCC" $flags "${args[@]}" "${group_args[@]}" -S -o "$asm" -std="$std" -tm "$tm" "$file" \
               || return $?
 
             obj=$(tmpname "$pid.$(basename "$file").o")
@@ -436,7 +436,7 @@ run_tests() {
 
           for file in "${files[@]}"; do
             obj=$(tmpname "$pid.$(basename "$file").o")
-            timeout -k $BUILD_TIMEOUT $BUILD_TIMEOUT "$JCC" $flags "${args[@]}" "${group_args[@]}" -c -o "$obj" -std=c23 -tm "$tm" "$file" \
+            timeout -k $BUILD_TIMEOUT $BUILD_TIMEOUT "$JCC" $flags "${args[@]}" "${group_args[@]}" -c -o "$obj" -std="$std" -tm "$tm" "$file" \
               || return $?
 
             obj_files+=("$obj")
@@ -450,7 +450,7 @@ run_tests() {
         }
       else
         build_command() {
-          timeout -k $BUILD_TIMEOUT $BUILD_TIMEOUT "$JCC" $flags "${args[@]}" "${group_args[@]}" -o "$output" -std=c23 -tm "$tm" "${files[@]}"
+          timeout -k $BUILD_TIMEOUT $BUILD_TIMEOUT "$JCC" $flags "${args[@]}" "${group_args[@]}" -o "$output" -std="$std" -tm "$tm" "${files[@]}"
           return $?
         }
       fi
@@ -477,6 +477,8 @@ run_tests() {
       std=$(grep -i "std:" "$file" | head -1 | sed -n 's/^\/\/ std: //p')
       flags=$(grep -i "flags:" "$file" | head -1 | sed -n 's/^\/\/ flags: //p')
       os_flags=$(grep -i "flags-$(uname):" "$file" | head -1 | sed -n "s/^\/\/ flags-[^:]*: //p")
+
+      std="${std:-c23}"
 
       flags="$([ -n "$flags" ] && echo "$flags $os_flags" || echo "$os_flags")"
 
