@@ -304,8 +304,8 @@ static void write_segment_command(FILE *file,
   }
 
   total_func_size = ROUND_UP(total_func_size, str_align);
-  total_str_size = ROUND_UP(total_func_size, const_align);
-  total_const_size = ROUND_UP(total_func_size, data_align);
+  total_str_size = ROUND_UP(total_str_size, const_align);
+  total_const_size = ROUND_UP(total_const_size, data_align);
 
   size_t total_size =
       total_func_size + total_str_size + total_const_size + total_data_size;

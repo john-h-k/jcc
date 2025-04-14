@@ -2515,17 +2515,15 @@ struct ir_glb *ir_add_global(struct ir_unit *iru, enum ir_glb_ty ty,
   struct ir_glb *pred = iru->last_global;
 
   iru->num_globals++;
-  glb->id = pred ? pred->id + 1 : 0;
-  glb->succ = NULL;
-  glb->pred = pred;
-  glb->ty = ty;
-  glb->name = name;
-  glb->def_ty = def_ty;
-  glb->var_ty = *var_ty;
-
-  // TODO: for debugging
-  glb->func = NULL;
-  glb->var = NULL;
+  *glb = (struct ir_glb){
+      .id = pred ? pred->id + 1 : 0,
+      .succ = NULL,
+      .pred = pred,
+      .ty = ty,
+      .name = name,
+      .def_ty = def_ty,
+      .var_ty = *var_ty,
+  };
 
   if (!iru->first_global) {
     iru->first_global = glb;

@@ -2,11 +2,11 @@
 
 #include "alloc.h"
 #include "ap_val.h"
+#include "builtins.h"
 #include "diagnostics.h"
 #include "lex.h"
 #include "log.h"
 #include "program.h"
-#include "builtins.h"
 #include "util.h"
 #include "var_table.h"
 #include "vector.h"
@@ -56,9 +56,10 @@ enum parser_create_result parser_create(
   p->diagnostics = diagnostics;
   p->state = PARSER_STATE_NORMAL;
 
-#define BUILTIN_TY(name) \
-  do { \
-      vt_create_entry(&p->ty_table, VAR_TABLE_NS_TYPEDEF, MK_USTR("__builtin_" # name)); \
+#define BUILTIN_TY(name)                                                       \
+  do {                                                                         \
+    vt_create_entry(&p->ty_table, VAR_TABLE_NS_TYPEDEF,                        \
+                    MK_USTR("__builtin_" #name));                              \
   } while (0);
 #define BUILTIN_FN(...)
 
@@ -318,6 +319,7 @@ static bool parse_expected_expr(struct parser *parser, struct ast_expr *expr,
 
   return false;
 }
+
 static bool parse_token(struct parser *parser, enum lex_token_ty ty,
                         struct text_span *span) {
   struct lex_token token;
@@ -1753,8 +1755,7 @@ static bool parse_char_cnst(struct parser *parser, struct ast_cnst *cnst) {
     ty = AST_CNST_TY_CHAR;
     num_bits = 8;
 
-    ustr_t literal =
-        lex_strlike_associated_text(parser->lexer, &token);
+    ustr_t literal = lex_strlike_associated_text(parser->lexer, &token);
     DEBUG_ASSERT(literal.len, "literal_len was 0");
     int_value = (unsigned long long)literal.str[0];
     break;
@@ -1763,8 +1764,7 @@ static bool parse_char_cnst(struct parser *parser, struct ast_cnst *cnst) {
     ty = AST_CNST_TY_SIGNED_INT;
     num_bits = 32;
 
-    ustr_t literal =
-        lex_strlike_associated_text(parser->lexer, &token);
+    ustr_t literal = lex_strlike_associated_text(parser->lexer, &token);
     DEBUG_ASSERT(literal.len, "literal_len was 0");
 
     wchar_t wchar;
@@ -1833,9 +1833,11 @@ static bool parse_int_cnst(struct parser *parser, struct ast_cnst *cnst) {
   }
 
   // FIXME: this logic is hacky and not right in edge cases
-  if (ty == AST_CNST_TY_SIGNED_INT && !ap_int_fits_in(cnst->num_value.ap_int, 31)) {
+  if (ty == AST_CNST_TY_SIGNED_INT &&
+      !ap_int_fits_in(cnst->num_value.ap_int, 31)) {
     cnst->ty = AST_CNST_TY_SIGNED_LONG_LONG;
-  } else if (ty == AST_CNST_TY_UNSIGNED_INT && !ap_int_fits_in(cnst->num_value.ap_int, 32)) {
+  } else if (ty == AST_CNST_TY_UNSIGNED_INT &&
+             !ap_int_fits_in(cnst->num_value.ap_int, 32)) {
     cnst->ty = AST_CNST_TY_UNSIGNED_LONG_LONG;
   }
 
@@ -1906,8 +1908,8 @@ static bool parse_str_cnst(struct parser *parser, struct ast_cnst *cnst) {
   return true;
 }
 
-static bool parse_bool_cnst(struct parser *parser,
-                            struct lex_token *token, struct ast_cnst *cnst) {
+static bool parse_bool_cnst(struct parser *parser, struct lex_token *token,
+                            struct ast_cnst *cnst) {
   switch (token->ty) {
   case LEX_TOKEN_TY_KW_TRUE:
     cnst->ty = AST_CNST_TY_BOOL;
@@ -2223,29 +2225,32 @@ static bool parse_atom_1(struct parser *parser, struct ast_expr *expr) {
 
   struct lex_token token;
   lex_peek_token(parser->lexer, &token);
-  if (token.ty == LEX_TOKEN_TY_IDENTIFIER && ustr_eq(identifier_str(parser, &token), MK_USTR("__builtin_va_arg"))) {
+  if (token.ty == LEX_TOKEN_TY_IDENTIFIER &&
+      ustr_eq(identifier_str(parser, &token), MK_USTR("__builtin_va_arg"))) {
     lex_consume_token(parser->lexer, token);
 
-    parse_expected_token(parser, LEX_TOKEN_TY_OPEN_BRACKET, token.span.start, "'(' after va_list", NULL);
+    parse_expected_token(parser, LEX_TOKEN_TY_OPEN_BRACKET, token.span.start,
+                         "'(' after va_list", NULL);
 
     struct ast_expr list;
     parse_expected_expr(parser, &list, "expression after 'va_arg'");
 
-    parse_expected_token(parser, LEX_TOKEN_TY_COMMA, token.span.start, "',' after va_arg list argument", NULL);
+    parse_expected_token(parser, LEX_TOKEN_TY_COMMA, token.span.start,
+                         "',' after va_arg list argument", NULL);
 
     struct ast_type_name type;
     if (!parse_type_name(parser, &type)) {
       BUG("diagnostic on no typename after va_arg call");
     }
 
-    parse_expected_token(parser, LEX_TOKEN_TY_CLOSE_BRACKET, token.span.start, "')' after va_list", NULL);
+    parse_expected_token(parser, LEX_TOKEN_TY_CLOSE_BRACKET, token.span.start,
+                         "')' after va_list", NULL);
 
     expr->ty = AST_EXPR_TY_VA_ARG;
     expr->va_arg = (struct ast_va_arg){
-      .list = arena_alloc(parser->arena, sizeof(*expr->va_arg.list)),
-      .type = type,
-      .span = MK_TEXT_SPAN(token.span.start, type.span.end)
-    };
+        .list = arena_alloc(parser->arena, sizeof(*expr->va_arg.list)),
+        .type = type,
+        .span = MK_TEXT_SPAN(token.span.start, type.span.end)};
 
     *expr->va_arg.list = list;
     expr->span = expr->va_arg.span;
@@ -3391,6 +3396,25 @@ static bool parse_selectstmt(struct parser *parser,
   return false;
 }
 
+static bool parse_deferstmt(struct parser *parser,
+                            struct ast_deferstmt *deferstmt) {
+  struct text_span start;
+
+  if (!parse_token(parser, LEX_TOKEN_TY_KW_DEFER, &start)) {
+    return false;
+  }
+
+  struct ast_stmt stmt;
+  if (!parse_stmt(parser, PARSE_STMT_MODE_DECL_OR_STMT, &stmt)) {
+    BUG("diagnostic on no stmt after 'defer'");
+  }
+
+  deferstmt->stmt = arena_alloc_init(parser->arena, sizeof(*deferstmt->stmt), &stmt);
+  deferstmt->span = MK_TEXT_SPAN(start.start, stmt.span.end);
+  
+  return true;
+}
+
 static bool parse_staticassert(struct parser *parser,
                                struct ast_staticassert *staticassert) {
   struct text_span start;
@@ -3435,6 +3459,14 @@ static bool parse_stmt(struct parser *parser, enum parse_stmt_mode mode,
   if (parse_token(parser, LEX_TOKEN_TY_SEMICOLON, &null_span)) {
     stmt->ty = AST_STMT_TY_NULL;
     stmt->span = null_span;
+    return true;
+  }
+
+  struct ast_deferstmt deferstmt;
+  if (parse_deferstmt(parser, &deferstmt)) {
+    stmt->ty = AST_STMT_TY_DEFER;
+    stmt->deferred = deferstmt;
+    stmt->span = deferstmt.span;
     return true;
   }
 
@@ -3695,8 +3727,7 @@ static bool parse_funcdef(struct parser *parser, struct ast_funcdef *func_def) {
   text_pos_len((token).start, (token).end),                                    \
       text_pos_len((token).start, (token).end), lexer->text[(token).start.idx]
 
-ustr_t identifier_str(struct parser *parser,
-                                const struct lex_token *token) {
+ustr_t identifier_str(struct parser *parser, const struct lex_token *token) {
   return lex_associated_text(parser->lexer, token);
 }
 
@@ -3934,14 +3965,14 @@ DEBUG_FUNC(declaration_list, declaration_list) {
 
 #define AST_PRINT_IDENTIFIER(identifier)                                       \
   do {                                                                         \
-    ustr_t str = identifier_str(state->parser, identifier);          \
+    ustr_t str = identifier_str(state->parser, identifier);                    \
     AST_PRINT("'%.*s'", (int)str.len, str.str);                                \
     AST_PRINTZ("");                                                            \
   } while (0)
 
 #define AST_PRINT_IDENTIFIER_SAMELINE(identifier)                              \
   do {                                                                         \
-    ustr_t str = identifier_str(state->parser, identifier);          \
+    ustr_t str = identifier_str(state->parser, identifier);                    \
     AST_PRINT_SAMELINE_NOINDENT("'%.*s'", (int)str.len, str.str);              \
     AST_PRINTZ("");                                                            \
   } while (0)
@@ -4044,7 +4075,8 @@ DEBUG_FUNC(var, var) {
 DEBUG_FUNC(cnst, cnst) {
   switch (cnst->ty) {
   case AST_CNST_TY_BOOL:
-    AST_PRINT("CONSTANT %s", ap_val_nonzero(cnst->num_value) ? "true" : "false");
+    AST_PRINT("CONSTANT %s",
+              ap_val_nonzero(cnst->num_value) ? "true" : "false");
     break;
   case AST_CNST_TY_SIGNED_INT:
   case AST_CNST_TY_UNSIGNED_INT:
@@ -4999,6 +5031,15 @@ DEBUG_FUNC(staticassert, staticassert) {
     DEBUG_CALL(expr, staticassert->message);
     UNINDENT();
   }
+
+  UNINDENT();
+}
+
+DEBUG_FUNC(deferstmt, deferstmt) {
+  AST_PRINTZ("DEFER");
+  INDENT();
+  DEBUG_CALL(stmt, deferstmt->stmt);
+  UNINDENT();
 }
 
 DEBUG_FUNC(stmt, stmt) {
@@ -5009,6 +5050,9 @@ DEBUG_FUNC(stmt, stmt) {
     break;
   case AST_STMT_TY_STATICASSERT:
     DEBUG_CALL(staticassert, &stmt->staticassert);
+    break;
+  case AST_STMT_TY_DEFER:
+    DEBUG_CALL(deferstmt, &stmt->deferred);
     break;
   case AST_STMT_TY_DECLARATION:
     DEBUG_CALL(declaration, &stmt->declaration);

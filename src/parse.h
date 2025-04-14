@@ -939,6 +939,13 @@ struct ast_iterstmt {
   struct text_span span;
 };
 
+struct ast_deferstmt {
+  // FIXME: this should actually be unlabeled stmt, `defer foo: bar()` is not legal (maybe just check in typechk)
+  struct ast_stmt *stmt;
+
+  struct text_span span;
+};
+
 enum ast_stmt_ty {
   AST_STMT_TY_NULL,
   AST_STMT_TY_DECLARATION,
@@ -949,6 +956,7 @@ enum ast_stmt_ty {
   AST_STMT_TY_ITER,
   AST_STMT_TY_SELECT,
   AST_STMT_TY_STATICASSERT,
+  AST_STMT_TY_DEFER,
 };
 
 struct ast_stmt {
@@ -962,6 +970,7 @@ struct ast_stmt {
     struct ast_iterstmt iter;
     struct ast_labeledstmt labeled;
     struct ast_staticassert staticassert;
+    struct ast_deferstmt deferred;
   };
 
   struct text_span span;
