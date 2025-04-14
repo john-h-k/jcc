@@ -33,6 +33,8 @@ than the the shoggoth of Clang/GCC.
 
 ## Support
 
+Compiler can fully bootstrap itself and passes the full C std test suite (which is not as large as it sounds).
+
 AArch64, x64, and RISC-V 32 are supported, although some of the x64 ABI is not yet fully implemented and RISC-V 32 64 bit integers are WIP.
 Working with RISC-V requires installing a RISC-V linker.
 
