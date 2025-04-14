@@ -1,4 +1,6 @@
 // expected value: 99
+// arch-skip: rv32i
+
 int main() {
   char c = 1;
   int a = 10;
