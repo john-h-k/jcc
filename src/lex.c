@@ -117,6 +117,10 @@ enum lex_create_result lexer_create(struct program program,
       KEYWORD("false", LEX_TOKEN_TY_KW_FALSE);
     }
 
+    if (c_standard >= COMPILE_C_STANDARD_C2Y) {
+      // KEYWORD("defer", LEX_TOKEN_TY_KW_DEFER);
+    }
+
     // required by macOS
     KEYWORD("__uint128_t", LEX_TOKEN_TY_KW_UINT128);
 

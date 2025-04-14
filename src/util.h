@@ -205,8 +205,7 @@ typedef unsigned _BitInt(128) uint128_t;
 
 // fails on one-length arrays, but that is okay because who uses one-length
 // arrays ensures it is not a pointer type
-#define ARR_LENGTH_RELAXED(a)                                                  \
-   (sizeof((a)) / sizeof((a)[0]))
+#define ARR_LENGTH_RELAXED(a) (sizeof((a)) / sizeof((a)[0]))
 
 #define ARR_LENGTH(a)                                                          \
   (ERR_EXPR_COND(sizeof((a)) / sizeof((a)[0]) > 1,                             \
@@ -294,7 +293,7 @@ static inline void debug_print_stack_trace(void) {}
 
 #define EXIT_FAIL(code)                                                        \
   debug_print_stack_trace();                                                   \
-  raise(SIGINT);                                                               \
+  raise(SIGABRT);                                                              \
   exit(code);
 
 #define TODO_FUNC(sig)                                                         \

@@ -102,6 +102,7 @@ enum compile_c_standard {
   COMPILE_C_STANDARD_C11,
   COMPILE_C_STANDARD_C17,
   COMPILE_C_STANDARD_C23,
+  COMPILE_C_STANDARD_C2Y,
 };
 
 enum compile_opts_level {

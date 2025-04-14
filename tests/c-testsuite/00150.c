@@ -1,5 +1,3 @@
-// skip: not yet implemented
-
 struct S1 {
 	int a;
 	int b;

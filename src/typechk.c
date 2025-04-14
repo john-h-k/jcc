@@ -213,9 +213,6 @@ static enum well_known_ty canonicalize_wkt(struct typechk *tchk,
   }
 }
 
-static char *tchk_type_name(struct typechk *tchk,
-                            const struct td_var_ty *var_ty);
-
 static bool td_var_ty_compatible(struct typechk *tchk,
                                  const struct td_var_ty *l0,
                                  const struct td_var_ty *r0,
@@ -749,7 +746,7 @@ static char *tchk_qualifiers_name(struct typechk *tchk,
   return buf;
 }
 
-static char *tchk_type_name(struct typechk *tchk,
+char *tchk_type_name(struct typechk *tchk,
                             const struct td_var_ty *var_ty) {
   return arena_alloc_snprintf(
       tchk->arena, "%s%s", tchk_qualifiers_name(tchk, var_ty->type_qualifiers),
@@ -4595,6 +4592,35 @@ eval_constant_integral_expr(struct typechk *tchk, const struct td_expr *expr,
     return true;
   }
 
+  if (expr->ty == TD_EXPR_TY_CALL) {
+    struct td_expr *target = expr->call.target;
+
+    if (target->ty == TD_EXPR_TY_VAR &&
+        ustr_eq(target->var.identifier, MK_USTR("strlen"))) {
+      // support strlen as constant expr
+
+      if (expr->call.arg_list.num_args != 1) {
+        return false;
+      }
+
+      struct td_expr *str = &expr->call.arg_list.args[0];
+
+      // go through casts
+      // FIXME: we should only traverse _some_ casts
+      while (str->ty == TD_EXPR_TY_UNARY_OP) {
+        str = str->unary_op.expr;
+      }
+
+      if (str->ty == TD_EXPR_TY_CNST && str->cnst.ty == TD_CNST_TY_STRING &&
+          str->cnst.str_value.ty == TD_CNST_STR_TY_ASCII) {
+        *value = (struct td_val){
+            .var_ty = TD_VAR_TY_WELL_KNOWN_SIGNED_INT,
+            .val = ap_val_from_ull(str->cnst.str_value.ascii.len, 32)};
+        return true;
+      }
+    }
+  }
+
   if (expr->ty == TD_EXPR_TY_UNARY_OP) {
     if (expr->unary_op.ty == TD_UNARY_OP_TY_ADDRESSOF &&
         expr->unary_op.expr->ty == TD_EXPR_TY_POINTERACCESS) {
@@ -4819,13 +4845,35 @@ eval_constant_integral_expr(struct typechk *tchk, const struct td_expr *expr,
 
   if (expr->ty == TD_EXPR_TY_BINARY_OP) {
     struct td_val lhs;
-    if (!eval_constant_integral_expr(tchk, expr->binary_op.lhs, flags, &lhs)) {
-      return false;
-    }
+    bool lhs_eval =
+        eval_constant_integral_expr(tchk, expr->binary_op.lhs, flags, &lhs);
 
     struct td_val rhs;
-    if (!eval_constant_integral_expr(tchk, expr->binary_op.rhs, flags, &rhs)) {
-      return false;
+    bool rhs_eval =
+        eval_constant_integral_expr(tchk, expr->binary_op.rhs, flags, &rhs);
+
+    if (!lhs_eval || !rhs_eval) {
+      if (lhs_eval) {
+        if (ap_val_nonzero(lhs.val)) {
+          return false;
+        }
+      } else if (rhs_eval) {
+        if (ap_val_nonzero(rhs.val)) {
+          return false;
+        }
+      } else {
+        return false;
+      }
+
+      // support `ptr != NULL`/`ptr == NULL`
+      switch (expr->binary_op.ty) {
+      case TD_BINARY_OP_TY_NEQ:
+        return true;
+      case TD_BINARY_OP_TY_EQ:
+        return false;
+      default:
+        break;
+      }
     }
 
 #define CHECK_INT_OPS()                                                        \
@@ -4996,6 +5044,23 @@ static struct ap_val type_constant_expr(struct typechk *tchk,
   return value.val;
 }
 
+static void type_static_init_list(struct typechk *tchk,
+                                  struct td_init_list init_list) {
+  // FIXME: is mutating bad
+  for (size_t i = 0; i < init_list.num_inits; i++) {
+    struct td_init_list_init *init = &init_list.inits[i];
+    switch (init->init->ty) {
+    case TD_INIT_TY_EXPR:
+      init->init->expr = type_static_init_expr(tchk, init->init->expr,
+                                               init->init->expr.var_ty, false);
+      break;
+    case TD_INIT_TY_INIT_LIST:
+      type_static_init_list(tchk, init->init->init_list);
+      break;
+    }
+  }
+}
+
 static struct td_expr
 type_static_init_expr(struct typechk *tchk, struct td_expr expr,
                       struct td_var_ty target_ty,
@@ -5066,6 +5131,8 @@ type_static_init_expr(struct typechk *tchk, struct td_expr expr,
   }
 
   case TD_EXPR_TY_COMPOUND_LITERAL: {
+    type_static_init_list(tchk, expr.compound_literal.init_list);
+    expr.var_ty = target_ty;
     return expr;
   }
 
@@ -5213,6 +5280,22 @@ type_static_init_expr(struct typechk *tchk, struct td_expr expr,
       break;
     }
     break;
+  case TD_EXPR_TY_TERNARY: {
+    struct td_expr cond =
+        type_static_init_expr(tchk, *expr.ternary.cond, expr.var_ty, is_addr);
+
+    struct td_expr if_true = type_static_init_expr(
+        tchk, *expr.ternary.true_expr, expr.var_ty, is_addr);
+    struct td_expr if_false = type_static_init_expr(
+        tchk, *expr.ternary.false_expr, expr.var_ty, is_addr);
+
+    struct td_val cond_val;
+    if (eval_constant_integral_expr(
+            tchk, &cond, EVAL_CONSTANT_INTEGRAL_EXPR_FLAG_NONE, &cond_val)) {
+      return ap_val_nonzero(cond_val.val) ? if_true : if_false;
+    }
+    break;
+  }
   case TD_EXPR_TY_BINARY_OP: {
     // may be `ptr + cnst` or `cnst + ptr`
     struct td_expr lhs =
