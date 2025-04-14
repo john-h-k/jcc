@@ -44,6 +44,17 @@ struct ir_label {
   struct ir_label *succ;
 };
 
+enum ir_defer_ty {
+  IR_DEFER_TY_DEFER,
+  IR_DEFER_TY_NEW_SCOPE,
+};
+
+struct ir_defer {
+  enum ir_defer_ty ty;
+
+  struct td_deferstmt *deferstmt;
+};
+
 struct ir_var_builder {
   struct arena_allocator *arena;
   struct typechk *tchk;
@@ -76,6 +87,7 @@ struct ir_func_builder {
 
   struct vector *jumps;
   struct vector *switch_cases;
+  struct vector *defers;
 };
 
 static struct ir_label *add_label(struct ir_func_builder *irb, ustr_t name,
@@ -2369,13 +2381,46 @@ static struct ir_basicblock *build_ir_for_stmt(struct ir_func_builder *irb,
                                                struct ir_basicblock *basicblock,
                                                struct td_stmt *stmt);
 
+static void
+build_ensure_deferred(struct ir_func_builder *irb,
+                      struct ir_stmt **stmt) {
+  *stmt = ir_alloc_stmt(irb->func, (*stmt)->basicblock);
+
+  size_t i = vector_length(irb->defers);
+  while (i > 1) {
+    const struct ir_defer *defer = vector_get(irb->defers, i - 1);
+    i--;
+
+    if (defer->ty == IR_DEFER_TY_NEW_SCOPE) {
+      break;
+    }
+
+    struct ir_basicblock *basicblock = build_ir_for_stmt(irb, (*stmt)->basicblock, defer->deferstmt->stmt);
+    *stmt = basicblock->last;
+  }
+}
+
 static struct ir_basicblock *
 build_ir_for_compoundstmt(struct ir_func_builder *irb,
                           struct ir_basicblock *basicblock,
                           struct td_compoundstmt *compound_stmt) {
+  vector_push_back(irb->defers,
+                   &(struct ir_defer){.ty = IR_DEFER_TY_NEW_SCOPE});
+
   for (size_t i = 0; i < compound_stmt->num_stmts; i++) {
     basicblock = build_ir_for_stmt(irb, basicblock, &compound_stmt->stmts[i]);
   }
+
+  while (true) {
+    const struct ir_defer *defer = vector_pop(irb->defers);
+
+    if (defer->ty == IR_DEFER_TY_NEW_SCOPE) {
+      break;
+    }
+
+    basicblock = build_ir_for_stmt(irb, basicblock, defer->deferstmt->stmt);
+  }
+
   return basicblock;
 }
 
@@ -2851,6 +2896,8 @@ static struct ir_basicblock *build_ir_for_goto(struct ir_func_builder *irb,
 static struct ir_basicblock *
 build_ir_for_ret(struct ir_func_builder *irb, struct ir_stmt **stmt,
                  struct td_returnstmt *return_stmt) {
+  build_ensure_deferred(irb, stmt);
+
   struct ir_op *expr_op;
   if (return_stmt && return_stmt->expr) {
     expr_op = build_ir_for_expr(irb, stmt, return_stmt->expr);
@@ -2878,6 +2925,8 @@ build_ir_for_ret(struct ir_func_builder *irb, struct ir_stmt **stmt,
 
 static struct ir_basicblock *build_ir_for_break(struct ir_func_builder *irb,
                                                 struct ir_stmt **stmt) {
+  build_ensure_deferred(irb, stmt);
+
   struct ir_jump jump = {.ty = IR_JUMP_TY_BREAK,
                          .basicblock = (*stmt)->basicblock};
   vector_push_back(irb->jumps, &jump);
@@ -2888,6 +2937,8 @@ static struct ir_basicblock *build_ir_for_break(struct ir_func_builder *irb,
 
 static struct ir_basicblock *build_ir_for_continue(struct ir_func_builder *irb,
                                                    struct ir_stmt **stmt) {
+  build_ensure_deferred(irb, stmt);
+
   struct ir_jump jump = {.ty = IR_JUMP_TY_CONTINUE,
                          .basicblock = (*stmt)->basicblock};
   vector_push_back(irb->jumps, &jump);
@@ -3432,6 +3483,13 @@ static struct ir_basicblock *build_ir_for_stmt(struct ir_func_builder *irb,
     build_ir_for_expr(irb, &ir_stmt, &stmt->expr);
     return ir_stmt->basicblock;
   }
+  case TD_STMT_TY_DEFER: {
+    struct ir_defer defer = {.ty = IR_DEFER_TY_DEFER,
+                             .deferstmt = &stmt->deferstmt};
+
+    vector_push_back(irb->defers, &defer);
+    return basicblock;
+  }
   case TD_STMT_TY_JUMP: {
     return build_ir_for_jumpstmt(irb, basicblock, &stmt->jump);
   }
@@ -3644,6 +3702,7 @@ static struct ir_func *build_ir_for_function(struct ir_unit *unit,
           hashtbl_create(sizeof(struct td_var), sizeof(struct vector *),
                          hash_td_var, eq_td_var),
       .jumps = vector_create(sizeof(struct ir_jump)),
+      .defers = vector_create(sizeof(struct ir_defer)),
       .switch_cases = vector_create(sizeof(struct ir_case)),
       .var_refs = var_refs,
       .global_var_refs = global_var_refs};
@@ -4268,7 +4327,8 @@ static struct ir_var_value build_ir_for_var_value_addr(
   }
 
   case TD_EXPR_TY_COMPOUND_LITERAL: {
-    if (var_ty->ty == TD_VAR_TY_TY_POINTER && addr->compound_literal.var_ty.ty == TD_VAR_TY_TY_ARRAY) {
+    if (var_ty->ty == TD_VAR_TY_TY_POINTER &&
+        addr->compound_literal.var_ty.ty == TD_VAR_TY_TY_ARRAY) {
       // decay, take address
       return build_ir_for_compound_literal_addr(irb, addr, offset);
     }
@@ -4466,8 +4526,7 @@ build_ir_for_var_value_expr(struct ir_var_builder *irb,
   // sizeof/alignof/etc
   case TD_EXPR_TY_COMPOUND_LITERAL:
     if (expr->compound_literal.var_ty.ty == TD_VAR_TY_TY_ARRAY) {
-      return build_ir_for_var_value_addr(irb, expr, 0,
-                                         var_ty);
+      return build_ir_for_var_value_addr(irb, expr, 0, var_ty);
     }
     BUG("non array compound literal?");
   case TD_EXPR_TY_VAR:

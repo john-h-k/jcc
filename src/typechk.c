@@ -746,8 +746,7 @@ static char *tchk_qualifiers_name(struct typechk *tchk,
   return buf;
 }
 
-char *tchk_type_name(struct typechk *tchk,
-                            const struct td_var_ty *var_ty) {
+char *tchk_type_name(struct typechk *tchk, const struct td_var_ty *var_ty) {
   return arena_alloc_snprintf(
       tchk->arena, "%s%s", tchk_qualifiers_name(tchk, var_ty->type_qualifiers),
       tchk_base_type_name(tchk, var_ty));
@@ -5629,6 +5628,14 @@ type_compoundstmt(struct typechk *tchk,
 static void type_staticassert(struct typechk *tchk,
                               const struct ast_staticassert *staticassert);
 
+static struct td_deferstmt
+type_deferstmt(struct typechk *tchk, const struct ast_deferstmt *deferstmt) {
+  struct td_stmt stmt = type_stmt(tchk, deferstmt->stmt);
+
+  return (struct td_deferstmt){.stmt =
+                                   arena_alloc_init(tchk->arena, sizeof(stmt), &stmt)};
+}
+
 static struct td_stmt type_stmt(struct typechk *tchk,
                                 const struct ast_stmt *stmt) {
   struct td_stmt td_stmt;
@@ -5644,6 +5651,11 @@ static struct td_stmt type_stmt(struct typechk *tchk,
     td_stmt = (struct td_stmt){
         .ty = TD_STMT_TY_NULL,
     };
+    break;
+  case AST_STMT_TY_DEFER:
+    td_stmt =
+        (struct td_stmt){.ty = TD_STMT_TY_DEFER,
+                         .deferstmt = type_deferstmt(tchk, &stmt->deferred)};
     break;
   case AST_STMT_TY_DECLARATION:
     td_stmt = (struct td_stmt){.ty = TD_STMT_TY_DECLARATION,
@@ -6686,6 +6698,9 @@ static void td_walk_node(struct typechk *tchk, const struct td_node *node,
     case TD_STMT_TY_LABELED:
       CB_STMT(stmt->labeled.stmt);
       break;
+    case TD_STMT_TY_DEFER:
+      CB_STMT(stmt->deferstmt.stmt);
+      break;
     case TD_STMT_TY_EXPR:
       CB_EXPR(&stmt->expr);
       break;
@@ -7718,6 +7733,13 @@ DEBUG_FUNC(labeledstmt, labeled_stmt) {
   UNINDENT();
 }
 
+DEBUG_FUNC(deferstmt, deferstmt) {
+  TD_PRINTZ("DEFER");
+  INDENT();
+  DEBUG_CALL(stmt, deferstmt->stmt);
+  UNINDENT();
+}
+
 DEBUG_FUNC(stmt, stmt) {
   INDENT();
 
@@ -7729,6 +7751,9 @@ DEBUG_FUNC(stmt, stmt) {
     break;
   case TD_STMT_TY_EXPR:
     DEBUG_CALL(expr, &stmt->expr);
+    break;
+  case TD_STMT_TY_DEFER:
+    DEBUG_CALL(deferstmt, &stmt->deferstmt);
     break;
   case TD_STMT_TY_COMPOUND:
     DEBUG_CALL(compoundstmt, &stmt->compound);

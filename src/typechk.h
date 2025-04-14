@@ -729,6 +729,10 @@ struct td_iterstmt {
   };
 };
 
+struct td_deferstmt {
+  struct td_stmt *stmt;
+};
+
 enum td_stmt_ty {
   TD_STMT_TY_NULL,
   TD_STMT_TY_DECLARATION,
@@ -738,6 +742,7 @@ enum td_stmt_ty {
   TD_STMT_TY_JUMP,
   TD_STMT_TY_ITER,
   TD_STMT_TY_SELECT,
+  TD_STMT_TY_DEFER,
 };
 
 struct td_stmt {
@@ -750,6 +755,7 @@ struct td_stmt {
     struct td_selectstmt select;
     struct td_iterstmt iter;
     struct td_labeledstmt labeled;
+    struct td_deferstmt deferstmt;
   };
 
   struct text_span span;

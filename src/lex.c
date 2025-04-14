@@ -118,7 +118,7 @@ enum lex_create_result lexer_create(struct program program,
     }
 
     if (c_standard >= COMPILE_C_STANDARD_C2Y) {
-      // KEYWORD("defer", LEX_TOKEN_TY_KW_DEFER);
+      KEYWORD("defer", LEX_TOKEN_TY_KW_DEFER);
     }
 
     // required by macOS
@@ -769,6 +769,7 @@ const char *lex_token_name(UNUSED_ARG(const struct lexer *lexer),
 
     CASE_RET(LEX_TOKEN_TY_ELLIPSIS)
 
+    CASE_RET(LEX_TOKEN_TY_KW_DEFER)
     CASE_RET(LEX_TOKEN_TY_KW_NONNULL)
     CASE_RET(LEX_TOKEN_TY_KW_NULLABLE)
     CASE_RET(LEX_TOKEN_TY_KW_ASM)

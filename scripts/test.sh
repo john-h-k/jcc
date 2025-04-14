@@ -412,7 +412,7 @@ run_tests() {
 
           for file in "${files[@]}"; do
             asm=$(tmpname "$pid.$(basename "$file").s")
-            timeout -k $BUILD_TIMEOUT $BUILD_TIMEOUT "$JCC" $flags "${args[@]}" "${group_args[@]}" -S -o "$asm" -std=c23 -tm "$tm" "$file" \
+            timeout -k $BUILD_TIMEOUT $BUILD_TIMEOUT "$JCC" $flags "${args[@]}" "${group_args[@]}" -S -o "$asm" -std="${std:-c23}" -tm "$tm" "$file" \
               || return $?
 
             obj=$(tmpname "$pid.$(basename "$file").o")
@@ -473,9 +473,10 @@ run_tests() {
       rm -f -- "$output"
 
       expected=$(grep -i "expected value:" "$file" | head -1 | grep -Eo '[0-9]+')
-      stdin=$(grep -i "stdin" "$file" | head -1 | sed -n 's/^\/\/ stdin: //p')
-      flags=$(grep -i "flags" "$file" | head -1 | sed -n 's/^\/\/ flags: //p')
-      os_flags=$(grep -i "flags-$(uname)" "$file" | head -1 | sed -n "s/^\/\/ flags-[^:]*: //p")
+      stdin=$(grep -i "stdin:" "$file" | head -1 | sed -n 's/^\/\/ stdin: //p')
+      std=$(grep -i "std:" "$file" | head -1 | sed -n 's/^\/\/ std: //p')
+      flags=$(grep -i "flags:" "$file" | head -1 | sed -n 's/^\/\/ flags: //p')
+      os_flags=$(grep -i "flags-$(uname):" "$file" | head -1 | sed -n "s/^\/\/ flags-[^:]*: //p")
 
       flags="$([ -n "$flags" ] && echo "$flags $os_flags" || echo "$os_flags")"
 
@@ -496,10 +497,10 @@ run_tests() {
         continue
       fi
 
-      target_arch=$(grep -i "arch" "$file" | head -1 | sed -n 's/^\/\/ arch: //p')
+      target_arch=$(grep -i "arch:" "$file" | head -1 | sed -n 's/^\/\/ arch: //p')
       target_arch=${target_arch/arm64/aarch64}
 
-      target_arch_skip=$(grep -i "arch" "$file" | head -1 | sed -n 's/^\/\/ arch-skip: //p')
+      target_arch_skip=$(grep -i "arch-skip:" "$file" | head -1 | sed -n 's/^\/\/ arch-skip: //p')
       target_arch_skip=${target_arch_skip/arm64/aarch64}
 
       target_os=$(grep -i "os" "$file" | head -1 | sed -n 's/^\/\/ os: //p')
