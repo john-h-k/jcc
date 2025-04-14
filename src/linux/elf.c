@@ -433,6 +433,9 @@ static void write_elf_object(const struct build_object_args *args) {
     }
   }
 
+  total_text_size = ROUND_UP(total_text_size, const_align);
+  total_const_size = ROUND_UP(total_text_size + total_const_size, data_align) - total_text_size;
+
   struct reloc_info info = build_reloc_info(args, entry_offsets);
 
   /* assign file offsets to sections in order:
