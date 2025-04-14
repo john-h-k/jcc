@@ -1,4 +1,4 @@
-// skip: not yet implemented
+// skip: not yet implemented (__builtin_expect)
 
 /* Check some way in where code suppression caused various
    miscompilations.  */
