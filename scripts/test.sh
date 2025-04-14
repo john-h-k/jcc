@@ -346,7 +346,9 @@ aggregator() {
   exit $?
 }
 
-TMP_DIR="tmp"
+TMP_DIR=".tmp"
+mkdir -p "$TMP_DIR"
+
 tmpname() {
   file=./$TMP_DIR/"$1"
   mkdir -p "$(dirname "$file")"
@@ -495,12 +497,20 @@ run_tests() {
       fi
 
       target_arch=$(grep -i "arch" "$file" | head -1 | sed -n 's/^\/\/ arch: //p')
-      target_arch=${target_arch/arm64/atarget_arch64}
+      target_arch=${target_arch/arm64/aarch64}
+
+      target_arch_skip=$(grep -i "arch" "$file" | head -1 | sed -n 's/^\/\/ arch-skip: //p')
+      target_arch_skip=${target_arch_skip/arm64/aarch64}
 
       target_os=$(grep -i "os" "$file" | head -1 | sed -n 's/^\/\/ os: //p')
 
       if [[ -n $target_arch && $target_arch != "$arch" ]]; then
         send_status skip "$prefix'$file' skipped due to architecture (test: $target_arch, runner: $arch)"
+        continue
+      fi
+
+      if [[ -n $target_arch_skip && $target_arch_skip == "$arch" ]]; then
+        send_status skip "$prefix'$file' skipped due to architecture (test: $target_arch_skip, runner: $arch)"
         continue
       fi
 
@@ -534,13 +544,15 @@ run_tests() {
       fi
 
       # supress echo stderr because otherwise we get spurious broken pipe errors
+      cd "$TMP_DIR"
       if [ -z "$RUNNER" ]; then
-        output_result=$(echo "$stdin" 2>/dev/null | timeout -k $TEST_TIMEOUT $TEST_TIMEOUT ./"$output" 2>/dev/null)
+        output_result=$(echo "$stdin" 2>/dev/null | timeout -k $TEST_TIMEOUT $TEST_TIMEOUT ../"$output" 2>/dev/null)
         result=$?
       else
-        output_result=$(echo "$stdin" 2>/dev/null | timeout -k $TEST_TIMEOUT $TEST_TIMEOUT "$RUNNER" "$output" 2>/dev/null)
+        output_result=$(echo "$stdin" 2>/dev/null | timeout -k $TEST_TIMEOUT $TEST_TIMEOUT "$RUNNER" ../"$output" 2>/dev/null)
         result=$?
       fi
+      cd - &>/dev/null
   
       if [ "$result" != "$expected" ]; then
         send_status fail "$prefix'$file' produced exit code $result, expected $expected. Build output: \n${RESET}$(echo "$build_msg" | awk '{print "  " $0}')${RESET}\n"

@@ -1,4 +1,4 @@
-// skip: not yet implemented (GNU ranges)
+// skip: not yet implemented - GNU ranges
 
 typedef unsigned char u8;
 typedef struct {} empty_s;

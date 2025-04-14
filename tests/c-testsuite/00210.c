@@ -1,4 +1,4 @@
-// skip: not yet implemented (attribute packed/stdcall/noinline)
+// skip: not yet implemented - attribute packed/stdcall/noinline
 
 typedef unsigned short uint16_t;
 typedef unsigned char uint8_t;
