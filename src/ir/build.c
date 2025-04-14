@@ -3702,7 +3702,7 @@ static struct ir_func *build_ir_for_function(struct ir_unit *unit,
           hashtbl_create(sizeof(struct td_var), sizeof(struct vector *),
                          hash_td_var, eq_td_var),
       .jumps = vector_create(sizeof(struct ir_jump)),
-      .defers = vector_create(sizeof(struct ir_defer)),
+      .defers = vector_create_in_arena(sizeof(struct ir_defer), arena),
       .switch_cases = vector_create(sizeof(struct ir_case)),
       .var_refs = var_refs,
       .global_var_refs = global_var_refs};
