@@ -1,5 +1,6 @@
 // expected value: 99
 // arch-skip: rv32i
+// rv32i needs i64 support for this test (as `hi = 0xFFFFFFFF` compiles to `hi = (int)0xFFFFFFFFl`)
 
 int main() {
   char c = 1;
