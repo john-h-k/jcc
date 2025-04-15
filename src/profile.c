@@ -7,6 +7,8 @@
 
 #include <time.h>
 
+#define PROFILE_SELF
+
 #if defined(__APPLE__) && __has_include(<mach/mach_time.h>)
 #include <mach/mach_time.h>
 static mach_timebase_info_data_t timebase_info_data;
@@ -78,7 +80,8 @@ static void profiler_init(void) {
   }
 }
 
-struct profiler_multi_region_inst profiler_begin_multi_region(struct profiler_multi_region *multi_region) {
+struct profiler_multi_region_inst
+profiler_begin_multi_region(struct profiler_multi_region *multi_region) {
 #ifdef PROFILE_SELF
   unsigned long long prof_start = get_time();
 #endif
@@ -88,8 +91,10 @@ struct profiler_multi_region_inst profiler_begin_multi_region(struct profiler_mu
   struct hashtbl_entry entry;
   struct profiler_multi_region_data *region;
   if (UNLIKELY(!multi_region->entry.key)) {
-    // TODO: validate no other regions exist with this name (this will overwrite)
-    entry = hashtbl_lookup_entry_or_insert(MULTI_REGIONS, &multi_region->name, NULL);
+    // TODO: validate no other regions exist with this name (this will
+    // overwrite)
+    entry = hashtbl_lookup_entry_or_insert(MULTI_REGIONS, &multi_region->name,
+                                           NULL);
     multi_region->entry = entry;
 
     region = entry.data;
@@ -97,7 +102,8 @@ struct profiler_multi_region_inst profiler_begin_multi_region(struct profiler_mu
     region->name = multi_region->name;
     region->spans = vector_create(sizeof(struct profiler_span));
   } else {
-    entry = hashtbl_lookup_with_entry(MULTI_REGIONS, &multi_region->name, &multi_region->entry);
+    entry = hashtbl_lookup_with_entry(MULTI_REGIONS, &multi_region->name,
+                                      &multi_region->entry);
     region = entry.data;
 
     multi_region->entry = entry;
@@ -117,7 +123,8 @@ struct profiler_multi_region_inst profiler_begin_multi_region(struct profiler_mu
   span->start = start;
   span->ended = false;
 
-  return (struct profiler_multi_region_inst){.name = multi_region->name, .entry = entry, .idx = idx};
+  return (struct profiler_multi_region_inst){
+      .name = multi_region->name, .entry = entry, .idx = idx};
 }
 
 void profiler_end_multi_region(struct profiler_multi_region_inst region) {
@@ -127,7 +134,8 @@ void profiler_end_multi_region(struct profiler_multi_region_inst region) {
       hashtbl_lookup_with_entry(MULTI_REGIONS, &region.name, &region.entry);
   struct profiler_multi_region_data *data = entry.data;
 
-  DEBUG_ASSERT(data, "multi-region '%s' did not exist!", (const char *)entry.key);
+  DEBUG_ASSERT(data, "multi-region '%s' did not exist!",
+               (const char *)entry.key);
 
   struct profiler_span *span = vector_get(data->spans, region.idx);
 
@@ -188,7 +196,9 @@ static double profiler_elapsed_nanos(struct profiler_span span) {
 }
 
 #ifdef PROFILE_SELF
-static void profiler_elapsed_self_nanos(struct profiler_span span, double *start, double *end, double *total) {
+static void profiler_elapsed_self_nanos(struct profiler_span span,
+                                        double *start, double *end,
+                                        double *total) {
   *start = (double)span.start - (double)span.prof_start;
   *end = (double)span.prof_end - (double)span.end;
   *total = (double)span.prof_end - (double)span.prof_start;
@@ -196,8 +206,7 @@ static void profiler_elapsed_self_nanos(struct profiler_span span, double *start
 #endif
 
 static void profiler_print_region(FILE *file, size_t depth,
-                                  struct profiler_region_data *region,
-                                  double *region_sum) {
+                                  const struct profiler_region_data *region) {
   double nanos = profiler_elapsed_nanos(region->span);
 
   fprintf(file, "%*s%s: ", (int)((depth + 1) * 4), "", region->name);
@@ -210,7 +219,111 @@ static void profiler_print_region(FILE *file, size_t depth,
   }
 
   fprintf(file, "\n");
-  *region_sum += nanos;
+}
+
+enum profiler_regions_tree_ty {
+  PROFILER_REGIONS_TREE_TY_REGION,
+  PROFILER_REGIONS_TREE_TY_GAP,
+};
+
+struct profiler_regions_tree_region {
+  struct profiler_region_data region;
+  // vec of `profiler_regions_tree`
+  struct vector *subregions;
+};
+
+struct profiler_regions_tree {
+  enum profiler_regions_tree_ty ty;
+
+  union {
+    struct profiler_span gap;
+    struct profiler_regions_tree_region region;
+  };
+};
+
+struct profiler_multi_regions_result {
+  const char *name;
+  double total;
+};
+
+#ifdef PROFILE_SELF
+struct profiler_self_result {
+  double start_avg;
+  double span_avg;
+  double end_avg;
+  double proportion;
+};
+#endif
+
+struct profiler_result {
+  struct profiler_regions_tree tree;
+
+  struct profiler_multi_regions_result *multi_regions;
+  size_t num_multi_regions;
+
+#ifdef PROFILE_SELF
+  struct profiler_self_result self;
+#endif
+};
+
+static void
+profiler_build_regions_tree(struct profiler_regions_tree_region *parent,
+                            double *region_sum, size_t *start,
+                            size_t num_regions) {
+  (*start)++;
+
+  double sub_region_sum = 0;
+  double sub_region_gap_sum = 0;
+
+  unsigned long long parent_len =
+      parent->region.span.end - parent->region.span.start;
+  unsigned long long last_end = parent->region.span.start;
+
+  bool is_subregion = false;
+  while (*start < num_regions) {
+    struct profiler_region_data *region = vector_get(REGIONS, *start);
+
+    if (!region->span.ended) {
+      (*start)++;
+      continue;
+    }
+
+    if (region->span.start >= parent->region.span.end) {
+      break;
+    }
+
+    struct profiler_regions_tree gap_tree = {
+        .ty = PROFILER_REGIONS_TREE_TY_GAP,
+        .gap = {.start = last_end, .end = region->span.start, .ended = true}};
+
+    vector_push_back(parent->subregions, &gap_tree);
+
+    struct profiler_regions_tree region_tree = {
+        .ty = PROFILER_REGIONS_TREE_TY_REGION,
+        .region = {.region = *region,
+                   .subregions =
+                       vector_create(sizeof(struct profiler_regions_tree))}};
+
+    struct profiler_regions_tree *p =
+        vector_push_back(parent->subregions, &region_tree);
+
+    last_end = region->span.end;
+
+    is_subregion = true;
+    profiler_build_regions_tree(&p->region, &sub_region_sum, start,
+                                num_regions);
+  }
+
+  if (is_subregion) {
+    unsigned long long gap = parent->region.span.end - last_end;
+    sub_region_gap_sum += gap;
+
+    struct profiler_regions_tree gap_tree = {
+        .ty = PROFILER_REGIONS_TREE_TY_GAP,
+        .gap = {.start = last_end, .end = parent->region.span.end}};
+
+    vector_push_back(parent->subregions, &gap_tree);
+  }
 }
 
 static void profiler_print_subregions(FILE *file,
@@ -284,36 +397,150 @@ static void profiler_print_subregions(FILE *file,
   }
 }
 
-void profiler_print(FILE *file) {
-#ifndef TIME_UTC
-  warn("profiling not supported on this system (TIME_UTC was not defined)");
-  return;
-#endif
-
-  if (!REGIONS || !vector_length(REGIONS)) {
-    fprintf(file, "No profiling available\n");
-    return;
-  }
+static struct profiler_result profiler_build_result(void) {
+  struct profiler_result result = {0};
 
   struct profiler_region_data *top = vector_head(REGIONS);
   invariant_assert(!strcmp(top->name, "top"), "first entry has been corrupted");
   top->span.end = get_time();
   top->span.ended = true;
 
-  fprintf(file, "\nPROFILER: ");
-  fprintf(file, "\n");
+  struct profiler_regions_tree region_tree = {
+      .ty = PROFILER_REGIONS_TREE_TY_REGION,
+      .region = {.region = *top,
+                 .subregions =
+                     vector_create(sizeof(struct profiler_regions_tree))}};
 
-  size_t num_regions = vector_length(REGIONS);
-  if (!num_regions) {
+  double region_sum = 0;
+  size_t idx = 0;
+  profiler_build_regions_tree(&region_tree.region, &region_sum, &idx,
+                              vector_length(REGIONS));
+
+  result.tree = region_tree;
+
+  struct vector *multi =
+      vector_create(sizeof(struct profiler_multi_regions_result));
+
+#ifdef PROFILE_SELF
+  double profiler_start_elapsed = 0;
+  double profiler_end_elapsed = 0;
+  double profiler_span_elapsed = 0;
+  double profiler_total_elapsed = 0;
+  size_t num_profiles = 0;
+#endif
+
+  struct hashtbl_iter *iter = hashtbl_iter(MULTI_REGIONS);
+  struct hashtbl_entry entry;
+  while (hashtbl_iter_next(iter, &entry)) {
+    struct profiler_multi_region_data *data = entry.data;
+
+    size_t num_spans = vector_length(data->spans);
+    double elapsed = 0;
+    bool warned = false;
+    for (size_t i = 0; i < num_spans; i++) {
+      struct profiler_span *span = vector_get(data->spans, i);
+
+      if (!span->ended && !warned) {
+        warned = true;
+        warn("Unended profiler span in multi-region '%s'", data->name);
+        continue;
+      }
+
+      elapsed += profiler_elapsed_nanos(*span);
+
+#ifdef PROFILE_SELF
+      double start, end, total;
+      profiler_elapsed_self_nanos(*span, &start, &end, &total);
+      profiler_start_elapsed += start;
+      profiler_end_elapsed += end;
+      profiler_span_elapsed += profiler_elapsed_nanos(*span);
+      profiler_total_elapsed += total;
+      num_profiles++;
+#endif
+    }
+
+    vector_push_back(multi, &(struct profiler_multi_regions_result){
+                                .name = data->name, .total = elapsed});
+  }
+
+#ifdef PROFILE_SELF
+  double start_avg = profiler_start_elapsed / num_profiles;
+  double span_avg = profiler_span_elapsed / num_profiles;
+  double end_avg = profiler_end_elapsed / num_profiles;
+
+  double overhead_proportion =
+      (profiler_start_elapsed + profiler_end_elapsed) / profiler_total_elapsed;
+
+  result.self =
+      (struct profiler_self_result){.start_avg = start_avg,
+                                    .span_avg = span_avg,
+                                    .end_avg = end_avg,
+                                    .proportion = overhead_proportion};
+#endif
+
+  return result;
+}
+
+void profiler_print_tree(FILE *file, const struct profiler_regions_tree *tree,
+                         size_t depth) {
+  DEBUG_ASSERT(tree->ty == PROFILER_REGIONS_TREE_TY_REGION,
+               "gaps shoudl be handled seperately");
+
+  const struct profiler_region_data *region = &tree->region.region;
+
+  profiler_print_region(file, depth, region);
+
+  size_t num_subregions = vector_length(tree->region.subregions);
+
+  double region_len = profiler_elapsed_nanos(region->span);
+
+  for (size_t i = 0; i < num_subregions; i++) {
+    struct profiler_regions_tree *subregion =
+        vector_get(tree->region.subregions, i);
+
+    switch (subregion->ty) {
+    case PROFILER_REGIONS_TREE_TY_REGION:
+      profiler_print_tree(file, subregion, depth + 1);
+      break;
+    case PROFILER_REGIONS_TREE_TY_GAP: {
+      double gap = profiler_elapsed_nanos(subregion->gap);
+      double gap_proportion = gap / region_len;
+
+      if (gap_proportion > 0.15) {
+        fprintf(file, "%*s", (int)((depth + 2) * 4), "");
+        fprintf(file, "(profiling gap ");
+        print_time(file, gap);
+        fprintf(file, ")\n");
+      }
+
+      break;
+    }
+    }
+  }
+}
+
+void profiler_print(FILE *file) {
+#ifndef TIME_UTC
+  warn("profiling not supported on this system (TIME_UTC was not defined)");
+#else
+  if (!REGIONS || !vector_length(REGIONS)) {
+    fprintf(file, "No profiling available\n");
     return;
   }
 
-  for (size_t i = 0; i < num_regions;) {
-    double sub_region_sum = 0;
-    profiler_print_subregions(file, vector_get(REGIONS, i), 1, &sub_region_sum,
-                              &i, num_regions);
-    fprintf(file, "\n");
-  }
+  struct profiler_result result = profiler_build_result();
+
+  fprintf(file, "\nPROFILER: ");
+  fprintf(file, "\n");
+
+  while ()
+
+    for (size_t i = 0; i < num_regions;) {
+      double sub_region_sum = 0;
+      profiler_print_subregions(file, vector_get(REGIONS, i), 1,
+                                &sub_region_sum, &i, num_regions);
+      fprintf(file, "\n");
+    }
 
   for (size_t i = 0; i < num_regions; i++) {
     struct profiler_region_data *data = vector_get(REGIONS, i);
@@ -357,15 +584,15 @@ void profiler_print(FILE *file) {
 
       elapsed += profiler_elapsed_nanos(*span);
 
-      #ifdef PROFILE_SELF
-        double start, end, total;
-        profiler_elapsed_self_nanos(*span, &start, &end, &total);
-        profiler_start_elapsed += start;
-        profiler_end_elapsed += end;
-        profiler_span_elapsed += profiler_elapsed_nanos(*span);
-        profiler_total_elapsed += total;
-        num_profiles++;
-      #endif
+#ifdef PROFILE_SELF
+      double start, end, total;
+      profiler_elapsed_self_nanos(*span, &start, &end, &total);
+      profiler_start_elapsed += start;
+      profiler_end_elapsed += end;
+      profiler_span_elapsed += profiler_elapsed_nanos(*span);
+      profiler_total_elapsed += total;
+      num_profiles++;
+#endif
     }
 
     fprintf(file, "        %s: ", data->name);
@@ -393,12 +620,14 @@ void profiler_print(FILE *file) {
   print_time(file, end_avg);
   fprintf(file, "\n");
 
-  double overhead_proportion = (profiler_start_elapsed + profiler_end_elapsed) / profiler_total_elapsed;
+  double overhead_proportion =
+      (profiler_start_elapsed + profiler_end_elapsed) / profiler_total_elapsed;
 
   fprintf(file, "        ");
   fprintf(file, "(total profiling time ");
   print_time(file, profiler_total_elapsed);
   fprintf(file, ", overhead ~%.2f%%)\n\n", overhead_proportion * 100);
   fprintf(file, "\n");
+#endif
 #endif
 }
