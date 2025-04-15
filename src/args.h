@@ -347,6 +347,9 @@ VALUES_FN(language, LANGUAGE)
                                                                                \
   ARG_BOOL(profile, "", "--profile", "Run profiler")                           \
                                                                                \
+  ARG_STRING(profile_json, "", "--profile-json",                               \
+             "Run profiler and output JSON to file")                           \
+                                                                               \
   DEBUG_OPT_LIST
 
 struct parsed_args {

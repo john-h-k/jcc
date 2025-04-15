@@ -79,37 +79,37 @@ const static struct td_var_ty AARCH64_VA_LIST_TY =
     {.ty = TD_VAR_TY_TY_AGGREGATE,
      .aggregate = {
          .ty = TD_TY_AGGREGATE_TY_STRUCT,
-         .name = MK_USTR(""),
+          .name = MK_NULL_USTR(),
          .num_fields = 5,
          .fields =
              (struct td_struct_field[5]){
                  [0] =
                      {
-                         .identifier = MK_USTR("stack"),
+                         .identifier = MK_USTR_LITERAL("stack"),
                          .var_ty = {.ty = TD_VAR_TY_TY_POINTER,
                                     .pointer = {.underlying = &TD_VAR_TY_VOID}},
                      },
                  [1] =
                      {
-                         .identifier = MK_USTR("gr_top"),
+                         .identifier = MK_USTR_LITERAL("gr_top"),
                          .var_ty = {.ty = TD_VAR_TY_TY_POINTER,
                                     .pointer = {.underlying = &TD_VAR_TY_VOID}},
                      },
                  [2] =
                      {
-                         .identifier = MK_USTR("vr_top"),
+                         .identifier = MK_USTR_LITERAL("vr_top"),
                          .var_ty = {.ty = TD_VAR_TY_TY_POINTER,
                                     .pointer = {.underlying = &TD_VAR_TY_VOID}},
                      },
                  [3] =
                      {
-                         .identifier = MK_USTR("gr_offs"),
+                         .identifier = MK_USTR_LITERAL("gr_offs"),
                          .var_ty = {.ty = TD_VAR_TY_TY_WELL_KNOWN,
                                     .well_known = WELL_KNOWN_TY_UNSIGNED_INT},
                      },
                  [4] =
                      {
-                         .identifier = MK_USTR("vr_offs"),
+                         .identifier = MK_USTR_LITERAL("vr_offs"),
                          .var_ty = {.ty = TD_VAR_TY_TY_WELL_KNOWN,
                                     .well_known = WELL_KNOWN_TY_UNSIGNED_INT},
                      },

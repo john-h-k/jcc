@@ -13,6 +13,7 @@
 #include "rv32i.h"
 #include "target.h"
 #include "util.h"
+#include "vector.h"
 #include "x64.h"
 
 #include <locale.h>
@@ -388,7 +389,10 @@ int main(int argc, char **argv) {
 
   // we want to use the user's locale i think?
   // TODO: remove this
-  LSAN_IGNORE(setlocale(LC_ALL, ""));
+  const char *locale;
+  if (!(locale = setlocale(LC_ALL, "C.utf8"))) {
+    locale = setlocale(LC_ALL, "");
+  }
 
 #if SAN && OS_APPLE
   // sanitizer running causes spurious 'malloc: nano zone abandoned due to
@@ -446,8 +450,11 @@ static int jcc_driver_compiler(struct arena_allocator *arena,
                                const char **sources);
 
 static int jcc_main(int argc, char **argv) {
-  struct arena_allocator *arena = NULL;
+  int exc = 0;
 
+  profiler_init();
+
+  struct arena_allocator *arena = NULL;
   arena_allocator_create("main", &arena);
 
   struct fcache *fcache;
@@ -462,23 +469,33 @@ static int jcc_main(int argc, char **argv) {
   case PARSE_ARGS_RESULT_SUCCESS:
     break;
   case PARSE_ARGS_RESULT_HELP:
-    return 0;
+    exc = 0;
+    goto exit;
   case PARSE_ARGS_RESULT_FAIL:
-    return 1;
+    exc = 1;
+    goto exit;
   }
 
   const struct target *target = get_target(compile_args.target);
   if (!target) {
-    return 1;
+    exc = 1;
+    goto exit;
   }
 
   switch (args.driver) {
   case JCC_DRIVER_COMPILER:
-    return jcc_driver_compiler(arena, fcache, args, compile_args, target,
+    exc = jcc_driver_compiler(arena, fcache, args, compile_args, target,
                                num_sources, sources);
+    break;
   case JCC_DRIVER_LSP:
-    return jcc_driver_lsp(arena, fcache, args, compile_args, target);
+    exc = jcc_driver_lsp(arena, fcache, args, compile_args, target);
+    break;
   }
+
+exit:
+  free_args(&args);
+  arena_allocator_free(&arena);
+  return exc;
 }
 
 static int jcc_driver_lsp(struct arena_allocator *arena, struct fcache *fcache,
@@ -495,16 +512,14 @@ static int jcc_driver_compiler(struct arena_allocator *arena,
                                const char **sources) {
   int exc = 1;
 
+  // FIXME: proper temp management
+  struct vector *tmps = vector_create_in_arena(sizeof(const char *), arena);
+
   const char **objects = nonnull_malloc(sizeof(*objects) * num_sources);
 
   info("beginning compilation stage...");
   for (size_t i = 0; i < num_sources; i++) {
     const char *source_path = sources[i];
-
-    char *region =
-        arena_alloc(arena, strlen("compile ") + strlen(source_path) + 1);
-    strcpy(region, "compile ");
-    strcat(region, source_path);
 
     info("compiling source file \"%s\"", source_path);
 
@@ -542,7 +557,7 @@ static int jcc_driver_compiler(struct arena_allocator *arena,
       unreachable();
     }
 
-    struct profiler_region compile_region = profiler_begin_region(region);
+    PROFILE_BEGIN(compile);
 
     PROFILE_BEGIN(source_read);
 
@@ -585,9 +600,13 @@ static int jcc_driver_compiler(struct arena_allocator *arena,
       }
     } else if (target_needs_linking(&compile_args, target) ||
                compile_args.output.ty == COMPILE_FILE_TY_NONE) {
+      char *name = arena_alloc_strdup(arena, "jcc-obj-XXXXXXXX");
+      vector_push_back(tmps, &name);
+      mkstemp(name);
       file = (struct compile_file){
           .ty = COMPILE_FILE_TY_PATH,
-          .path = path_replace_ext(arena, source_path, "o")};
+          // FIXME: not portable!
+          .path = name};
       info("compiling source file '%s' into object file '%s'", source_path,
            file.path);
     } else {
@@ -634,7 +653,7 @@ static int jcc_driver_compiler(struct arena_allocator *arena,
       goto exit;
     }
 
-    profiler_end_region(compile_region);
+    PROFILE_END(compile);
 
     // this can be non-trivially slow and maybe isn't worth doing
     PROFILE_BEGIN(free_compiler);
@@ -684,19 +703,25 @@ static int jcc_driver_compiler(struct arena_allocator *arena,
   exc = 0;
 
 exit:
+  while (vector_length(tmps)) {
+    char **p = vector_pop(tmps);
+    remove(*p);
+  }
+
   if (args.profile) {
-    profiler_print(stderr);
+    profiler_print_text(stderr);
   }
 
-  char *b = arena_alloc(arena, 11);
-  b[10] = 11;
-
-  if (arena) {
-    arena_allocator_free(&arena);
+  if (args.profile_json) {
+    FILE *file;
+    if (!strcmp(args.profile_json, "-")) {
+      file = stdout;
+    } else {
+      file = fopen(args.profile_json, "w");
+    }
+    profiler_print_json(file);
+    fclose(file);
   }
-
-  // char z = *b;
-  // (void)z;
 
   if (objects) {
     free(objects);
@@ -705,8 +730,6 @@ exit:
   if (compile_args.log_symbols) {
     hashtbl_free(&compile_args.log_symbols);
   }
-
-  free_args(&args);
 
   return exc;
 }

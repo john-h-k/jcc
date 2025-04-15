@@ -31,31 +31,31 @@ const static struct td_var_ty X64_VA_LIST_TAG_TY = {
     .ty = TD_VAR_TY_TY_AGGREGATE,
     .aggregate = {
         .ty = TD_TY_AGGREGATE_TY_STRUCT,
-        .name = MK_USTR(""),
+        .name = MK_NULL_USTR(),
         .num_fields = 4,
         .fields =
             (struct td_struct_field[4]){
                 [0] =
                     {
-                        .identifier = MK_USTR("gp_offset"),
+                        .identifier = MK_USTR_LITERAL("gp_offset"),
                         .var_ty = {.ty = TD_VAR_TY_TY_WELL_KNOWN,
                                    .well_known = WELL_KNOWN_TY_UNSIGNED_INT},
                     },
                 [1] =
                     {
-                        .identifier = MK_USTR("fp_offset"),
+                        .identifier = MK_USTR_LITERAL("fp_offset"),
                         .var_ty = {.ty = TD_VAR_TY_TY_WELL_KNOWN,
                                    .well_known = WELL_KNOWN_TY_UNSIGNED_INT},
                     },
                 [2] =
                     {
-                        .identifier = MK_USTR("overflow_arg_area"),
+                        .identifier = MK_USTR_LITERAL("overflow_arg_area"),
                         .var_ty = {.ty = TD_VAR_TY_TY_POINTER,
                                    .pointer = {.underlying = &TD_VAR_TY_VOID}},
                     },
                 [3] =
                     {
-                        .identifier = MK_USTR("reg_save_area"),
+                        .identifier = MK_USTR_LITERAL("reg_save_area"),
                         .var_ty = {.ty = TD_VAR_TY_TY_POINTER,
                                    .pointer = {.underlying = &TD_VAR_TY_VOID}},
                     },

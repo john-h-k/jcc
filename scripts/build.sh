@@ -247,9 +247,9 @@ build() {
     fi
 
     # we are now in build dir (should make this clearer)
-    if [ -d traces ]; then
-        jq -s '{traceEvents: map(.traceEvents) | add}' traces/*.json > trace.json
-    fi
+    # if [ -d traces ]; then
+    #     jq -s '{traceEvents: map(.traceEvents) | add}' traces/*.json > trace.json
+    # fi
     
     # if [ -n "$default_target" ]; then
     #     # verifies --default-target

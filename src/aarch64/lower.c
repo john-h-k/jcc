@@ -1075,7 +1075,7 @@ static void lower_va_arg(struct ir_func *func, struct ir_op *op) {
     break;
   }
   default:
-    TODO("");
+    TODO("linux va arg");
     break;
   }
 }

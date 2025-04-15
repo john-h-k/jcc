@@ -4560,8 +4560,10 @@ eval_constant_integral_expr(struct typechk *tchk, const struct td_expr *expr,
     struct td_val expr_value = {.var_ty = TD_VAR_TY_UNKNOWN,
                                 .val = MK_AP_VAL_INVALID()};
     for (size_t i = 0; i < expr->compound_expr.num_exprs; i++) {
-      eval_constant_integral_expr(tchk, &expr->compound_expr.exprs[i], flags,
-                                  &expr_value);
+      if (!eval_constant_integral_expr(tchk, &expr->compound_expr.exprs[i], flags,
+                                  &expr_value)) {
+        return false;
+      }
     }
 
     *value = expr_value;
@@ -6400,7 +6402,7 @@ tchk_builtin_ty_spec(struct typechk *tchk,
   switch (ty_spec->ty) {
   case BUILTIN_TYPE_SPEC_TY_ANY:
   case BUILTIN_TYPE_SPEC_TY_BUILTIN:
-    TODO("");
+    TODO("other builtins");
     break;
   case BUILTIN_TYPE_SPEC_TY_VA_LIST:
     return *tchk->target->variadic_info.va_list_var_ty;

@@ -26,7 +26,6 @@ void objdump_debug_disasm(enum compile_target target, const char *filename,
 
   enum compile_arch arch;
   enum compile_platform platform;
-
   compile_target_decomp(target, &arch, &platform);
 
   switch (arch) {

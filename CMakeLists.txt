@@ -152,13 +152,12 @@ endforeach()
 
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
   message(STATUS "Debug build detected")
-
-  if(CMAKE_C_COMPILER_ID STREQUAL "GNU")
-    message(WARNING "Debug mode may be VERY SLOW on GCC due to ASan problems - Clang w/ ASan is significantly faster")
-  endif()
   
-
   if(NOT DEFINED NO_SAN OR NO_SAN STREQUAL "")
+    if(CMAKE_C_COMPILER_ID STREQUAL "GNU")
+      message(WARNING "Debug mode may be VERY SLOW on GCC due to ASan problems - Clang w/ ASan is significantly faster")
+    endif()
+
     if(NOT CMAKE_C_COMPILER_ID STREQUAL "JCC")
       add_link_options(-fsanitize=address,undefined)
       add_compile_options(-fsanitize=address,undefined -fno-sanitize-recover=all)

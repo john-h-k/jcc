@@ -485,6 +485,26 @@ format() {
     fd -e c -e h -x sed -i '' -E 's/[[:space:]]+$//' {}
 }
 
+view-trace() {
+    jq '
+def format_time:
+  if . >= 1e9 then "\(./1e9|round*1e3/1e3)s"
+  elif . >= 1e6 then "\(./1e6|round*1e3/1e3)ms"
+  elif . >= 1e3 then "\(./1e3|round*1e3/1e3)µs"
+  else "\(round*10/10)ns" end;
+
+[
+    paths(scalars) as $p
+    | select($p.[-1]=="elapsed")
+    | getpath($p) as $v
+    | { path: getpath(($p | .[0:-1]) + ["name"]), val: ($v) }
+]
+| sort_by(.val)
+| reverse
+| map("\(.path): \(.val | format_time)")
+' "$CALLER_DIR$1"
+}
+
 # e.g for `jcc benchmark parse`, `benchmark` is a sub fn
 sub_fns=()
 

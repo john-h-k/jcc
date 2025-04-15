@@ -342,6 +342,19 @@ aggregator() {
 
   profile_end "Tests took " $start_time
 
+  rm build/trace.json &>/dev/null
+  jq -s 'reduce .[] as $o (
+  {}; 
+  reduce ($o | paths(scalars)) as $p (
+    .;
+    if $p.[-1]=="elapsed" then
+      setpath($p; ((getpath($p) // 0) + ($o | getpath($p))))
+    else
+      setpath($p; ($o | getpath($p)))
+    end
+  )
+)' build/traces/* > build/trace.json
+
   [ "$failed" -eq "0" ]
   exit $?
 }
@@ -353,6 +366,12 @@ tmpname() {
   file=./$TMP_DIR/"$1"
   mkdir -p "$(dirname "$file")"
   echo "$file"
+}
+
+rm -rf "build/traces"
+mkdir -p "build/traces"
+tracename() {
+  mktemp "./build/traces/XXXXXXXX"
 }
 
 run_tests() {
@@ -412,7 +431,7 @@ run_tests() {
 
           for file in "${files[@]}"; do
             asm=$(tmpname "$pid.$(basename "$file").s")
-            timeout -k $BUILD_TIMEOUT $BUILD_TIMEOUT "$JCC" $flags "${args[@]}" "${group_args[@]}" -S -o "$asm" -std="$std" -tm "$tm" "$file" \
+            timeout -k $BUILD_TIMEOUT $BUILD_TIMEOUT "$JCC" $flags "${args[@]}" "${group_args[@]}" -S -o "$asm" --profile-json "$trace" -std="$std" -tm "$tm" "$file" \
               || return $?
 
             obj=$(tmpname "$pid.$(basename "$file").o")
@@ -436,7 +455,7 @@ run_tests() {
 
           for file in "${files[@]}"; do
             obj=$(tmpname "$pid.$(basename "$file").o")
-            timeout -k $BUILD_TIMEOUT $BUILD_TIMEOUT "$JCC" $flags "${args[@]}" "${group_args[@]}" -c -o "$obj" -std="$std" -tm "$tm" "$file" \
+            timeout -k $BUILD_TIMEOUT $BUILD_TIMEOUT "$JCC" $flags "${args[@]}" "${group_args[@]}" -c -o "$obj" --profile-json "$trace" -std="$std" -tm "$tm" "$file" \
               || return $?
 
             obj_files+=("$obj")
@@ -450,7 +469,7 @@ run_tests() {
         }
       else
         build_command() {
-          timeout -k $BUILD_TIMEOUT $BUILD_TIMEOUT "$JCC" $flags "${args[@]}" "${group_args[@]}" -o "$output" -std="$std" -tm "$tm" "${files[@]}"
+          timeout -k $BUILD_TIMEOUT $BUILD_TIMEOUT "$JCC" $flags "${args[@]}" "${group_args[@]}" -o "$output" --profile-json "$trace" -std="$std" -tm "$tm" "${files[@]}"
           return $?
         }
       fi
@@ -471,6 +490,8 @@ run_tests() {
       fi
 
       rm -f -- "$output"
+
+      trace="$(tracename)"
 
       expected=$(grep -i "expected value:" "$file" | head -1 | grep -Eo '[0-9]+')
       stdin=$(grep -i "stdin:" "$file" | head -1 | sed -n 's/^\/\/ stdin: //p')

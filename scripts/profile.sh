@@ -19,6 +19,13 @@ profile_begin() {
     fi
 }
 
+profile_elapsed() {
+    if [ -n "$profile_cmd" ]; then
+        end_time=$($profile_cmd +%s%3N)
+        echo $((end_time - $2))
+    fi
+}
+
 profile_end() {
     if [ -n "$profile_cmd" ]; then
         end_time=$($profile_cmd +%s%3N)

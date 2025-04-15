@@ -16,12 +16,42 @@ macos_link_objects_with_ld(const struct link_args *args) {
 
   // FIXME: support non `ld_classic` - requires arch and platform_version
   // -arch arm64 -platform_version macos 14.0.0 14.4"
+
+#define LINK_USE_LLD
+
+#ifdef LINK_USE_LLD
+  struct syscmd *cmd = syscmd_create(arena, "ld64.lld");
+
+  enum compile_arch arch;
+  enum compile_platform platform;
+  compile_target_decomp(args->args->target, &arch, &platform);
+
+  switch (arch) {
+  case COMPILE_ARCH_X86_64:
+    syscmd_add_arg_val(cmd, "-arch", "x86_64");
+    break;
+  case COMPILE_ARCH_ARM64:
+    syscmd_add_arg_val(cmd, "-arch", "arm64");
+    break;
+  default:
+    BUG("unexpected arch");
+  }
+
+  syscmd_add_arg_val(cmd, "-platform_version", "macos");
+  syscmd_add_arg_val(cmd, "15.0.0", "15.0.0");
+  syscmd_add_arg(cmd, "-lSystem");
+  syscmd_add_arg(cmd, "-lc");
+  syscmd_add_arg(cmd, "-dynamic");
+  syscmd_add_arg_val(cmd, "-syslibroot", sdk_path);
+
+#else
   struct syscmd *cmd = syscmd_create(arena, "ld");
   syscmd_add_arg(cmd, "-lSystem");
   syscmd_add_arg(cmd, "-lc");
   syscmd_add_arg(cmd, "-dynamic");
   syscmd_add_arg_val(cmd, "-syslibroot", sdk_path);
   syscmd_add_arg(cmd, "-ld_classic");
+#endif
 
   syscmd_add_arg_val(cmd, "-o", args->output);
 

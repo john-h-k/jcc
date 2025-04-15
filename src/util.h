@@ -82,7 +82,7 @@ typedef unsigned _BitInt(128) uint128_t;
 #include <sanitizer/common_interface_defs.h> // __sanitizer_print_stack_trace
 #endif
 
-#if __has_feature(attribute_analyzer_noreturn)
+#if HAS_FEATURE(attribute_analyzer_noreturn)
 #define NORETURN __attribute__((__noreturn__, __analyzer_noreturn__))
 #endif
 
@@ -115,7 +115,8 @@ typedef unsigned _BitInt(128) uint128_t;
 #define DEPRECATED
 #endif
 
-#if HAS_ATTRIBUTE(__maybe_unused__)
+// gcc errors with "ignored attribute" even though it claims support
+#if HAS_ATTRIBUTE(__maybe_unused__) && !__GNUC__
 #define MAYBE_UNUSED __attribute__((__maybe_unused__))
 #else
 #define MAYBE_UNUSED
@@ -146,7 +147,7 @@ typedef unsigned _BitInt(128) uint128_t;
   PUSH_NO_WARN("-Wcast-qual")                                                  \
   (x) POP_NO_WARN()
 
-#if __GNUC__ || __clang__
+#if __clang__
 #define ERR_EXPR(msg)                                                          \
   PUSH_NO_WARN("-Wgnu-statement-expression-from-macro-expansion")(void)({      \
     static_assert(0, msg);                                                     \
@@ -158,8 +159,8 @@ typedef unsigned _BitInt(128) uint128_t;
     0;                                                                         \
   })POP_NO_WARN()
 #else
-#define ERR_EXPR(msg) ((void)sizeof(char[-1]))
-#define ERR_EXPR_COND(cond, msg) ((void)sizeof(char[(cond) ? 1 : -1]))
+#define ERR_EXPR(msg) ((int)sizeof(char[-1]))
+#define ERR_EXPR_COND(cond, msg) ((int)sizeof(char[(cond) ? 1 : -1]))
 #endif
 
 /********** Banned functions **********/
@@ -207,10 +208,19 @@ typedef unsigned _BitInt(128) uint128_t;
 // arrays ensures it is not a pointer type
 #define ARR_LENGTH_RELAXED(a) (sizeof((a)) / sizeof((a)[0]))
 
+// GCC allows ternary but not compound expressions within constant
+// clang allows compound but not ternary...
+#if __clang__
 #define ARR_LENGTH(a)                                                          \
   (ERR_EXPR_COND(sizeof((a)) / sizeof((a)[0]) > 1,                             \
                  "ARR_LENGTH macro used with pointer or one-len array"),       \
    sizeof((a)) / sizeof((a)[0]))
+#else
+#define ARR_LENGTH(a)                                                          \
+  (0 ? ERR_EXPR_COND(sizeof((a)) / sizeof((a)[0]) > 1,                         \
+                     "ARR_LENGTH macro used with pointer or one-len array")    \
+     : sizeof((a)) / sizeof((a)[0]))
+#endif
 
 static inline size_t num_digits(size_t num) {
   return (num ? (size_t)log10(num) : 0) + 1;
@@ -323,7 +333,7 @@ static inline void debug_print_stack_trace(void) {}
 //   * DEBUG_ASSERT is understood by clang analyzer
 //   * DEBUG_ASSERT does not double evaluate its arguments
 
-#if __has_feature(attribute_analyzer_noreturn) && 0
+#if HAS_FEATURE(attribute_analyzer_noreturn) && 0
 #define DEBUG_ASSERT(b, ...)                                                   \
   (util_debug_assert((b), #b, __func__, __FILE__, __LINE__, __VA_ARGS__),      \
    assert((b)), 0)
@@ -536,7 +546,18 @@ static inline int ustr_cmp(ustr_t l, ustr_t r) {
   return cmp;
 }
 
+#ifdef __GNUC__
+// gcc warns on `false ? strlen(NULL) : <other>`
+// (which is silly)
+static inline size_t wrap_strlen(const char *p) {
+  DEBUG_ASSERT(p, "p null");
+  return strlen(p);
+}
+#define MK_USTR(s) ((ustr_t){(s), ((s) != NULL) ? wrap_strlen((s)) : 0})
+#else
 #define MK_USTR(s) ((ustr_t){(s), ((s) != NULL) ? strlen((s)) : 0})
+#endif
+#define MK_USTR_LITERAL(s) ((ustr_t){(s), ARR_LENGTH_RELAXED((s))})
 #define MK_NULL_USTR() ((ustr_t){NULL, 0})
 
 #endif
