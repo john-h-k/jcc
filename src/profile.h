@@ -50,6 +50,8 @@ struct profiler_multi_region_inst {
   size_t idx;
 };
 
+// not required to be called, but ensures more accurate measurement if it is
+void profiler_init(void);
 
 NOINLINE struct profiler_multi_region_inst profiler_begin_multi_region(struct profiler_multi_region *multi_region);
 NOINLINE void profiler_end_multi_region(struct profiler_multi_region_inst inst);
@@ -61,6 +63,7 @@ struct profiler_region {
 NOINLINE struct profiler_region profiler_begin_region(const char *name);
 NOINLINE void profiler_end_region(struct profiler_region region);
 
-void profiler_print(FILE *file);
+void profiler_print_text(FILE *file);
+void profiler_print_json(FILE *file);
 
 #endif

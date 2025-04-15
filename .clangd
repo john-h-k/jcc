@@ -25,7 +25,7 @@ Index:
 
 # Inlays not playing nicely with macros
 If:
-  PathMatch: src/lsp/lsp.c
+  PathMatch: [src/lsp/lsp.c, src/profile.c]
 
 InlayHints:
   Enabled: No

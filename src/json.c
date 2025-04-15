@@ -428,6 +428,7 @@ struct json_writer *json_writer_create(void) {
 }
 
 void json_writer_free(struct json_writer **writer) {
+  vector_free(&(*writer)->buffer);
   free(*writer);
   *writer = NULL;
 }
@@ -512,7 +513,7 @@ void json_writer_write_double(struct json_writer *writer, double value) {
     vector_push_back(writer->buffer, &(char){','});
   }
 
-  json_writer_snprintf(writer, "%f", value);
+  json_writer_snprintf(writer, "%.1f", value);
   writer->needs_sep = true;
 }
 
