@@ -20,8 +20,8 @@
 #include <time.h>
 #include <unistd.h>
 
-#define DEFAULT_JCC "build/jcc"
-#define DEFAULT_TEST_DIR "tests"
+#define DEFAULT_JCC "../build/jcc"
+#define DEFAULT_TEST_DIR "../tests"
 #define TM_STR "Tue Dec 10 10:04:33 2024"
 
 struct jobq;
