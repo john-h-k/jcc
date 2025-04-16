@@ -276,6 +276,14 @@ static inline void debug_print_stack_trace(void) {}
 #define PR_WHITE "\x1B[37m"
 #define PR_BOLD "\033[1m"
 
+#define PR_BOLDRED "\x1B[1;31m"
+#define PR_BOLDGREEN "\x1B[1;32m"
+#define PR_BOLDYELLOW "\x1B[1;33m"
+#define PR_BOLDBLUE "\x1B[1;34m"
+#define PR_BOLDMAGENTA "\x1B[1;35m"
+#define PR_BOLDCYAN "\x1B[1;36m"
+#define PR_BOLDWHITE "\x1B[1;37m"
+
 #define START_NO_UNUSED_ARGS PUSH_NO_WARN("-Wunused-parameter")
 #define END_NO_UNUSED_ARGS POP_NO_WARN()
 

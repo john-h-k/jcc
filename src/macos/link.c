@@ -52,6 +52,9 @@ macos_link_objects_with_ld(const struct link_args *args) {
   syscmd_add_arg(cmd, "-lc");
   syscmd_add_arg(cmd, "-dynamic");
   syscmd_add_arg_val(cmd, "-syslibroot", sdk_path);
+
+  // FIXME: remove no warnings (-w) and use new linker mode (not -ld_classic)
+  syscmd_add_arg(cmd, "-w");
   syscmd_add_arg(cmd, "-ld_classic");
 #endif
 

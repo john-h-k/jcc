@@ -27,6 +27,7 @@
 struct jobq;
 
 struct jobq *jobq_create(struct arena_allocator *arena, size_t job_size);
+void jobq_free(struct jobq **jobq);
 void jobq_push(struct jobq *jobq, void *job);
 bool jobq_try_pop(struct jobq *jobq, size_t *id, void *job);
 size_t jobq_count(struct jobq *jobq);
@@ -56,6 +57,11 @@ struct jobq *jobq_create(struct arena_allocator *arena, size_t job_size) {
                         .lock = lock};
 
   return jobq;
+}
+
+void jobq_free(struct jobq **jobq) {
+  mtx_destroy(&(*jobq)->lock);
+  *jobq = NULL;
 }
 
 size_t jobq_count(struct jobq *jobq) {
@@ -113,12 +119,6 @@ struct jcc_test_opts {
 
   bool quiet;
   bool use_process;
-};
-
-struct jcc_test_result {
-  enum test_status status;
-  const char *file;
-  const char *msg;
 };
 
 PRINTF_ARGS(1) static void echo(const char *color, const char *fmt, ...) {
@@ -228,11 +228,27 @@ static void discover_tests(struct arena_allocator *arena, struct vector *tests,
   }
 }
 
+struct jcc_test_result {
+  enum test_status status;
+  const char *file;
+  const char *msg;
+};
+
+struct jcc_tests_status {
+  mtx_t lock;
+  cnd_t cond;
+
+  struct vector *results;
+  size_t num_done;
+  size_t num_pass;
+  size_t num_fail;
+  size_t num_skip;
+};
+
 struct jcc_worker_args {
   struct jobq *jobq;
-  struct vector *results;
-  mtx_t results_lock;
   struct arena_allocator *arena;
+  struct jcc_tests_status *results;
   struct jcc_test_opts opts;
 };
 
@@ -429,18 +445,38 @@ static struct jcc_test_info get_test_info(const struct jcc_worker_args *args,
   return info;
 }
 
+static void add_test_result(struct jcc_worker_args *args,
+                            const struct jcc_test_result *result) {
+  MTX_LOCK(&args->results->lock, {
+    args->results->num_done++;
+
+    switch (result->status) {
+    case TEST_STATUS_PASS:
+      args->results->num_pass++;
+      break;
+    case TEST_STATUS_FAIL:
+      args->results->num_fail++;
+      break;
+    case TEST_STATUS_SKIP:
+      args->results->num_skip++;
+      break;
+    }
+
+    vector_push_back(args->results->results, result);
+    cnd_signal(&args->results->cond);
+  });
+}
+
 static void run_test(struct jcc_worker_args *args, const struct jcc_test *test,
                      UNUSED const char *arggroup) {
   struct jcc_test_info info = get_test_info(args, test);
 
   if (info.skip) {
-    MTX_LOCK(&args->results_lock, {
-      vector_push_back(args->results, &(struct jcc_test_result){
-                                          .status = TEST_STATUS_SKIP,
-                                          .file = test->file,
-                                          .msg = arena_alloc_ustrconv(
-                                              args->arena, info.skip_msg)});
-    });
+    add_test_result(
+        args, &(struct jcc_test_result){
+                  .status = TEST_STATUS_SKIP,
+                  .file = test->file,
+                  .msg = arena_alloc_ustrconv(args->arena, info.skip_msg)});
     return;
   }
 
@@ -495,39 +531,34 @@ static void run_test(struct jcc_worker_args *args, const struct jcc_test *test,
   struct jcc_comp_info comp_info = run_compilation(args, test, comp_args);
 
   if (info.no_compile) {
-    MTX_LOCK(&args->results_lock, {
-      if (comp_info.exc == 0) {
-        vector_push_back(args->results,
-                         &(struct jcc_test_result){
-                             .status = TEST_STATUS_FAIL,
-                             .file = test->file,
-                             .msg = "test marked 'no-compile' but it compiled!",
-                         });
-      } else {
-        vector_push_back(args->results, &(struct jcc_test_result){
-                                            .status = TEST_STATUS_PASS,
-                                            .file = test->file,
-                                        });
-      }
-    });
+    if (comp_info.exc == 0) {
+      add_test_result(args,
+                      &(struct jcc_test_result){
+                          .status = TEST_STATUS_FAIL,
+                          .file = test->file,
+                          .msg = "test marked 'no-compile' but it compiled!",
+                      });
+    } else {
+      add_test_result(args, &(struct jcc_test_result){
+                                .status = TEST_STATUS_PASS,
+                                .file = test->file,
+                            });
+    }
 
     return;
   }
 
   if (comp_info.exc != 0) {
-    MTX_LOCK(&args->results_lock, {
-      vector_push_back(
-          args->results,
-          &(struct jcc_test_result){
-              .status = TEST_STATUS_FAIL,
-              .file = test->file,
-              .msg = comp_info.stderr_buf
-                         ? arena_alloc_snprintf(
-                               args->arena,
-                               "compilation error! build output: \n%s\n",
-                               comp_info.stderr_buf)
-                         : "compilation error!"});
-    });
+    add_test_result(
+        args, &(struct jcc_test_result){
+                  .status = TEST_STATUS_FAIL,
+                  .file = test->file,
+                  .msg = comp_info.stderr_buf
+                             ? arena_alloc_snprintf(
+                                   args->arena,
+                                   "compilation error! build output: \n%s\n",
+                                   comp_info.stderr_buf)
+                             : "compilation error!"});
     return;
   }
 
@@ -549,38 +580,30 @@ static void run_test(struct jcc_worker_args *args, const struct jcc_test *test,
   int run_ret = syscmd_exec(&cmd);
 
   if (run_ret != info.expected_exc) {
-    MTX_LOCK(&args->results_lock, {
-      vector_push_back(args->results,
-                       &(struct jcc_test_result){
-                           .status = TEST_STATUS_FAIL,
-                           .file = test->file,
-                           .msg = arena_alloc_snprintf(
-                               args->arena, "Exit code %d vs expected %d",
-                               run_ret, info.expected_exc)});
-    });
+    add_test_result(args, &(struct jcc_test_result){
+                              .status = TEST_STATUS_FAIL,
+                              .file = test->file,
+                              .msg = arena_alloc_snprintf(
+                                  args->arena, "Exit code %d vs expected %d",
+                                  run_ret, info.expected_exc)});
     return;
   }
 
   if (info.expected_stdout.str &&
       !ustr_eq(info.expected_stdout, MK_USTR(run_output))) {
-    MTX_LOCK(&args->results_lock, {
-      vector_push_back(
-          args->results,
-          &(struct jcc_test_result){
-              .status = TEST_STATUS_FAIL,
-              .file = test->file,
-              .msg = arena_alloc_snprintf(
-                  args->arena, "Stdout mismatch: expected \"%.*s\" got \"%s\"",
-                  USTR_SPEC(info.expected_stdout), run_output)});
-    });
+    add_test_result(
+        args,
+        &(struct jcc_test_result){
+            .status = TEST_STATUS_FAIL,
+            .file = test->file,
+            .msg = arena_alloc_snprintf(
+                args->arena, "Stdout mismatch: expected \"%.*s\" got \"%s\"",
+                USTR_SPEC(info.expected_stdout), run_output)});
     return;
   }
 
-  MTX_LOCK(&args->results_lock, {
-    vector_push_back(args->results,
-                     &(struct jcc_test_result){.status = TEST_STATUS_PASS,
-                                               .file = test->file});
-  });
+  add_test_result(args, &(struct jcc_test_result){.status = TEST_STATUS_PASS,
+                                                  .file = test->file});
 }
 
 static int test_worker(void *arg) {
@@ -599,19 +622,19 @@ static int test_worker(void *arg) {
   return 0;
 }
 
-static bool parse_args(struct arena_allocator *arena, int argc,
-                                       char *argv[], struct jcc_test_opts *opts) {
+static bool parse_args(struct arena_allocator *arena, int argc, char *argv[],
+                       struct jcc_test_opts *opts) {
   *opts = (struct jcc_test_opts){.jobs = /* TODO: default to nproc */ 10,
-                               .num_tests = 0,
-                               .jcc = DEFAULT_JCC,
-                               .arch = MK_USTR(ARCH_NAME),
-                               .os = MK_USTR(OS_NAME),
-                               .num_paths = 0,
-                               .paths = NULL,
-                               .num_args = 0,
-                               .args = NULL,
-                               .num_arg_groups = 0,
-                               .arg_groups = NULL};
+                                 .num_tests = 0,
+                                 .jcc = DEFAULT_JCC,
+                                 .arch = MK_USTR(ARCH_NAME),
+                                 .os = MK_USTR(OS_NAME),
+                                 .num_paths = 0,
+                                 .paths = NULL,
+                                 .num_args = 0,
+                                 .args = NULL,
+                                 .num_arg_groups = 0,
+                                 .arg_groups = NULL};
 
   struct vector *paths = vector_create_in_arena(sizeof(char *), arena);
   struct vector *args = vector_create_in_arena(sizeof(char *), arena);
@@ -683,9 +706,7 @@ static bool parse_args(struct arena_allocator *arena, int argc,
   return true;
 }
 
-static int void_strcmp(const void *l, const void *r) {
-  return strcmp(l, r);
-}
+static int void_strcmp(const void *l, const void *r) { return strcmp(l, r); }
 
 int main(int argc, char **argv) {
   struct arena_allocator *arena;
@@ -720,22 +741,29 @@ int main(int argc, char **argv) {
   for (size_t i = 0; i < opts.num_tests; i++) {
     jobq_push(jobq, vector_get(tests, i));
   }
-  
+
   echo(PR_BOLD, "Using %zu processes...", opts.jobs);
-  echo(PR_BOLD, "Found %zu tests, running %zu", vector_length(tests), opts.num_tests);
+  echo(PR_BOLD, "Found %zu tests, running %zu", vector_length(tests),
+       opts.num_tests);
 
   struct timestmp start = get_timestamp();
-
-  struct vector *results =
-      vector_create_in_arena(sizeof(struct jcc_test_result), arena);
-
-  mtx_t results_lock;
-  invariant_assert(mtx_init(&results_lock, mtx_plain) == thrd_success,
-                   "results mtx_init failed");
 
   thrd_t *threads = arena_alloc(arena, opts.jobs * sizeof(*threads));
   struct arena_allocator **arenas =
       arena_alloc(arena, opts.jobs * sizeof(*arenas));
+
+  struct jcc_tests_status status = {
+      .results = vector_create_in_arena(sizeof(struct jcc_test_result), arena),
+      .num_done = 0,
+      .num_pass = 0,
+      .num_fail = 0,
+      .num_skip = 0};
+
+  invariant_assert(mtx_init(&status.lock, mtx_plain) == thrd_success,
+                   "results mtx_init failed");
+
+  invariant_assert(cnd_init(&status.cond) == thrd_success,
+                   "results cnd_init failed");
 
   for (size_t i = 0; i < opts.jobs; i++) {
     struct arena_allocator *worker_arena;
@@ -743,17 +771,65 @@ int main(int argc, char **argv) {
 
     arenas[i] = worker_arena;
 
-    struct jcc_worker_args worker = {.jobq = jobq,
-                                     .results = results,
-                                     .results_lock = results_lock,
-                                     .opts = opts,
-                                     .arena = worker_arena};
+    struct jcc_worker_args worker = {
+        .jobq = jobq, .results = &status, .opts = opts, .arena = worker_arena};
 
     void *data = arena_alloc_init(arena, sizeof(worker), &worker);
 
     invariant_assert(thrd_create(&threads[i], test_worker, data) ==
                          thrd_success,
                      "thrd_create failed");
+  }
+
+  size_t total_tests = opts.num_tests * opts.num_arg_groups;
+  int pad = (int)num_digits(total_tests);
+
+  if (!opts.quiet) {
+    printf(PR_BOLD "Completed %*zu/%zu (%zu tests, %zu arg groups) "
+                   "   " PR_BOLD PR_GREEN "Pass: %*zu  " PR_BOLD PR_RED
+                   "Fail: %*zu  " PR_BOLD PR_YELLOW "Skip: %*zu" PR_RESET "\r",
+           pad, (size_t)0, total_tests, (size_t)0, opts.num_arg_groups, pad,
+           (size_t)0, pad, (size_t)0, pad, (size_t)0);
+    fflush(stdout);
+
+    while (true) {
+      invariant_assert(mtx_lock(&status.lock) == thrd_success,
+                       "mtx_lock failed");
+
+      struct timespec ts = {
+        .tv_nsec = 50000000
+      };
+
+      int st = cnd_timedwait(&status.cond, &status.lock, &ts);
+      invariant_assert(st == thrd_success || st == thrd_timedout,
+                       "cnd_wait failed");
+
+      size_t num_done = status.num_done;
+      size_t num_pass = status.num_pass;
+      size_t num_fail = status.num_fail;
+      size_t num_skip = status.num_skip;
+
+      invariant_assert(mtx_unlock(&status.lock) == thrd_success,
+                       "mtx_unlock failed");
+
+      fflush(stdout);
+      printf("\r\033[?25l");
+      fflush(stdout);
+      printf(PR_BOLD "Completed %*zu/%zu (%zu tests, %zu arg groups) "
+                     "   " PR_BOLDGREEN "Pass: %*zu  " PR_BOLDRED
+                     "Fail: %*zu  " PR_BOLDYELLOW "Skip: %*zu" PR_RESET,
+             pad, num_done, total_tests, opts.num_tests, opts.num_arg_groups,
+             pad, num_pass, pad, num_fail, pad, num_skip);
+      fflush(stdout);
+      printf("\033[?25h");
+      fflush(stdout);
+
+      if (num_done == total_tests) {
+        break;
+      }
+    }
+
+    printf("\n");
   }
 
   for (size_t i = 0; i < opts.jobs; i++) {
@@ -763,6 +839,8 @@ int main(int argc, char **argv) {
   struct timestmp end = get_timestamp();
 
   int passed = 0, failed = 0, skipped = 0;
+
+  struct vector *results = status.results;
 
   size_t num_results = vector_length(results);
   for (size_t i = 0; i < num_results; i++) {
@@ -816,6 +894,10 @@ int main(int argc, char **argv) {
   printf(PR_BOLD "Tests took ");
   print_time(stdout, timestamp_elapsed(start, end));
   printf(PR_RESET "\n");
+
+  mtx_destroy(&status.lock);
+  cnd_destroy(&status.cond);
+  jobq_free(&jobq);
 
   for (size_t i = 0; i < opts.jobs; i++) {
     arena_allocator_free(&arenas[i]);
