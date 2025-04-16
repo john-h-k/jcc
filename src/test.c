@@ -111,6 +111,7 @@ struct jcc_test_opts {
   char **arg_groups;
   size_t num_arg_groups;
 
+  bool quiet;
   bool use_process;
 };
 
@@ -598,9 +599,9 @@ static int test_worker(void *arg) {
   return 0;
 }
 
-static struct jcc_test_opts parse_args(struct arena_allocator *arena, int argc,
-                                       char *argv[]) {
-  struct jcc_test_opts opts = {.jobs = 10,
+static bool parse_args(struct arena_allocator *arena, int argc,
+                                       char *argv[], struct jcc_test_opts *opts) {
+  *opts = (struct jcc_test_opts){.jobs = 10,
                                .num_tests = 0,
                                .jcc = DEFAULT_JCC,
                                .arch = MK_USTR(ARCH_NAME),
@@ -623,42 +624,47 @@ static struct jcc_test_opts parse_args(struct arena_allocator *arena, int argc,
     }
 
     if (strcmp(argv[i], "-j") == 0 && i + 1 < argc) {
-      opts.jobs = atoi(argv[++i]);
+      opts->jobs = atoi(argv[++i]);
     } else if (strcmp(argv[i], "-p") == 0) {
-      opts.use_process = true;
+      opts->use_process = true;
+    } else if (strcmp(argv[i], "--quiet") == 0) {
+      opts->quiet = true;
     } else if (strcmp(argv[i], "-n") == 0 && i + 1 < argc) {
-      opts.num_tests = atoi(argv[++i]);
+      opts->num_tests = atoi(argv[++i]);
     } else if (strcmp(argv[i], "--jcc") == 0 && i + 1 < argc) {
-      opts.jcc = argv[++i];
+      opts->jcc = argv[++i];
     } else if (strcmp(argv[i], "--arg-group") == 0 && i + 1 < argc) {
-      vector_push_back(arg_groups, &argv[i]);
+      vector_push_back(arg_groups, &argv[++i]);
+    } else if (argv[i] && argv[i][0] == '-') {
+      echo(PR_BOLD PR_RED, "Unrecognised argument '%s'", argv[i]);
+      return false;
     } else {
       vector_push_back(paths, &argv[i]);
     }
   }
 
-  opts.args = &argv[i];
-  opts.num_args = (size_t)(argc - MIN(i, argc));
+  opts->args = &argv[i];
+  opts->num_args = (size_t)(argc - MIN(i, argc));
 
   if (vector_empty(paths)) {
-    opts.num_paths = 1;
-    opts.paths = arena_alloc(arena, sizeof(char *));
-    opts.paths[0] = DEFAULT_TEST_DIR;
+    opts->num_paths = 1;
+    opts->paths = arena_alloc(arena, sizeof(char *));
+    opts->paths[0] = DEFAULT_TEST_DIR;
   } else {
-    opts.num_paths = vector_length(paths);
-    opts.paths = vector_head(paths);
+    opts->num_paths = vector_length(paths);
+    opts->paths = vector_head(paths);
   }
 
   if (vector_empty(arg_groups)) {
-    opts.num_arg_groups = 1;
-    opts.arg_groups = arena_alloc(arena, sizeof(char *));
-    opts.arg_groups[0] = NULL;
+    opts->num_arg_groups = 1;
+    opts->arg_groups = arena_alloc(arena, sizeof(char *));
+    opts->arg_groups[0] = NULL;
   } else {
-    opts.num_arg_groups = vector_length(arg_groups);
-    opts.arg_groups = vector_head(arg_groups);
+    opts->num_arg_groups = vector_length(arg_groups);
+    opts->arg_groups = vector_head(arg_groups);
   }
 
-  return opts;
+  return true;
 }
 
 int main(int argc, char **argv) {
@@ -667,10 +673,20 @@ int main(int argc, char **argv) {
 
   jcc_init();
 
-  struct jcc_test_opts opts = parse_args(arena, argc, argv);
+  struct jcc_test_opts opts;
+  if (!parse_args(arena, argc, argv, &opts)) {
+    arena_allocator_free(&arena);
+    return 1;
+  }
+
   struct jobq *jobq = jobq_create(arena, sizeof(struct jcc_test));
 
   discover_tests(arena, jobq, opts.paths, opts.num_paths);
+
+  if (!jobq_count(jobq)) {
+    echo(PR_BOLD PR_RED, "Could not find any tests!");
+    return 1;
+  }
 
   if (!opts.num_tests) {
     opts.num_tests = jobq_count(jobq);
@@ -778,5 +794,5 @@ int main(int argc, char **argv) {
 
   arena_allocator_free(&arena);
 
-  return 0;
+  return failed > 0;
 }
