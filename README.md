@@ -1,6 +1,8 @@
 # jcc
 
-JCC is designed to be a pure C11 (no dependencies outside C stdlib) C11/C18/C23 compiler.
+JCC is designed to be a pure C11 (no dependencies) C11/C18/C23 compiler.
+
+<sup><sub>No dependencies = no dependencies outside of libc and some basic OS calls needed to e.g read directories</sub></sup>
 
 ## CI Status
 
