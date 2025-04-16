@@ -1,3 +1,3 @@
-// Expected value: 0
+// expected value: 0
 
 int main() {}

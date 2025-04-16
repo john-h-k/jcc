@@ -190,6 +190,8 @@ finished:
 
 size_t hashtbl_size(struct hashtbl *hashtbl) { return hashtbl->len; }
 
+hashtbl_ver_t hashtbl_ver(struct hashtbl *hashtbl) { return hashtbl->ver; }
+
 void hashtbl_hash_str(struct hasher *hasher, const void *obj) {
   hasher_hash_str(hasher, *(const char *const *)obj);
 }
@@ -218,7 +220,7 @@ static struct bucket *hashtbl_create_bucket(struct hashtbl *hashtbl) {
 }
 
 static void hashtbl_rebuild(struct hashtbl *hashtbl) {
-  size_t ver = hashtbl->ver;
+  hashtbl_ver_t ver = hashtbl->ver;
 
   struct vector *buckets = hashtbl->buckets;
   size_t num_buckets = vector_length(buckets);

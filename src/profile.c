@@ -3,6 +3,7 @@
 #include "hashtbl.h"
 #include "json.h"
 #include "log.h"
+#include "thrd.h"
 #include "util.h"
 #include "vector.h"
 
@@ -36,8 +37,12 @@ static unsigned long long get_time(void) {
 }
 #endif
 
+static once_flag lock_once = ONCE_FLAG_INIT;
+static mtx_t lock;
+
 static struct vector *REGIONS = NULL;
 static struct hashtbl *MULTI_REGIONS = NULL;
+static size_t VER = 0;
 
 struct profiler_span {
   bool ended;
@@ -62,30 +67,62 @@ struct profiler_region_data {
   struct profiler_span span;
 };
 
-void profiler_init(void) {
-  if (!REGIONS) {
-    REGIONS = vector_create(sizeof(struct profiler_region_data));
-    MULTI_REGIONS =
-        hashtbl_create_str_keyed(sizeof(struct profiler_multi_region_data));
+static void lock_init(void) { mtx_init(&lock, mtx_plain); }
 
-    // we have a dummy region that covers everything. makes printing subregions
-    // easier
-    struct profiler_region_data region = {.name = "top",
-                                          .span = {
-                                              .ended = false,
-                                              .start = get_time(),
-                                          }};
-    vector_push_back(REGIONS, &region);
+void profiler_init(void) {
+  // is this safe?
+  if (REGIONS) {
+    return;
   }
+
+  call_once(&lock_once, lock_init);
+
+  LOCK(&lock, {
+    if (!REGIONS) {
+      REGIONS = vector_create(sizeof(struct profiler_region_data));
+      MULTI_REGIONS =
+          hashtbl_create_str_keyed(sizeof(struct profiler_multi_region_data));
+
+      // we have a dummy region that covers everything. makes printing
+      // subregions easier
+      struct profiler_region_data region = {.name = "top",
+                                            .span = {
+                                                .ended = false,
+                                                .start = get_time(),
+                                            }};
+      vector_push_back(REGIONS, &region);
+    }
+  });
+}
+
+void profiler_reset(void) {
+  call_once(&lock_once, lock_init);
+
+  LOCK(&lock, {
+    VER++;
+
+    if (REGIONS) {
+      vector_free(&REGIONS);
+      hashtbl_free(&MULTI_REGIONS);
+    }
+  });
+
+  profiler_init();
 }
 
 struct profiler_multi_region_inst
 profiler_begin_multi_region(struct profiler_multi_region *multi_region) {
 #ifdef PROFILE_SELF
+
   unsigned long long prof_start = get_time();
 #endif
 
   profiler_init();
+
+  if (UNLIKELY(multi_region->ver < VER)) {
+    multi_region->entry = (struct hashtbl_entry){0};
+    multi_region->ver = VER;
+  }
 
   struct hashtbl_entry entry;
   struct profiler_multi_region_data *region;
@@ -281,12 +318,11 @@ struct profiler_print_cb {
   } while (0)
 
 static void profiler_print_subregions(struct profiler_print_cb cb,
-                                      void *metadata,
-                                      double gap,
+                                      void *metadata, double gap,
                                       double gap_proportion,
                                       const struct profiler_region_data *parent,
-                                      double *region_sum,
-                                      size_t *start, size_t num_regions) {
+                                      double *region_sum, size_t *start,
+                                      size_t num_regions) {
   CBZ(begin_region);
   if (gap != 0.0) {
     CB(gap, gap, gap_proportion);
@@ -327,8 +363,8 @@ static void profiler_print_subregions(struct profiler_print_cb cb,
     last_end = region->span.end;
 
     subregion = true;
-    profiler_print_subregions(cb, metadata, sub_gap, sub_gap_proportion, region, &sub_region_sum,
-                              start, num_regions);
+    profiler_print_subregions(cb, metadata, sub_gap, sub_gap_proportion, region,
+                              &sub_region_sum, start, num_regions);
   }
   CBZ(end_subregions);
 
@@ -493,7 +529,6 @@ static void profiler_print_text_begin_multi(void *metadata, size_t len) {
   fprintf(data->file, "\n");
 }
 
-
 static void profiler_print_text_begin_subregions(void *metadata) {
   struct profiler_print_data *data = metadata;
   data->depth++;
@@ -597,19 +632,19 @@ static void profiler_print_text_overhead(void *metadata,
 }
 
 void profiler_print_text(FILE *file) {
-  struct profiler_print_cb cb = {.begin_tree = profiler_print_text_begin_tree,
+  struct profiler_print_cb cb = {
+      .begin_tree = profiler_print_text_begin_tree,
 
-                                 .begin_multi = profiler_print_text_begin_multi,
+      .begin_multi = profiler_print_text_begin_multi,
 
-                                 .begin_subregions = profiler_print_text_begin_subregions,
-                                 .end_subregions = profiler_print_text_end_subregions,
+      .begin_subregions = profiler_print_text_begin_subregions,
+      .end_subregions = profiler_print_text_end_subregions,
 
-                                 .gap = profiler_print_text_gap,
-                                 .parent_gap = profiler_print_text_parent_gap,
-                                 .region = profiler_print_text_region,
-                                 .multi_region =
-                                     profiler_print_text_multi_region,
-                                 .overhead = profiler_print_text_overhead};
+      .gap = profiler_print_text_gap,
+      .parent_gap = profiler_print_text_parent_gap,
+      .region = profiler_print_text_region,
+      .multi_region = profiler_print_text_multi_region,
+      .overhead = profiler_print_text_overhead};
 
   struct profiler_print_data data = {.file = file, .depth = 0, .any = false};
 
@@ -726,24 +761,24 @@ static void profiler_print_json_overhead(void *metadata,
 }
 
 void profiler_print_json(FILE *file) {
-  struct profiler_print_cb cb = {.begin_tree = profiler_print_json_begin_tree,
-                                 .end_tree = profiler_print_json_end_tree,
+  struct profiler_print_cb cb = {
+      .begin_tree = profiler_print_json_begin_tree,
+      .end_tree = profiler_print_json_end_tree,
 
-                                 .begin_multi = profiler_print_json_begin_multi,
-                                 .end_multi = profiler_print_json_end_multi,
+      .begin_multi = profiler_print_json_begin_multi,
+      .end_multi = profiler_print_json_end_multi,
 
-                                 .begin_subregions = profiler_print_json_begin_subregions,
-                                 .end_subregions = profiler_print_json_end_subregions,
+      .begin_subregions = profiler_print_json_begin_subregions,
+      .end_subregions = profiler_print_json_end_subregions,
 
-                                 .begin_region = profiler_print_json_begin_region,
-                                 .end_region = profiler_print_json_end_region,
+      .begin_region = profiler_print_json_begin_region,
+      .end_region = profiler_print_json_end_region,
 
-                                 .gap = profiler_print_json_gap,
-                                 .parent_gap = profiler_print_json_parent_gap,
-                                 .region = profiler_print_json_region,
-                                 .multi_region =
-                                     profiler_print_json_multi_region,
-                                 .overhead = profiler_print_json_overhead};
+      .gap = profiler_print_json_gap,
+      .parent_gap = profiler_print_json_parent_gap,
+      .region = profiler_print_json_region,
+      .multi_region = profiler_print_json_multi_region,
+      .overhead = profiler_print_json_overhead};
 
   struct json_writer *writer = json_writer_create();
   struct profiler_json_data data = {.writer = writer};

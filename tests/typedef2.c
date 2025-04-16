@@ -1,4 +1,4 @@
-// expeced value: 0
+// expected value: 0
 
 typedef int int_t;
 

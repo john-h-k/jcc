@@ -1,5 +1,5 @@
 // skip: not implemented
-// expected value
+// expected value: 0
 
 #define FOO bar\
 baz

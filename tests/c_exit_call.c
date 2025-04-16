@@ -1,4 +1,4 @@
-// Expected value: 17
+// expected value: 17
 
 void exit(int code);
 

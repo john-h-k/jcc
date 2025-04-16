@@ -3380,17 +3380,95 @@ static struct td_expr type_unary_op(struct typechk *tchk,
 }
 
 static struct td_expr type_binary_op(struct typechk *tchk,
-                                     const struct ast_binary_op *binary_op) {
-  // in some weird scenarios this can stack overflow
+                                     const struct ast_binary_op *binary_op);
 
-  // all binary operations perform integer promotion
-  struct td_expr lhs = perform_integer_promotion(
-      tchk, type_expr(tchk, TYPE_EXPR_FLAGS_NONE, binary_op->lhs));
-  struct td_expr rhs = perform_integer_promotion(
-      tchk, type_expr(tchk, TYPE_EXPR_FLAGS_NONE, binary_op->rhs));
+static struct td_expr type_binary_op_typed(struct typechk *tchk,
+                                           enum ast_binary_op_ty op_ty,
+                                           struct text_span span,
+                                           struct td_expr *lhs,
+                                           struct td_expr *rhs);
 
+static struct td_expr type_expr_iter(struct typechk *tchk,
+                                     enum type_expr_flags flags,
+                                     const struct ast_expr *expr) {
+  if (expr->ty != AST_EXPR_TY_BINARY_OP) {
+    return type_expr(tchk, flags, expr);
+  }
+
+  // Our state for iterative traversal.
+  struct type_state {
+    enum { LHS, RHS, DONE } state;
+    const struct ast_expr *expr;
+  };
+
+  struct vector *exprs = vector_create_in_arena(sizeof(struct type_state), tchk->arena);
+  struct vector *results = vector_create_in_arena(sizeof(struct td_expr), tchk->arena);
+
+  // kick things off: push binary op node.
+  vector_push_back(exprs, &(struct type_state){ .state = LHS, .expr = expr });
+
+  while (vector_length(exprs)) {
+    struct type_state *state = vector_tail(exprs);
+
+    if (state->expr->ty == AST_EXPR_TY_BINARY_OP) {
+      switch (state->state) {
+      case LHS:
+        // Reserve a dummy slot to later hold the LHS result.
+        vector_push_back(results, &((struct td_expr){0}));
+        state->state = RHS;
+        // FIX: Use the current node’s left child.
+        vector_push_back(exprs, &(struct type_state){
+                                  .state = LHS,
+                                  .expr = state->expr->binary_op.lhs
+                                });
+        break;
+      case RHS: {
+        state->state = DONE;
+        // Pop the computed LHS result...
+        struct td_expr *lhs = vector_pop(results);
+        // FIX: Update the reserved slot.
+        *(struct td_expr *)vector_revget(results, 0) = *lhs;
+        // FIX: Use current node’s right child.
+        vector_push_back(exprs, &(struct type_state){
+                                  .state = LHS,
+                                  .expr = state->expr->binary_op.rhs
+                                });
+        break;
+      }
+      case DONE: {
+        // Now both subtrees are computed.
+        struct td_expr *rhs = vector_pop(results);
+        struct td_expr *lhs = vector_pop(results);
+        struct td_expr typed = type_binary_op_typed(tchk,
+                                                    state->expr->binary_op.ty,
+                                                    state->expr->span,
+                                                    lhs, rhs);
+        vector_push_back(results, &typed);
+        // Remove this binary op node’s state.
+        vector_pop(exprs);
+        break;
+      }
+      }
+    } else {
+      // A leaf (or non-binary op): pop and process normally.
+      vector_pop(exprs);
+      struct td_expr tmp = type_expr(tchk, TYPE_EXPR_FLAGS_NONE, state->expr);
+      vector_push_back(results, &tmp);
+    }
+  }
+  
+  return *(struct td_expr *)vector_head(results);
+}
+
+
+// once sub expressions have been typed, this does the binary op specific stuff
+static struct td_expr type_binary_op_typed(struct typechk *tchk,
+                                           enum ast_binary_op_ty op_ty,
+                                           struct text_span span,
+                                           struct td_expr *lhs_expr,
+                                           struct td_expr *rhs_expr) {
   enum td_binary_op_ty ty;
-  switch (binary_op->ty) {
+  switch (op_ty) {
   case AST_BINARY_OP_TY_EQ:
     ty = TD_BINARY_OP_TY_EQ;
     break;
@@ -3452,21 +3530,31 @@ static struct td_expr type_binary_op(struct typechk *tchk,
       .lhs = arena_alloc(tchk->arena, sizeof(*td_binary_op.lhs)),
       .rhs = arena_alloc(tchk->arena, sizeof(*td_binary_op.rhs))};
 
-  *td_binary_op.lhs = lhs;
-  *td_binary_op.rhs = rhs;
+  *td_binary_op.lhs = perform_integer_promotion(tchk, *lhs_expr);
+  *td_binary_op.rhs = perform_integer_promotion(tchk, *rhs_expr);
 
-  struct td_binary_op_tys op_tys =
-      resolve_binary_op_types(tchk, td_binary_op.lhs, td_binary_op.rhs,
-                              td_binary_op.ty, binary_op->span);
+  struct td_binary_op_tys op_tys = resolve_binary_op_types(
+      tchk, td_binary_op.lhs, td_binary_op.rhs, td_binary_op.ty, span);
 
-  *td_binary_op.lhs = add_cast_if_needed(tchk, binary_op->span,
-                                         *td_binary_op.lhs, op_tys.lhs_op_ty);
-  *td_binary_op.rhs = add_cast_if_needed(tchk, binary_op->span,
-                                         *td_binary_op.rhs, op_tys.rhs_op_ty);
+  *td_binary_op.lhs =
+      add_cast_if_needed(tchk, span, *td_binary_op.lhs, op_tys.lhs_op_ty);
+  *td_binary_op.rhs =
+      add_cast_if_needed(tchk, span, *td_binary_op.rhs, op_tys.rhs_op_ty);
 
   return (struct td_expr){.ty = TD_EXPR_TY_BINARY_OP,
                           .var_ty = op_tys.result_ty,
                           .binary_op = td_binary_op};
+}
+
+static struct td_expr type_binary_op(struct typechk *tchk,
+                                     const struct ast_binary_op *binary_op) {
+  // all binary operations perform integer promotion
+  struct td_expr lhs =
+      type_expr_iter(tchk, TYPE_EXPR_FLAGS_NONE, binary_op->lhs);
+  struct td_expr rhs =
+      type_expr_iter(tchk, TYPE_EXPR_FLAGS_NONE, binary_op->rhs);
+
+  return type_binary_op_typed(tchk, binary_op->ty, binary_op->span, &lhs, &rhs);
 }
 
 static struct td_expr
@@ -6245,7 +6333,8 @@ static bool td_var_ty_is_const(const struct td_var_ty *var_ty) {
     // typedef int int_arr[16]
     // const int_arr arr = { ... };
     // ```
-    return var_ty->type_qualifiers & TD_TYPE_QUALIFIER_FLAG_CONST || td_var_ty_is_const(var_ty->array.underlying);
+    return var_ty->type_qualifiers & TD_TYPE_QUALIFIER_FLAG_CONST ||
+           td_var_ty_is_const(var_ty->array.underlying);
   case TD_VAR_TY_TY_WELL_KNOWN:
   case TD_VAR_TY_TY_POINTER:
   case TD_VAR_TY_TY_VARIADIC:
@@ -6285,12 +6374,17 @@ type_init_declarator(struct typechk *tchk, struct text_span context,
                             td_var_decl.var.identifier);
 
     if (specifiers->storage != TD_STORAGE_CLASS_SPECIFIER_EXTERN) {
-      if (td_var_decl.var.scope == SCOPE_GLOBAL && !td_var_ty_is_const(&td_var_decl.var_ty)) {
+      if (td_var_decl.var.scope == SCOPE_GLOBAL &&
+          !td_var_ty_is_const(&td_var_decl.var_ty)) {
         // TODO: disabled, need way to granularly enable/disable warnings
         // compiler_diagnostics_add(
         //     tchk->diagnostics,
         //     MK_SEMANTIC_DIAGNOSTIC(MUT_GLOBAL, mut_global, context,
-        //                            MK_INVALID_TEXT_POS(0), arena_alloc_snprintf(tchk->arena, "mutable global %.*s", (int)td_var_decl.var.identifier.len, td_var_decl.var.identifier.str)));
+        //                            MK_INVALID_TEXT_POS(0),
+        //                            arena_alloc_snprintf(tchk->arena, "mutable
+        //                            global %.*s",
+        //                            (int)td_var_decl.var.identifier.len,
+        //                            td_var_decl.var.identifier.str)));
       }
 
       td_var_decl.var_ty =

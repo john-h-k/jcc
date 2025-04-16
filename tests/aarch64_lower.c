@@ -1,4 +1,5 @@
 // expected value: 5
+
 // ignore the slightly weird code
 // - it helps generate clearer IR for explaining lowering
 int main() {

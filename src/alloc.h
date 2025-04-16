@@ -23,6 +23,8 @@ void *arena_alloc_strdup(struct arena_allocator *allocator, const char *str);
 
 ustr_t arena_alloc_ustrdup(struct arena_allocator *allocator, ustr_t str);
 
+char *arena_alloc_ustrconv(struct arena_allocator *allocator, ustr_t str);
+
 PRINTF_ARGS(1)
 char *arena_alloc_snprintf(struct arena_allocator *allocator,
                            const char *format, ...);

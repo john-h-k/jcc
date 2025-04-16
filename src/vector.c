@@ -151,6 +151,10 @@ void *vector_get(struct vector *v, size_t index) {
   return &v->data[index * v->element_size];
 }
 
+void *vector_revget(struct vector *v, size_t rindex) {
+  return vector_get(v, v->len - (1 + rindex));
+}
+
 void vector_copy_to(struct vector *v, void *dest) {
   if (v->data) {
     memcpy(dest, v->data, v->len * v->element_size);

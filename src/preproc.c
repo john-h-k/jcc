@@ -6,6 +6,7 @@
 #include "fcache.h"
 #include "hashtbl.h"
 #include "io.h"
+#include "thrd.h"
 #include "log.h"
 #include "profile.h"
 #include "program.h"
@@ -383,8 +384,6 @@ enum preproc_special_macro {
   PREPROC_SPECIAL_MACRO_DATE,
 };
 
-static struct hashtbl *SPECIAL_MACROS = NULL;
-
 enum preproc_unexpanded_token_ty {
   PREPROC_UNEXPANDED_TOKEN_TY_BEGIN_EXPAND,
   PREPROC_UNEXPANDED_TOKEN_TY_END_EXPAND,
@@ -418,21 +417,14 @@ static bool is_preproc_number_char(char c) {
   return isalpha(c) || isdigit(c) || c == '_' || c == '.';
 }
 
-enum preproc_create_result
-preproc_create(struct program program, struct fcache *fcache,
-               struct preproc_create_args args,
-               struct compiler_diagnostics *diagnostics,
-               struct preproc **preproc) {
-  if (args.fixed_timestamp) {
-    DEBUG_ASSERT(strlen(args.fixed_timestamp) >= 19,
-                 "`fixed_timestamp` must be at least 19");
-  }
+static once_flag SPECIAL_MACROS_ONCE = ONCE_FLAG_INIT;
+static struct hashtbl *SPECIAL_MACROS = NULL;
 
-  if (!SPECIAL_MACROS) {
-    debug("building special macro table");
+static void build_special_macros(void) {
+  debug("building special macro table");
 
-    SPECIAL_MACROS =
-        hashtbl_create_ustr_keyed(sizeof(enum preproc_special_macro));
+  SPECIAL_MACROS =
+      hashtbl_create_ustr_keyed(sizeof(enum preproc_special_macro));
 
 #define SPECIAL_MACRO(kw, ty)                                                  \
   do {                                                                         \
@@ -444,13 +436,25 @@ preproc_create(struct program program, struct fcache *fcache,
     hashtbl_insert(SPECIAL_MACROS, &k, &v);                                    \
   } while (0)
 
-    SPECIAL_MACRO("__FILE__", PREPROC_SPECIAL_MACRO_FILE);
-    SPECIAL_MACRO("__LINE__", PREPROC_SPECIAL_MACRO_LINE);
-    SPECIAL_MACRO("__TIME__", PREPROC_SPECIAL_MACRO_TIME);
-    SPECIAL_MACRO("__DATE__", PREPROC_SPECIAL_MACRO_DATE);
+  SPECIAL_MACRO("__FILE__", PREPROC_SPECIAL_MACRO_FILE);
+  SPECIAL_MACRO("__LINE__", PREPROC_SPECIAL_MACRO_LINE);
+  SPECIAL_MACRO("__TIME__", PREPROC_SPECIAL_MACRO_TIME);
+  SPECIAL_MACRO("__DATE__", PREPROC_SPECIAL_MACRO_DATE);
 #undef SPECIAL_MACRO
 
-    debug("built special macro table (len=%zu)", hashtbl_size(SPECIAL_MACROS));
+  debug("built special macro table (len=%zu)", hashtbl_size(SPECIAL_MACROS));
+}
+
+enum preproc_create_result
+preproc_create(struct program program, struct fcache *fcache,
+               struct preproc_create_args args,
+               struct compiler_diagnostics *diagnostics,
+               struct preproc **preproc) {
+  call_once(&SPECIAL_MACROS_ONCE, build_special_macros);
+
+  if (args.fixed_timestamp) {
+    DEBUG_ASSERT(strlen(args.fixed_timestamp) >= 19,
+                 "`fixed_timestamp` must be at least 19");
   }
 
   info("beginning preproc stage");

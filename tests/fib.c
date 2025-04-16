@@ -1,4 +1,4 @@
-// Expected value: 89
+// expected value: 89
 
 // int fib(int nₖ) {
 //   if (nₖ == 0) {

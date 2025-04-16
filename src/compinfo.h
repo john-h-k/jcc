@@ -130,7 +130,8 @@ void __lsan_ignore_object(const void* p);
 
 #if defined(__APPLE__) || defined(__MACH__)
 #define OS_APPLE 1
-#define OS_NAME "apple"
+// needs to be darwin to match `uname`
+#define OS_NAME "darwin"
 #elif defined(__linux__)
 #define OS_LINUX 1
 #define OS_NAME "linux"
@@ -151,13 +152,13 @@ void __lsan_ignore_object(const void* p);
 
 #if defined(__aarch64__)
 #define ARCH_AARCH64 1
-#define ARCH_NAME "ARM64"
+#define ARCH_NAME "aarch64"
 #elif defined(__x86_64__)
 #define ARCH_X86_64 1
-#define ARCH_NAME "X86_64"
+#define ARCH_NAME "x86_64"
 #elif defined(__riscv__) || defined(__riscv) || defined(__riscv32)
 #define ARCH_RISCV32 1
-#define ARCH_NAME "RISCV 32"
+#define ARCH_NAME "rv32i"
 #else
 #define ARCH_NAME "<Unknown architecture>"
 #endif

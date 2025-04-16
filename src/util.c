@@ -181,7 +181,7 @@ void fprint_wstr(FILE *file, const uint32_t *input, size_t len) {
 }
 
 bool try_parse_integer(const char *str, size_t len, unsigned long long *value) {
-  if (!*str) {
+  if (!str || !*str) {
     return false;
   }
 

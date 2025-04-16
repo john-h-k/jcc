@@ -1,8 +1,7 @@
-// Expected value: 0
+// expected value: 0
 // stdout: Hello, World!
 
-// #include <stdio.h>
-int printf(const char *, ...);
+#include <stdio.h>
 
 int main() {
   printf("Hello, World!\n");

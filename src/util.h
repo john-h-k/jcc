@@ -5,6 +5,7 @@
 // header
 
 #include <assert.h>
+#include <ctype.h>
 #include <math.h>
 #include <signal.h>
 #include <stdarg.h>
@@ -290,6 +291,7 @@ static inline void debug_print_stack_trace(void) {}
     fprintf(file, message);                                                    \
     vfprintf(file, format, v);                                                 \
     fprintf(file, "\n");                                                       \
+    fflush(file);                                                              \
     va_end(v);                                                                 \
   } while (0)
 
@@ -299,12 +301,13 @@ static inline void debug_print_stack_trace(void) {}
     fprintf(file, message);                                                    \
     fprintf(file, __VA_ARGS__);                                                \
     fprintf(file, "\n");                                                       \
+    fflush(file);                                                              \
   } while (0)
 
 #define EXIT_FAIL(code)                                                        \
   debug_print_stack_trace();                                                   \
-  raise(SIGABRT);                                                              \
-  exit(code);
+  raise(SIGTRAP);                                                              \
+  exit(1);
 
 #define TODO_FUNC(sig)                                                         \
   START_NO_UNUSED_ARGS                                                         \
@@ -535,8 +538,42 @@ static inline ustr_t ustr_strip_suffix(ustr_t str, ustr_t suffix) {
   return str;
 }
 
+static inline ustr_t ustr_trim(ustr_t str) {
+  if (!str.str) {
+    return str;
+  }
+
+  const char *start = str.str;
+  const char *end = str.str + str.len - 1;
+
+  while (start < end && isspace((unsigned char)start[0])) {
+    start++;
+  }
+
+  while (end > start && isspace((unsigned char)end[0])) {
+    end--;
+  }
+
+  DEBUG_ASSERT(end - start >= 0, "trim overflow");
+  return (ustr_t){.str = start, .len = (size_t)(end - start + 1)};
+}
+
 static inline char *ustr_chr(ustr_t str, int ch) {
   return memchr(str.str, ch, str.len);
+}
+
+static inline bool ustr_split(ustr_t str, char delim, ustr_t *l, ustr_t *r) {
+  char *pos = ustr_chr(str, delim);
+
+  if (!pos) {
+    return false;
+  }
+
+  size_t len = (size_t)(pos - str.str);
+
+  *l = (ustr_t){.str = str.str, .len = len };
+  *r = (ustr_t){.str = pos + 1, .len = str.len - len - 1};
+  return true;
 }
 
 static inline int ustr_cmp(ustr_t l, ustr_t r) {
