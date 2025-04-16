@@ -282,7 +282,6 @@ endif()
 
 # libjcc
 add_library(libjcc STATIC ${SOURCE_FILES})
-target_include_directories(libjcc PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
 set_target_properties(libjcc PROPERTIES OUTPUT_NAME jcc)
 
 # jcc

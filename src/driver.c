@@ -307,6 +307,8 @@ try_get_compile_args(int argc, char **argv, struct parsed_args *args,
 
       .log_symbols = log_symbols,
 
+      .diagnostics_sink = args->diagnostics_sink,
+
       .verbose = args->verbose,
 
       .c_standard = args->c_standard,
@@ -645,8 +647,8 @@ static int jcc_driver_compiler(struct arena_allocator *arena,
     PROFILE_END(create_compiler);
 
     if (compile(compiler) != COMPILE_RESULT_SUCCESS) {
-      // FIXME: `err`/`warn` should ignore log levels
-      err("compilation failed!");
+      // temp disabled because doesnt respect `-fdiagnostics-sink`
+      // err("compilation failed!");
 
       free_compiler(&compiler);
       exc = -1;

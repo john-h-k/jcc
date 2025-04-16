@@ -162,6 +162,8 @@ struct compile_args {
 
   bool use_graphcol_regalloc;
 
+  const char *diagnostics_sink;
+
   size_t num_defines;
   struct preproc_define_macro *defines;
 

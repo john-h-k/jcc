@@ -20,8 +20,8 @@
 #include <time.h>
 #include <unistd.h>
 
-#define DEFAULT_JCC "../build/jcc"
-#define DEFAULT_TEST_DIR "../tests"
+#define DEFAULT_JCC "build/jcc"
+#define DEFAULT_TEST_DIR "tests"
 #define TM_STR "Tue Dec 10 10:04:33 2024"
 
 struct jobq;
@@ -235,17 +235,57 @@ struct jcc_worker_args {
   struct jcc_test_opts opts;
 };
 
-static int run_compilation(const struct jcc_worker_args *args, int argc,
-                           char **argv) {
+struct jcc_comp_info {
+  int exc;
+  char *stderr_buf;
+};
+
+static struct jcc_comp_info run_compilation(const struct jcc_worker_args *args,
+                                            const struct jcc_test *test,
+                                            struct vector *comp_args) {
   if (args->opts.use_process) {
     struct syscmd *cmd = syscmd_create(args->arena, args->opts.jcc);
-    for (int i = 1; i < argc; i++) {
+
+    size_t argc = vector_length(comp_args);
+    char **argv = vector_head(comp_args);
+
+    for (size_t i = 1; i < argc; i++) {
       syscmd_add_arg(cmd, argv[i]);
     }
 
-    return syscmd_exec(&cmd);
+    char *stderr_buf;
+    syscmd_set_stderr(cmd, SYSCMD_BUF_FLAG_NONE, &stderr_buf);
+    int exc = syscmd_exec(&cmd);
+
+    return (struct jcc_comp_info){.exc = exc, .stderr_buf = stderr_buf};
   } else {
-    return jcc_main(argc, argv);
+    const char *sink_flag = "-fdiagnostics-sink";
+    vector_push_back(comp_args, &sink_flag);
+
+    char *sink = arena_alloc_snprintf(args->arena, "%zu-sink.txt", test->id);
+    vector_push_back(comp_args, &sink);
+
+    size_t argc = vector_length(comp_args);
+    char **argv = vector_head(comp_args);
+
+    int exc = jcc_main(argc, argv);
+
+    char *result = NULL;
+    size_t n = 0;
+
+    FILE *file = fopen(sink, "r");
+    char buf[1024];
+    while (fgets(buf, sizeof(buf), file)) {
+      size_t len = strlen(buf);
+      result = arena_realloc(args->arena, result, n + len + 1);
+      memcpy(result + n, buf, len);
+      n += len;
+      result[n] = '\0';
+    }
+
+    fclose(file);
+
+    return (struct jcc_comp_info){.exc = exc, .stderr_buf = result};
   }
 }
 
@@ -450,14 +490,12 @@ static void run_test(struct jcc_worker_args *args, const struct jcc_test *test,
     vector_push_back(comp_args, &test->driver);
   }
 
-  size_t num_args = vector_length(comp_args);
-
   profiler_reset();
-  int compile_ret = run_compilation(args, num_args, vector_head(comp_args));
+  struct jcc_comp_info comp_info = run_compilation(args, test, comp_args);
 
   if (info.no_compile) {
     LOCK(&args->results_lock, {
-      if (compile_ret == 0) {
+      if (comp_info.exc == 0) {
         vector_push_back(args->results,
                          &(struct jcc_test_result){
                              .status = TEST_STATUS_FAIL,
@@ -475,15 +513,19 @@ static void run_test(struct jcc_worker_args *args, const struct jcc_test *test,
     return;
   }
 
-  if (compile_ret != 0) {
+  if (comp_info.exc != 0) {
     LOCK(&args->results_lock, {
       vector_push_back(
           args->results,
           &(struct jcc_test_result){
               .status = TEST_STATUS_FAIL,
               .file = test->file,
-              .msg = arena_alloc_snprintf(args->arena, "Compile error (ret=%d)",
-                                          compile_ret)});
+              .msg = comp_info.stderr_buf
+                         ? arena_alloc_snprintf(
+                               args->arena,
+                               "compilation error! build output: \n%s\n",
+                               comp_info.stderr_buf)
+                         : "compilation error!"});
     });
     return;
   }
@@ -507,14 +549,13 @@ static void run_test(struct jcc_worker_args *args, const struct jcc_test *test,
 
   if (run_ret != info.expected_exc) {
     LOCK(&args->results_lock, {
-      vector_push_back(
-          args->results,
-          &(struct jcc_test_result){
-          .status = TEST_STATUS_FAIL,
-          .file = test->file,
-          .msg =
-              arena_alloc_snprintf(args->arena, "Exit code %d vs expected %d",
-                                   run_ret, info.expected_exc)});
+      vector_push_back(args->results,
+                       &(struct jcc_test_result){
+                           .status = TEST_STATUS_FAIL,
+                           .file = test->file,
+                           .msg = arena_alloc_snprintf(
+                               args->arena, "Exit code %d vs expected %d",
+                               run_ret, info.expected_exc)});
     });
     return;
   }
@@ -525,21 +566,19 @@ static void run_test(struct jcc_worker_args *args, const struct jcc_test *test,
       vector_push_back(
           args->results,
           &(struct jcc_test_result){
-          .status = TEST_STATUS_FAIL,
-          .file = test->file,
-          .msg = arena_alloc_snprintf(
-              args->arena, "Stdout mismatch: expected \"%.*s\" got \"%s\"",
-              USTR_SPEC(info.expected_stdout), run_output)
-      });
+              .status = TEST_STATUS_FAIL,
+              .file = test->file,
+              .msg = arena_alloc_snprintf(
+                  args->arena, "Stdout mismatch: expected \"%.*s\" got \"%s\"",
+                  USTR_SPEC(info.expected_stdout), run_output)});
     });
     return;
   }
 
   LOCK(&args->results_lock, {
-      vector_push_back(
-          args->results,
-          &(struct jcc_test_result){
-        .status = TEST_STATUS_PASS, .file = test->file});
+    vector_push_back(args->results,
+                     &(struct jcc_test_result){.status = TEST_STATUS_PASS,
+                                               .file = test->file});
   });
 }
 
@@ -702,7 +741,7 @@ int main(int argc, char **argv) {
 
     echo(PR_BOLD PR_YELLOW, "Skipped tests:");
     for (size_t i = 0; i < num_results; i++) {
-    struct jcc_test_result *result = vector_get(results, i);
+      struct jcc_test_result *result = vector_get(results, i);
 
       if (result->status == TEST_STATUS_SKIP) {
         echo(PR_BOLD PR_YELLOW, "- '%s' skipped: '%s'", result->file,
@@ -716,11 +755,10 @@ int main(int argc, char **argv) {
 
     echo(PR_BOLD PR_RED, "Failed tests:");
     for (size_t i = 0; i < num_results; i++) {
-    struct jcc_test_result *result = vector_get(results, i);
+      struct jcc_test_result *result = vector_get(results, i);
 
       if (result->status == TEST_STATUS_FAIL) {
-        echo(PR_BOLD PR_RED, "- '%s' failed: %s", result->file,
-             result->msg);
+        echo(PR_BOLD PR_RED, "- '%s' failed: %s", result->file, result->msg);
       }
     }
   }

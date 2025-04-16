@@ -361,6 +361,8 @@ build() {
 }
 
 # In `debug` and `run`, `MallocNanoZone=0` gets rid of spurious meaningless warnings when address san is turned on on macOS
+# is there any probablem with globally setting it like this?
+export MallocNanoZone=0
 
 _run() {
     jcc=$(readlink -f ./build/jcc)
@@ -445,24 +447,31 @@ debug() {
     return $exc
 }
 
+_test_runner() {
+    if [ -z "$JCC_TEST_BASH" ]; then
+        echo "./build/test"
+    else
+        echo "./scripts/test.sh"
+    fi
+}
+
 test() {
     build
 
-    ./scripts/test.sh "$@" || exit $?
+    $(_test_runner) "$@"
 }
 
 test-all() {
     build
 
-    ./scripts/test.sh --arg-group -O0 --arg-group -O1 --arg-group -O2 --arg-group -O3 "$@" || exit $?
+    $(_test_runner) --arg-group -O0 --arg-group -O1 --arg-group -O2 --arg-group -O3 "$@"
 }
 
 ci-test() {
     build
 
-    # temp disable opts tests for quick iteration
-    timeout -k 30m 30m ./scripts/test.sh --quiet "$@" || exit $?
-    # timeout -k 30m 30m ./scripts/test.sh --quiet --arg-group -O0 --arg-group -O1 --arg-group -O2 --arg-group -O3 "$@" || exit $?
+    # timeout -k 30m 30m
+    $(_test_runner) --quiet --arg-group -O0 --arg-group -O1 --arg-group -O2 --arg-group -O3 "$@"
 }
 
 cfg() {
