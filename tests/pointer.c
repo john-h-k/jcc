@@ -1,4 +1,4 @@
-// Expected value: 0
+// expected value: 0
 // stdout: 0 5
 
 int printf(const char *format, ...);

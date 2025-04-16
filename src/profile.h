@@ -22,6 +22,19 @@
 // (B) is this bad?
 
 
+#define NO_PROFILE
+
+#ifdef NO_PROFILE
+#define PROFILE_BEGIN(name)
+#define PROFILE_END(name) 
+
+#define PROFILE_CREATE_MULTI(nm)
+#define PROFILE_BEGIN_MULTI(name)
+#define PROFILE_END_MULTI(name)
+
+#define PROFILE(name, code) code
+
+#else
 #define PROFILE_BEGIN(name)                                                    \
   struct profiler_region profiler_##name##_region =                            \
       profiler_begin_region(#name)
@@ -38,10 +51,12 @@
   PROFILE_BEGIN(name);                                                         \
   code;                                                                        \
   PROFILE_END(name);
+#endif
 
 struct profiler_multi_region {
   const char *name;
   struct hashtbl_entry entry;
+  size_t ver;
 };
 
 struct profiler_multi_region_inst {
@@ -52,6 +67,7 @@ struct profiler_multi_region_inst {
 
 // not required to be called, but ensures more accurate measurement if it is
 void profiler_init(void);
+void profiler_reset(void);
 
 NOINLINE struct profiler_multi_region_inst profiler_begin_multi_region(struct profiler_multi_region *multi_region);
 NOINLINE void profiler_end_multi_region(struct profiler_multi_region_inst inst);

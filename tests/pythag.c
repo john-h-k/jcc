@@ -1,4 +1,4 @@
-// Expected value: 5
+// expected value: 5
 // stdin: 3 4
 // stdout: sqrt(3^2 + 4^2) = 5
 

@@ -1,4 +1,4 @@
-// Expected value: 45
+// expected value: 45
 
 enum foo { FOUR = 4, FIVE, TWO = 2, THREE };
 

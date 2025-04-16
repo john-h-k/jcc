@@ -10,11 +10,13 @@
 struct hashtbl;
 struct hashtbl_iter;
 
+typedef size_t hashtbl_ver_t;
+
 struct hashtbl_entry {
   const void *key;
   void *data;
 
-  size_t ver;
+  hashtbl_ver_t ver;
 };
 
 typedef void (*hash_fn)(struct hasher *hasher, const void *obj);
@@ -41,6 +43,7 @@ hashtbl_create_ustr_keyed_in_arena(struct arena_allocator *arena,
 void hashtbl_free(struct hashtbl **hashtbl);
 
 size_t hashtbl_size(struct hashtbl *hashtbl);
+hashtbl_ver_t hashtbl_ver(struct hashtbl *hashtbl);
 
 struct hashtbl_iter *hashtbl_iter(struct hashtbl *hashtbl);
 bool hashtbl_iter_next(struct hashtbl_iter *hashtbl_iter,

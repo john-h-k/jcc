@@ -4,6 +4,7 @@
 #include "compiler.h"
 #include "hashtbl.h"
 #include "log.h"
+#include "thrd.h"
 #include "preproc.h"
 #include "program.h"
 #include "vector.h"
@@ -30,22 +31,18 @@ struct lexer {
   enum compile_c_standard c_standard;
 };
 
-static struct hashtbl *KEYWORDS = NULL;
-
 struct lex_keyword {
   enum lex_token_ty ty;
   enum compile_c_standard c_standard;
 };
 
-enum lex_create_result lexer_create(struct program program,
-                                    struct preproc *preproc,
-                                    enum compile_c_standard c_standard,
-                                    enum compile_preproc_mode mode,
-                                    struct lexer **lexer) {
-  if (!KEYWORDS) {
-    debug("building kw table");
+static once_flag KEYWORDS_ONCE = ONCE_FLAG_INIT;
+static struct hashtbl *KEYWORDS = NULL;
+static void build_keywords(void) {
 
-    KEYWORDS = hashtbl_create_ustr_keyed(sizeof(struct lex_keyword));
+  debug("building kw table");
+
+  KEYWORDS = hashtbl_create_ustr_keyed(sizeof(struct lex_keyword));
 
 #define KEYWORD_NEW(kw, kw_ty, std)                                            \
   do {                                                                         \
@@ -71,96 +68,103 @@ enum lex_create_result lexer_create(struct program program,
 #define KEYWORD_WITH_ALIASES(kw, ty)                                           \
   KEYWORD_WITH_ALIASES_NEW(kw, ty, COMPILE_C_STANDARD_C11)
 
-    // We falsely reserve some keywords here i believe (e.g banning `align` in
-    // C11)
-    KEYWORD("_Nonnull", LEX_TOKEN_TY_KW_NONNULL);
-    KEYWORD("_Nullable", LEX_TOKEN_TY_KW_NULLABLE);
-    KEYWORD("_Optional", LEX_TOKEN_TY_KW_NULLABLE);
+  // We falsely reserve some keywords here i believe (e.g banning `align` in
+  // C11)
+  KEYWORD("_Nonnull", LEX_TOKEN_TY_KW_NONNULL);
+  KEYWORD("_Nullable", LEX_TOKEN_TY_KW_NULLABLE);
+  KEYWORD("_Optional", LEX_TOKEN_TY_KW_NULLABLE);
 
-    KEYWORD_WITH_ALIASES("asm", LEX_TOKEN_TY_KW_ASM);
+  KEYWORD_WITH_ALIASES("asm", LEX_TOKEN_TY_KW_ASM);
 
-    KEYWORD("__attribute__", LEX_TOKEN_TY_KW_ATTRIBUTE);
+  KEYWORD("__attribute__", LEX_TOKEN_TY_KW_ATTRIBUTE);
 
-    KEYWORD_WITH_ALIASES_NEW("typeof", LEX_TOKEN_TY_KW_TYPEOF,
-                             COMPILE_C_STANDARD_C23);
-    KEYWORD_WITH_ALIASES_NEW("typeof_unqual", LEX_TOKEN_TY_KW_TYPEOF_UNQUAL,
-                             COMPILE_C_STANDARD_C23);
+  KEYWORD_WITH_ALIASES_NEW("typeof", LEX_TOKEN_TY_KW_TYPEOF,
+                           COMPILE_C_STANDARD_C23);
+  KEYWORD_WITH_ALIASES_NEW("typeof_unqual", LEX_TOKEN_TY_KW_TYPEOF_UNQUAL,
+                           COMPILE_C_STANDARD_C23);
 
-    KEYWORD("_Generic", LEX_TOKEN_TY_KW_GENERIC);
+  KEYWORD("_Generic", LEX_TOKEN_TY_KW_GENERIC);
 
-    KEYWORD("_Static_assert", LEX_TOKEN_TY_KW_STATICASSERT);
+  KEYWORD("_Static_assert", LEX_TOKEN_TY_KW_STATICASSERT);
 
-    KEYWORD_NEW("static_assert", LEX_TOKEN_TY_KW_STATICASSERT,
-                COMPILE_C_STANDARD_C23);
+  KEYWORD_NEW("static_assert", LEX_TOKEN_TY_KW_STATICASSERT,
+              COMPILE_C_STANDARD_C23);
 
-    KEYWORD("_Noreturn", LEX_TOKEN_TY_KW_NORETURN);
-    KEYWORD("goto", LEX_TOKEN_TY_KW_GOTO);
-    KEYWORD("break", LEX_TOKEN_TY_KW_BREAK);
-    KEYWORD("continue", LEX_TOKEN_TY_KW_CONTINUE);
-    KEYWORD("do", LEX_TOKEN_TY_KW_DO);
-    KEYWORD("for", LEX_TOKEN_TY_KW_FOR);
-    KEYWORD("while", LEX_TOKEN_TY_KW_WHILE);
-    KEYWORD("switch", LEX_TOKEN_TY_KW_SWITCH);
-    KEYWORD("default", LEX_TOKEN_TY_KW_DEFAULT);
-    KEYWORD("case", LEX_TOKEN_TY_KW_CASE);
-    KEYWORD("if", LEX_TOKEN_TY_KW_IF);
-    KEYWORD("else", LEX_TOKEN_TY_KW_ELSE);
-    KEYWORD("return", LEX_TOKEN_TY_KW_RETURN);
+  KEYWORD("_Noreturn", LEX_TOKEN_TY_KW_NORETURN);
+  KEYWORD("goto", LEX_TOKEN_TY_KW_GOTO);
+  KEYWORD("break", LEX_TOKEN_TY_KW_BREAK);
+  KEYWORD("continue", LEX_TOKEN_TY_KW_CONTINUE);
+  KEYWORD("do", LEX_TOKEN_TY_KW_DO);
+  KEYWORD("for", LEX_TOKEN_TY_KW_FOR);
+  KEYWORD("while", LEX_TOKEN_TY_KW_WHILE);
+  KEYWORD("switch", LEX_TOKEN_TY_KW_SWITCH);
+  KEYWORD("default", LEX_TOKEN_TY_KW_DEFAULT);
+  KEYWORD("case", LEX_TOKEN_TY_KW_CASE);
+  KEYWORD("if", LEX_TOKEN_TY_KW_IF);
+  KEYWORD("else", LEX_TOKEN_TY_KW_ELSE);
+  KEYWORD("return", LEX_TOKEN_TY_KW_RETURN);
 
-    KEYWORD("typedef", LEX_TOKEN_TY_KW_TYPEDEF);
-    KEYWORD("static", LEX_TOKEN_TY_KW_STATIC);
-    KEYWORD("auto", LEX_TOKEN_TY_KW_AUTO);
-    KEYWORD("extern", LEX_TOKEN_TY_KW_EXTERN);
-    KEYWORD("register", LEX_TOKEN_TY_KW_REGISTER);
+  KEYWORD("typedef", LEX_TOKEN_TY_KW_TYPEDEF);
+  KEYWORD("static", LEX_TOKEN_TY_KW_STATIC);
+  KEYWORD("auto", LEX_TOKEN_TY_KW_AUTO);
+  KEYWORD("extern", LEX_TOKEN_TY_KW_EXTERN);
+  KEYWORD("register", LEX_TOKEN_TY_KW_REGISTER);
 
-    // const does not have `__const__` variant as that is an attribute
-    KEYWORD("const", LEX_TOKEN_TY_KW_CONST);
-    KEYWORD("__const", LEX_TOKEN_TY_KW_CONST);
-    KEYWORD_WITH_ALIASES("inline", LEX_TOKEN_TY_KW_INLINE);
-    KEYWORD_WITH_ALIASES("volatile", LEX_TOKEN_TY_KW_VOLATILE);
-    KEYWORD_WITH_ALIASES("restrict", LEX_TOKEN_TY_KW_RESTRICT);
+  // const does not have `__const__` variant as that is an attribute
+  KEYWORD("const", LEX_TOKEN_TY_KW_CONST);
+  KEYWORD("__const", LEX_TOKEN_TY_KW_CONST);
+  KEYWORD_WITH_ALIASES("inline", LEX_TOKEN_TY_KW_INLINE);
+  KEYWORD_WITH_ALIASES("volatile", LEX_TOKEN_TY_KW_VOLATILE);
+  KEYWORD_WITH_ALIASES("restrict", LEX_TOKEN_TY_KW_RESTRICT);
 
-    KEYWORD("void", LEX_TOKEN_TY_KW_VOID);
+  KEYWORD("void", LEX_TOKEN_TY_KW_VOID);
 
-    KEYWORD("_Bool", LEX_TOKEN_TY_KW_BOOL);
+  KEYWORD("_Bool", LEX_TOKEN_TY_KW_BOOL);
 
-    KEYWORD_NEW("bool", LEX_TOKEN_TY_KW_BOOL, COMPILE_C_STANDARD_C23);
-    KEYWORD_NEW("true", LEX_TOKEN_TY_KW_TRUE, COMPILE_C_STANDARD_C23);
-    KEYWORD_NEW("false", LEX_TOKEN_TY_KW_FALSE, COMPILE_C_STANDARD_C23);
+  KEYWORD_NEW("bool", LEX_TOKEN_TY_KW_BOOL, COMPILE_C_STANDARD_C23);
+  KEYWORD_NEW("true", LEX_TOKEN_TY_KW_TRUE, COMPILE_C_STANDARD_C23);
+  KEYWORD_NEW("false", LEX_TOKEN_TY_KW_FALSE, COMPILE_C_STANDARD_C23);
 
-    KEYWORD_NEW("defer", LEX_TOKEN_TY_KW_DEFER, COMPILE_C_STANDARD_C2Y);
+  KEYWORD_NEW("defer", LEX_TOKEN_TY_KW_DEFER, COMPILE_C_STANDARD_C2Y);
 
-    KEYWORD("float", LEX_TOKEN_TY_KW_FLOAT);
-    KEYWORD("double", LEX_TOKEN_TY_KW_DOUBLE);
-    KEYWORD("char", LEX_TOKEN_TY_KW_CHAR);
-    KEYWORD("short", LEX_TOKEN_TY_KW_SHORT);
-    KEYWORD("int", LEX_TOKEN_TY_KW_INT);
-    KEYWORD("long", LEX_TOKEN_TY_KW_LONG);
+  KEYWORD("float", LEX_TOKEN_TY_KW_FLOAT);
+  KEYWORD("double", LEX_TOKEN_TY_KW_DOUBLE);
+  KEYWORD("char", LEX_TOKEN_TY_KW_CHAR);
+  KEYWORD("short", LEX_TOKEN_TY_KW_SHORT);
+  KEYWORD("int", LEX_TOKEN_TY_KW_INT);
+  KEYWORD("long", LEX_TOKEN_TY_KW_LONG);
 
-    KEYWORD_WITH_ALIASES("unsigned", LEX_TOKEN_TY_KW_UNSIGNED);
-    KEYWORD_WITH_ALIASES("signed", LEX_TOKEN_TY_KW_SIGNED);
+  KEYWORD_WITH_ALIASES("unsigned", LEX_TOKEN_TY_KW_UNSIGNED);
+  KEYWORD_WITH_ALIASES("signed", LEX_TOKEN_TY_KW_SIGNED);
 
-    KEYWORD("enum", LEX_TOKEN_TY_KW_ENUM);
-    KEYWORD("struct", LEX_TOKEN_TY_KW_STRUCT);
-    KEYWORD("union", LEX_TOKEN_TY_KW_UNION);
+  KEYWORD("enum", LEX_TOKEN_TY_KW_ENUM);
+  KEYWORD("struct", LEX_TOKEN_TY_KW_STRUCT);
+  KEYWORD("union", LEX_TOKEN_TY_KW_UNION);
 
-    KEYWORD("sizeof", LEX_TOKEN_TY_KW_SIZEOF);
-    KEYWORD("_Alignof", LEX_TOKEN_TY_KW_ALIGNOF);
-    KEYWORD("_Alignas", LEX_TOKEN_TY_KW_ALIGNAS);
+  KEYWORD("sizeof", LEX_TOKEN_TY_KW_SIZEOF);
+  KEYWORD("_Alignof", LEX_TOKEN_TY_KW_ALIGNOF);
+  KEYWORD("_Alignas", LEX_TOKEN_TY_KW_ALIGNAS);
 
-    KEYWORD_NEW("alignof", LEX_TOKEN_TY_KW_ALIGNOF, COMPILE_C_STANDARD_C23);
-    KEYWORD_NEW("alignas", LEX_TOKEN_TY_KW_ALIGNAS, COMPILE_C_STANDARD_C23);
+  KEYWORD_NEW("alignof", LEX_TOKEN_TY_KW_ALIGNOF, COMPILE_C_STANDARD_C23);
+  KEYWORD_NEW("alignas", LEX_TOKEN_TY_KW_ALIGNAS, COMPILE_C_STANDARD_C23);
 
-    KEYWORD("__fp16", LEX_TOKEN_TY_KW_HALF);
-    KEYWORD("_Float16", LEX_TOKEN_TY_KW_HALF);
+  KEYWORD("__fp16", LEX_TOKEN_TY_KW_HALF);
+  KEYWORD("_Float16", LEX_TOKEN_TY_KW_HALF);
 
-    // required by macOS
-    KEYWORD("__uint128_t", LEX_TOKEN_TY_KW_UINT128);
+  // required by macOS
+  KEYWORD("__uint128_t", LEX_TOKEN_TY_KW_UINT128);
 
 #undef KEYWORD
 
-    debug("built kw table (len=%zu)", hashtbl_size(KEYWORDS));
-  }
+  debug("built kw table (len=%zu)", hashtbl_size(KEYWORDS));
+}
+
+enum lex_create_result lexer_create(struct program program,
+                                    struct preproc *preproc,
+                                    enum compile_c_standard c_standard,
+                                    enum compile_preproc_mode mode,
+                                    struct lexer **lexer) {
+  call_once(&KEYWORDS_ONCE, build_keywords);
 
   info("beginning lex stage");
 
@@ -207,7 +211,8 @@ void lex_all(struct lexer *lexer) {
 
 /* The lexer parses identifiers, but these could be identifiers, typedef-names,
    or keywords. This function converts identifiers into their "real" type */
-static enum lex_token_ty refine_ty(struct lexer *lexer, struct preproc_token *token) {
+static enum lex_token_ty refine_ty(struct lexer *lexer,
+                                   struct preproc_token *token) {
   struct keyword {
     const char *str;
     size_t len;

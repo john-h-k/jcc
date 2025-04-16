@@ -14,7 +14,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 set(
   SOURCE_FILES
-  src/main.c
+  src/driver.c
   src/args.c
 
   src/thrd.c
@@ -280,5 +280,15 @@ else()
   message(WARNING "Unknown compiler: ${CMAKE_C_COMPILER_ID}")
 endif()
 
-add_executable(jcc ${SOURCE_FILES})
-target_link_libraries(jcc m)
+# libjcc
+add_library(libjcc STATIC ${SOURCE_FILES})
+target_include_directories(libjcc PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
+set_target_properties(libjcc PROPERTIES OUTPUT_NAME jcc)
+
+# jcc
+add_executable(jcc src/main.c)
+target_link_libraries(jcc PRIVATE libjcc m)
+
+# test
+add_executable(test src/test.c)
+target_link_libraries(test PRIVATE libjcc m)

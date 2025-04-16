@@ -106,14 +106,19 @@ void syscmd_write_cmd(struct syscmd *cmd, FILE *file) {
 }
 
 
-void syscmd_set_stdin(struct syscmd *syscmd, const char *value) {
-  syscmd->stdin_val = arena_alloc_strdup(syscmd->arena, value);
+void syscmd_set_stdin(struct syscmd *syscmd, ustr_t value) {
+  syscmd->stdin_val = arena_alloc_ustrconv(syscmd->arena, value);
 }
 
 #if SYSCMD_UNIX
 
 static int syscmd_open_fd(const char *output) {
-  int fd = open(output, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+  int flags = O_WRONLY | O_CREAT;
+  if (strcmp(output, "/dev/null") != 0) {
+    flags |= O_TRUNC;
+  }
+
+  int fd = open(output, flags, 0644);
 
   invariant_assert(fd >= 0, "open file '%s' failed", output);
 
@@ -199,8 +204,6 @@ int syscmd_exec(struct syscmd **syscmd) {
     posix_spawn_file_actions_addclose(&actions, stderr_fd);
   }
 
-  int status;
-
   pid_t pid;
   if (posix_spawnp(&pid, s->process, &actions, NULL, args, environ) != 0) {
     BUG("spawnp failed");
@@ -217,6 +220,7 @@ int syscmd_exec(struct syscmd **syscmd) {
     close(stdin_pipe[1]);
   }
 
+  int status;
   if (waitpid(pid, &status, 0) == -1) {
     BUG("waitpid failed");
   }

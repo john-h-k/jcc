@@ -1,5 +1,6 @@
 #include "alloc.h"
 
+#include "thrd.h"
 #include "util.h"
 #include "vector.h"
 
@@ -52,45 +53,58 @@ struct allocator_info {
   void *end;
 };
 
+static mtx_t LOCK;
+static once_flag METADATA_ONCE = ONCE_FLAG_INIT;
 static struct vector *ALLOCATORS = NULL;
 
+static void arena_asan_error(const char *report);
+
+static void asan_metadata_init(void) {
+  mtx_init(&LOCK, mtx_plain);
+  ALLOCATORS = vector_create(sizeof(struct allocator_info));
+  __asan_set_error_report_callback(arena_asan_error);
+}
+
 static void arena_asan_error(const char *report) {
-  // DEBUG_ASSERT(__asan_report_present(), "wot");
-  // void *addr = __asan_get_report_address();
+  LOCK(&LOCK, {
+    // DEBUG_ASSERT(__asan_report_present(), "wot");
+    // void *addr = __asan_get_report_address();
 
-  // HACK: `__asan_get_report_address` doesn't seem to work? so parse string lol
-  const char *addr_str = strstr(report, "on address ");
-  unsigned long long addr_val = 0;
+    // HACK: `__asan_get_report_address` doesn't seem to work? so parse string
+    // lol
+    const char *addr_str = strstr(report, "on address ");
+    unsigned long long addr_val = 0;
 
-  if (addr_str) {
-    addr_str += strlen("on address ");
-  }
-
-  const char *addr_end = strchr(addr_str, ' ');
-  if (!addr_end ||
-      !try_parse_integer(addr_str, addr_end - addr_str, &addr_val)) {
-    return;
-  }
-
-  void *addr = (void *)addr_val;
-
-  size_t num_allocators = vector_length(ALLOCATORS);
-  if (!ALLOCATORS || !addr) {
-    return;
-  }
-
-  for (size_t i = 0; i < num_allocators; i++) {
-    struct allocator_info *alloc = vector_get(ALLOCATORS, i);
-
-    void *base = alloc->base;
-    void *end = alloc->end;
-
-    if (addr >= base && addr <= end) {
-      fprintf(stderr,
-              PR_RED PR_BOLD "\nError occurred in arena '%s'\n\n" PR_RESET,
-              alloc->name);
+    if (addr_str) {
+      addr_str += strlen("on address ");
     }
-  }
+
+    const char *addr_end = strchr(addr_str, ' ');
+    if (!addr_end ||
+        !try_parse_integer(addr_str, addr_end - addr_str, &addr_val)) {
+      return;
+    }
+
+    void *addr = (void *)addr_val;
+
+    size_t num_allocators = vector_length(ALLOCATORS);
+    if (!ALLOCATORS || !addr) {
+      return;
+    }
+
+    for (size_t i = 0; i < num_allocators; i++) {
+      struct allocator_info *alloc = vector_get(ALLOCATORS, i);
+
+      void *base = alloc->base;
+      void *end = alloc->end;
+
+      if (addr >= base && addr <= end) {
+        fprintf(stderr,
+                PR_RED PR_BOLD "\nError occurred in arena '%s'\n\n" PR_RESET,
+                alloc->name);
+      }
+    }
+  });
 }
 #endif
 
@@ -114,13 +128,7 @@ void arena_allocator_create(const char *name,
   p->first = p->last;
 
 #ifdef ASAN
-  // FIXME: thread safety
-  static bool init = false;
-  if (!init) {
-    init = true;
-    ALLOCATORS = vector_create(sizeof(struct allocator_info));
-    __asan_set_error_report_callback(arena_asan_error);
-  }
+  call_once(&METADATA_ONCE, asan_metadata_init);
 #endif
 }
 
@@ -143,7 +151,8 @@ void arena_allocator_free(struct arena_allocator **allocator) {
         .end = arena->block + arena->size,
     };
 
-    vector_push_back(ALLOCATORS, &info);
+    // TODO: not very efficient
+    LOCK(&LOCK, { vector_push_back(ALLOCATORS, &info); });
 #endif
 
     void *p = arena;
@@ -183,9 +192,24 @@ void *arena_alloc_strdup(struct arena_allocator *allocator, const char *str) {
 }
 
 ustr_t arena_alloc_ustrdup(struct arena_allocator *allocator, ustr_t str) {
+  if (!str.str) {
+    return str;
+  }
+
   char *cp = arena_alloc(allocator, str.len);
   memcpy(cp, str.str, str.len);
   return (ustr_t){.str = cp, .len = str.len};
+}
+
+char *arena_alloc_ustrconv(struct arena_allocator *allocator, ustr_t str) {
+  if (!str.str) {
+    str.str = "";
+  }
+
+  char *cp = arena_alloc(allocator, str.len + 1);
+  memcpy(cp, str.str, str.len);
+  cp[str.len] = '\0';
+  return cp;
 }
 
 PRINTF_ARGS(1)
