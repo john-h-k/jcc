@@ -85,7 +85,7 @@ void profiler_init(void) {
 
   call_once(&lock_once, lock_init);
 
-  LOCK(&lock, {
+  MTX_LOCK(&lock, {
     if (!REGIONS) {
       REGIONS = vector_create(sizeof(struct profiler_region_data));
       MULTI_REGIONS =
@@ -106,7 +106,7 @@ void profiler_init(void) {
 void profiler_reset(void) {
   call_once(&lock_once, lock_init);
 
-  LOCK(&lock, {
+  MTX_LOCK(&lock, {
     VER++;
 
     if (REGIONS) {

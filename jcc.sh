@@ -456,6 +456,8 @@ _test_runner() {
 }
 
 _test() {
+    build
+
     mkdir -p .tmp
     cd .tmp
 
@@ -469,20 +471,14 @@ _test() {
 }
 
 test() {
-    build
-
     _test "$@"
 }
 
 test-all() {
-    build
-
     _test --arg-group -O0 --arg-group -O1 --arg-group -O2 --arg-group -O3 "$@"
 }
 
 ci-test() {
-    build
-
     # timeout -k 30m 30m
     # opts disabled for now
     _test --quiet "$@"

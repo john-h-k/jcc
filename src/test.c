@@ -61,19 +61,19 @@ struct jobq *jobq_create(struct arena_allocator *arena, size_t job_size) {
 size_t jobq_count(struct jobq *jobq) {
   size_t count;
 
-  LOCK(&jobq->lock, { count = vector_length(jobq->jobs); });
+  MTX_LOCK(&jobq->lock, { count = vector_length(jobq->jobs); });
 
   return count;
 }
 
 void jobq_push(struct jobq *jobq, void *job) {
-  LOCK(&jobq->lock, { vector_push_back(jobq->jobs, job); });
+  MTX_LOCK(&jobq->lock, { vector_push_back(jobq->jobs, job); });
 }
 
 bool jobq_try_pop(struct jobq *jobq, size_t *id, void *job) {
   bool found = false;
 
-  LOCK(&jobq->lock, {
+  MTX_LOCK(&jobq->lock, {
     if (vector_length(jobq->jobs)) {
       found = true;
       void *p = vector_pop(jobq->jobs);
@@ -434,7 +434,7 @@ static void run_test(struct jcc_worker_args *args, const struct jcc_test *test,
   struct jcc_test_info info = get_test_info(args, test);
 
   if (info.skip) {
-    LOCK(&args->results_lock, {
+    MTX_LOCK(&args->results_lock, {
       vector_push_back(args->results, &(struct jcc_test_result){
                                           .status = TEST_STATUS_SKIP,
                                           .file = test->file,
@@ -495,7 +495,7 @@ static void run_test(struct jcc_worker_args *args, const struct jcc_test *test,
   struct jcc_comp_info comp_info = run_compilation(args, test, comp_args);
 
   if (info.no_compile) {
-    LOCK(&args->results_lock, {
+    MTX_LOCK(&args->results_lock, {
       if (comp_info.exc == 0) {
         vector_push_back(args->results,
                          &(struct jcc_test_result){
@@ -515,7 +515,7 @@ static void run_test(struct jcc_worker_args *args, const struct jcc_test *test,
   }
 
   if (comp_info.exc != 0) {
-    LOCK(&args->results_lock, {
+    MTX_LOCK(&args->results_lock, {
       vector_push_back(
           args->results,
           &(struct jcc_test_result){
@@ -549,7 +549,7 @@ static void run_test(struct jcc_worker_args *args, const struct jcc_test *test,
   int run_ret = syscmd_exec(&cmd);
 
   if (run_ret != info.expected_exc) {
-    LOCK(&args->results_lock, {
+    MTX_LOCK(&args->results_lock, {
       vector_push_back(args->results,
                        &(struct jcc_test_result){
                            .status = TEST_STATUS_FAIL,
@@ -563,7 +563,7 @@ static void run_test(struct jcc_worker_args *args, const struct jcc_test *test,
 
   if (info.expected_stdout.str &&
       !ustr_eq(info.expected_stdout, MK_USTR(run_output))) {
-    LOCK(&args->results_lock, {
+    MTX_LOCK(&args->results_lock, {
       vector_push_back(
           args->results,
           &(struct jcc_test_result){
@@ -576,7 +576,7 @@ static void run_test(struct jcc_worker_args *args, const struct jcc_test *test,
     return;
   }
 
-  LOCK(&args->results_lock, {
+  MTX_LOCK(&args->results_lock, {
     vector_push_back(args->results,
                      &(struct jcc_test_result){.status = TEST_STATUS_PASS,
                                                .file = test->file});
@@ -601,7 +601,7 @@ static int test_worker(void *arg) {
 
 static bool parse_args(struct arena_allocator *arena, int argc,
                                        char *argv[], struct jcc_test_opts *opts) {
-  *opts = (struct jcc_test_opts){.jobs = 10,
+  *opts = (struct jcc_test_opts){.jobs = /* TODO: default to nproc */ 10,
                                .num_tests = 0,
                                .jcc = DEFAULT_JCC,
                                .arch = MK_USTR(ARCH_NAME),

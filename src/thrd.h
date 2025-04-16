@@ -67,7 +67,7 @@ int thrd_join(thrd_t thr, int* res);
 
 #endif
 
-#define LOCK(mtx, ...)                                                       \
+#define MTX_LOCK(mtx, ...)                                                       \
   invariant_assert(mtx_lock((mtx)) == thrd_success, "lock failed");           \
   {__VA_ARGS__};                                                                     \
   invariant_assert(mtx_unlock((mtx)) == thrd_success, "unlock failed");
