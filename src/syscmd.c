@@ -206,7 +206,8 @@ int syscmd_exec(struct syscmd **syscmd) {
 
   pid_t pid;
   if (posix_spawnp(&pid, s->process, &actions, NULL, args, environ) != 0) {
-    BUG("spawnp failed");
+    perror("spawnp failed");
+    BUG("");
   }
 
   if (s->stdin_val) {
