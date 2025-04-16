@@ -307,7 +307,10 @@ VALUES_FN(language, LANGUAGE)
            "Only run preprocessor and syntax stages")                          \
                                                                                \
   ARG_BOOL(syntax_only, "", "-fsyntax-only",                                   \
-           "Only run preprocessor, syntax, and typechecking stages")
+           "Only run preprocessor, syntax, and typechecking stages")           \
+                                                                               \
+  ARG_STRING(diagnostics_sink, "", "-fdiagnostics-sink",                       \
+             "File to output diagnostics too")
 
 /* ------------------------- Warning options ------------------------- */
 #define WARNING_OPT_LIST                                                       \

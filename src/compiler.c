@@ -139,6 +139,7 @@ FILE *compiler_open_file(struct compile_file file) {
 }
 
 static void compiler_print_diagnostics_context(struct compiler *compiler,
+                                               FILE *sink,
                                                struct text_span span,
                                                struct text_pos point) {
   // FIXME: super inefficient
@@ -152,7 +153,7 @@ static void compiler_print_diagnostics_context(struct compiler *compiler,
 
   if (!span.start.file ||
       !fcache_read_path(compiler->fcache, MK_USTR(span.start.file), &file)) {
-    fprintf(stderr, "(could not read function file %s)", span.start.file);
+    fprintf(sink, "(could not read function file %s)", span.start.file);
     return;
   }
 
@@ -184,13 +185,13 @@ static void compiler_print_diagnostics_context(struct compiler *compiler,
 
   if (start.line == TEXT_POS_INVALID_LINE ||
       end.line == TEXT_POS_INVALID_LINE) {
-    fprintf(stderr, "(unable to print due to invalid line pos, likely from "
+    fprintf(sink, "(unable to print due to invalid line pos, likely from "
                     "macro expansion)");
     return;
   }
 
   if (end.line - start.line > DIAG_LINE_LIM) {
-    fprintf(stderr,
+    fprintf(sink,
             "(unable to print due to line lim %d, from line %zu to line %zu)",
             DIAG_LINE_LIM, start.line, end.line);
     return;
@@ -208,7 +209,7 @@ static void compiler_print_diagnostics_context(struct compiler *compiler,
     }
 
     if (i + 1 >= len) {
-      fprintf(stderr, "    %zu | <eof>\n", line + 1);
+      fprintf(sink, "    %zu | <eof>\n", line + 1);
       return;
     }
 
@@ -217,48 +218,48 @@ static void compiler_print_diagnostics_context(struct compiler *compiler,
       size_t line_len = (size_t)(next - &text[i + 1]);
 
       size_t offset = 7 + num_digits(line + 1);
-      fprintf(stderr, "    %zu | %.*s\n", line + 1, (int)line_len,
+      fprintf(sink, "    %zu | %.*s\n", line + 1, (int)line_len,
               &text[i + 1]);
 
-      fprintf(stderr, "%*s", (int)offset, "");
+      fprintf(sink, "%*s", (int)offset, "");
 
       if (line == start.line) {
         size_t rel_idx_start = start.idx - (i + 1);
-        fprintf(stderr, "%*s", (int)rel_idx_start, "");
+        fprintf(sink, "%*s", (int)rel_idx_start, "");
 
         line_len -= rel_idx_start;
       }
 
-      fprintf(stderr, PR_GREEN);
+      fprintf(sink, PR_GREEN);
 
       if (line_len == 0) {
-        fprintf(stderr, "~");
-        fprintf(stderr, "\n");
-        fprintf(stderr, PR_RESET);
+        fprintf(sink, "~");
+        fprintf(sink, "\n");
+        fprintf(sink, PR_RESET);
         continue;
       }
 
       size_t start_print_len = MIN(start_len, line_len);
       for (size_t j = 0; j < start_print_len; j++) {
-        fprintf(stderr, "~");
+        fprintf(sink, "~");
       }
       start_len -= start_print_len;
       line_len -= start_print_len;
 
       if (has_point && point.line == line) {
-        fprintf(stderr, "^");
+        fprintf(sink, "^");
       }
 
       if (!start_len) {
         size_t end_print_len = MIN(end_len, line_len);
         for (size_t j = 0; j < end_print_len; j++) {
-          fprintf(stderr, "~");
+          fprintf(sink, "~");
         }
         end_len -= end_print_len;
       }
 
-      fprintf(stderr, PR_RESET);
-      fprintf(stderr, "\n");
+      fprintf(sink, PR_RESET);
+      fprintf(sink, "\n");
     }
   }
 }
@@ -266,6 +267,16 @@ static void compiler_print_diagnostics_context(struct compiler *compiler,
 static void compiler_print_diagnostics(struct compiler *compiler) {
   if (!compiler->args.print_diagnostics) {
     return;
+  }
+
+  FILE *file;
+  bool close;
+  if (compiler->args.diagnostics_sink) {
+    file = fopen(compiler->args.diagnostics_sink, "w");
+    close = true;
+  } else {
+    file = stderr;
+    close = false;
   }
 
   struct compiler_diagnostics *diagnostics = compiler->diagnostics;
@@ -295,7 +306,7 @@ static void compiler_print_diagnostics(struct compiler *compiler) {
       continue;
     }
 
-    fprintf(stderr, PR_BOLD PR_WHITE "%s:%zu:%zu: " PR_RESET, span.start.file,
+    fprintf(file, PR_BOLD PR_WHITE "%s:%zu:%zu: " PR_RESET, span.start.file,
             span.start.line, span.start.col);
 
     // this is currently never set to true, because diagnostics.c sets level to
@@ -305,40 +316,44 @@ static void compiler_print_diagnostics(struct compiler *compiler) {
 
     switch (diagnostic.ty.severity) {
     case COMPILER_DIAGNOSTIC_SEVERITY_ERROR:
-      fprintf(stderr, PR_BOLD PR_RED "error: " PR_RESET);
+      fprintf(file, PR_BOLD PR_RED "error: " PR_RESET);
       break;
     case COMPILER_DIAGNOSTIC_SEVERITY_WARN:
       prefix = "-W";
       if (compiler->args.warnings_as_errors) {
-        fprintf(stderr, PR_BOLD PR_RED "error: " PR_RESET);
+        fprintf(file, PR_BOLD PR_RED "error: " PR_RESET);
         werror = true;
       } else {
-        fprintf(stderr, PR_BOLD PR_MAGENTA "warning: " PR_RESET);
+        fprintf(file, PR_BOLD PR_MAGENTA "warning: " PR_RESET);
       }
       break;
     case COMPILER_DIAGNOSTIC_SEVERITY_INFO:
-      fprintf(stderr, PR_BOLD PR_WHITE "info: " PR_RESET);
+      fprintf(file, PR_BOLD PR_WHITE "info: " PR_RESET);
       break;
     }
 
-    fprintf(stderr, PR_BOLD PR_WHITE "%s", message);
+    fprintf(file, PR_BOLD PR_WHITE "%s", message);
 
-    fprintf(stderr, " [");
+    fprintf(file, " [");
     if (werror) {
-      fprintf(stderr, "-Werror,");
+      fprintf(file, "-Werror,");
     }
 
-    fprintf(stderr, "%s%s", prefix, diagnostic.ty.name);
-    fprintf(stderr, "]\n" PR_RESET);
+    fprintf(file, "%s%s", prefix, diagnostic.ty.name);
+    fprintf(file, "]\n" PR_RESET);
 
     if (has_pos) {
-      compiler_print_diagnostics_context(compiler, span, point);
+      compiler_print_diagnostics_context(compiler, file, span, point);
     }
 
-    fprintf(stderr, "\n");
+    fprintf(file, "\n");
   }
 
-  fflush(stderr);
+  fflush(file);
+
+  if (close) {
+    fclose(file);
+  }
 }
 
 static enum compile_result compile_stage_preproc(struct compiler *compiler,
