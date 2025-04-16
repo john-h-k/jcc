@@ -1,11 +1,11 @@
 #include "thrd.h"
 
 #include "util.h"
+
+#include <errno.h>
 #include <pthread.h>
 
 #ifdef PTHREAD_IMPL
-
-#include <time.h>
 
 /****************************** call_once ******************************/
 
@@ -66,6 +66,33 @@ int mtx_timedlock(mtx_t *mtx, const struct timespec *ts) {
 #endif
 }
 
+/****************************** cnd_t ******************************/
+
+// TODO: properly map return codes
+
+int cnd_init(cnd_t *cond) { return pthread_cond_init(cond, NULL); }
+
+int cnd_signal(cnd_t *cond) { return pthread_cond_signal(cond); }
+int cnd_broadcast(cnd_t *cond) { return pthread_cond_broadcast(cond); }
+
+int cnd_wait(cnd_t *cond, mtx_t *mutex) {
+  return pthread_cond_wait(cond, &mutex->handle);
+}
+
+int cnd_timedwait(cnd_t *restrict cond, mtx_t *restrict mutex,
+                  const struct timespec *restrict time_point) {
+  switch (pthread_cond_timedwait(cond, &mutex->handle, time_point)) {
+    case 0:
+      return thrd_success;
+    case ETIMEDOUT:
+      return thrd_timedout;
+    default:
+      return thrd_error;
+  }
+}
+
+void cnd_destroy(cnd_t *cond) { pthread_cond_destroy(cond); }
+
 /****************************** thrd_t ******************************/
 
 // adapter because `pthread_create` returns `void *` but `thrd_create` returns
@@ -101,8 +128,9 @@ int thrd_create(thrd_t *thr, thrd_start_t func, void *arg) {
 
   wrap->func = func;
   wrap->arg = arg;
-  return pthread_create(thr, &attrs, thrd_start_adapter, wrap) == 0 ? thrd_success
-                                                                  : thrd_error;
+  return pthread_create(thr, &attrs, thrd_start_adapter, wrap) == 0
+             ? thrd_success
+             : thrd_error;
 }
 
 int thrd_join(thrd_t thr, int *res) {
