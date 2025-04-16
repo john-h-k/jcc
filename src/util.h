@@ -535,6 +535,10 @@ static inline ustr_t ustr_strip_suffix(ustr_t str, ustr_t suffix) {
   return str;
 }
 
+static inline char *ustr_chr(ustr_t str, int ch) {
+  return memchr(str.str, ch, str.len);
+}
+
 static inline int ustr_cmp(ustr_t l, ustr_t r) {
   size_t len = (l.len < r.len) ? l.len : r.len;
   int cmp = memcmp(l.str, r.str, len);
@@ -557,7 +561,14 @@ static inline size_t wrap_strlen(const char *p) {
 #else
 #define MK_USTR(s) ((ustr_t){(s), ((s) != NULL) ? strlen((s)) : 0})
 #endif
+
 #define MK_USTR_LITERAL(s) ((ustr_t){(s), ARR_LENGTH_RELAXED((s))})
+
+// preproc uses null vs empty as a distiction (search 'marker' in file)
+// probably want to change that and have these be considered equiv
 #define MK_NULL_USTR() ((ustr_t){NULL, 0})
+#define MK_EMPTY_USTR() ((ustr_t){"", 0})
+
+#define USTR_SPEC(s) (int)(s).len, (s).str
 
 #endif

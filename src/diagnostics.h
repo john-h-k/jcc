@@ -54,6 +54,8 @@ enum compiler_diagnostic_class {
           const char *)
 
 #define COMPILER_SEMANTIC_DIAGNOSTIC_LIST                                      \
+  DIAG_FN(WARN, "mut-global", mut_global, MUT_GLOBAL,              \
+          const char *)                                                        \
   DIAG_FN(WARN, "empty-init-c23", empty_init_c23, EMPTY_INIT_C23,              \
           const char *)                                                        \
   DIAG_FN(WARN, "unrecognised-attribute", unrecognised_attr,                   \
@@ -197,21 +199,21 @@ struct compiler_diagnostic_ty {
 };
 
 #define DIAG_FN(_0, _1, name, enum, ty)                                        \
-  extern struct compiler_diagnostic_ty DIAGNOSTIC_PREPROC_##enum;
+  extern const struct compiler_diagnostic_ty DIAGNOSTIC_PREPROC_##enum;
 
 COMPILER_PREPROC_DIAGNOSTIC_LIST
 
 #undef DIAG_FN
 
 #define DIAG_FN(_0, _1, name, enum, ty)                                        \
-  extern struct compiler_diagnostic_ty DIAGNOSTIC_PARSER_##enum;
+  extern const struct compiler_diagnostic_ty DIAGNOSTIC_PARSER_##enum;
 
 COMPILER_PARSE_DIAGNOSTIC_LIST
 
 #undef DIAG_FN
 
 #define DIAG_FN(_0, _1, name, enum, ty)                                        \
-  extern struct compiler_diagnostic_ty DIAGNOSTIC_SEMANTIC_##enum;
+  extern const struct compiler_diagnostic_ty DIAGNOSTIC_SEMANTIC_##enum;
 
 COMPILER_SEMANTIC_DIAGNOSTIC_LIST
 

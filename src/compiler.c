@@ -358,6 +358,7 @@ static enum compile_result compile_stage_preproc(struct compiler *compiler,
 
   compiler_print_diagnostics(compiler);
 
+  fclose(file);
   return COMPILE_RESULT_SUCCESS;
 }
 
@@ -379,6 +380,7 @@ static enum compile_result compile_stage_lex(struct compiler *compiler,
 
   lexer_free(&lexer);
 
+  fclose(file);
   return COMPILE_RESULT_SUCCESS;
 }
 

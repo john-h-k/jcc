@@ -210,7 +210,14 @@ static struct req_msg lsp_read_msg(struct lsp_ctx *ctx) {
   vector_clear(ctx->read_buf);
   vector_extend(ctx->read_buf, NULL, headers.content_length);
 
-  fread(vector_head(ctx->read_buf), 1, headers.content_length, ctx->in);
+  size_t rem = headers.content_length;
+
+  while (rem) {
+   size_t rd = fread(vector_head(ctx->read_buf), 1, headers.content_length, ctx->in);
+   DEBUG_ASSERT(rd, "fread failed");
+
+   rem -= rd;
+  }
 
   ustr_t obj = {.len = vector_length(ctx->read_buf),
                           .str = vector_head(ctx->read_buf)};

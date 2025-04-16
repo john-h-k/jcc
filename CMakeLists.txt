@@ -5,10 +5,19 @@ set(CMAKE_C_STANDARD 11)
 set(CMAKE_COMPILE_WARNING_AS_ERROR ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+# set(
+#   CMAKE_C_CLANG_TIDY
+#   clang-tidy
+#   --use-color
+#   --checks=-*,cppcoreguidelines-avoid-non-const-global-variables
+# )
+
 set(
   SOURCE_FILES
   src/main.c
   src/args.c
+
+  src/thrd.c
 
   src/util.c
   src/vector.c
@@ -150,6 +159,8 @@ endforeach()
 # eep/object.c
 # eep/disasm.c
 
+# TODO: use hwaddress if possible, and allow using threadsanitizer instead of addresssanitizer (plus if hwaddress supported use hwaddress + thread)
+
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
   message(STATUS "Debug build detected")
   
@@ -181,7 +192,6 @@ elseif(CMAKE_BUILD_TYPE STREQUAL "Release" OR CMAKE_BUILD_TYPE STREQUAL "RelWith
 
   add_link_options(
     -O3
-    -Wl,-dead_strip
   )
 
   # add_compile_options(-flto)
