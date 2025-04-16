@@ -96,7 +96,7 @@ enum test_status { TEST_STATUS_PASS, TEST_STATUS_FAIL, TEST_STATUS_SKIP };
 
 struct jcc_test_opts {
   size_t jobs;
-  int num_tests;
+  size_t num_tests;
   char *jcc;
 
   ustr_t arch;
@@ -131,10 +131,10 @@ PRINTF_ARGS(1) static void echo(const char *color, const char *fmt, ...) {
 }
 
 static void discover_tests_file(struct arena_allocator *arena,
-                                struct jobq *tests, const char *path);
+                                struct vector *tests, const char *path);
 
 static void discover_tests_dir(struct arena_allocator *arena,
-                               struct jobq *tests, const char *dirpath) {
+                               struct vector *tests, const char *dirpath) {
   DIR *dp = opendir(dirpath);
   if (!dp) {
     return;
@@ -166,7 +166,7 @@ static void discover_tests_dir(struct arena_allocator *arena,
 }
 
 static void discover_tests_file(struct arena_allocator *arena,
-                                struct jobq *tests, const char *path) {
+                                struct vector *tests, const char *path) {
   struct stat st;
 
   if (stat(path, &st) < 0) {
@@ -208,11 +208,11 @@ static void discover_tests_file(struct arena_allocator *arena,
       test.driver = arena_alloc_strdup(arena, test.driver);
     }
 
-    jobq_push(tests, &test);
+    vector_push_back(tests, &test);
   }
 }
 
-static void discover_tests(struct arena_allocator *arena, struct jobq *tests,
+static void discover_tests(struct arena_allocator *arena, struct vector *tests,
                            char **paths, int count) {
   for (int i = 0; i < count; i++) {
     struct stat st;
@@ -695,21 +695,32 @@ int main(int argc, char **argv) {
     return 1;
   }
 
-  struct jobq *jobq = jobq_create(arena, sizeof(struct jcc_test));
+  struct vector *tests = vector_create_in_arena(sizeof(struct jcc_test), arena);
+  discover_tests(arena, tests, opts.paths, opts.num_paths);
 
-  discover_tests(arena, jobq, opts.paths, opts.num_paths);
+  if (!opts.num_tests) {
+    opts.num_tests = vector_length(tests);
+  } else {
+    opts.num_tests = MIN(opts.num_tests, vector_length(tests));
+  }
 
-  if (!jobq_count(jobq)) {
+  if (!opts.num_tests) {
     echo(PR_BOLD PR_RED, "Could not find any tests!");
     return 1;
   }
 
-  if (!opts.num_tests) {
-    opts.num_tests = jobq_count(jobq);
-  }
+  PUSH_NO_WARN("-Wcast-function-type-strict");
+  vector_sort(tests, (int (*)(const void *, const void *))strcmp);
+  POP_NO_WARN();
 
+  struct jobq *jobq = jobq_create(arena, sizeof(struct jcc_test));
+
+  for (size_t i = 0; i < opts.num_tests; i++) {
+    jobq_push(jobq, vector_get(tests, i));
+  }
+  
   echo(PR_BOLD, "Using %zu processes...", opts.jobs);
-  echo(PR_BOLD, "Found %d tests.", opts.num_tests);
+  echo(PR_BOLD, "Found %zu tests, running %zu", vector_length(tests), opts.num_tests);
 
   struct timestmp start = get_timestamp();
 

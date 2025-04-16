@@ -161,6 +161,11 @@ void vector_copy_to(struct vector *v, void *dest) {
   }
 }
 
+void vector_sort(struct vector *v,
+            int (*comp)(const void*, const void*)) {
+  qsort(vector_head(v), vector_length(v), vector_element_size(v), comp);
+}
+
 void vector_free(struct vector **v) {
   if ((*v)->arena) {
     *v = NULL;
