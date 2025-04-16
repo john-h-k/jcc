@@ -812,7 +812,6 @@ int main(int argc, char **argv) {
       invariant_assert(mtx_unlock(&status.lock) == thrd_success,
                        "mtx_unlock failed");
 
-      fflush(stdout);
       printf("\r\033[?25l");
       fflush(stdout);
       printf(PR_BOLD "Completed %*zu/%zu (%zu tests, %zu arg groups) "
@@ -820,7 +819,6 @@ int main(int argc, char **argv) {
                      "Fail: %*zu  " PR_BOLDYELLOW "Skip: %*zu" PR_RESET,
              pad, num_done, total_tests, opts.num_tests, opts.num_arg_groups,
              pad, num_pass, pad, num_fail, pad, num_skip);
-      fflush(stdout);
       printf("\033[?25h");
       fflush(stdout);
 
