@@ -66,7 +66,7 @@ static void asan_metadata_init(void) {
 }
 
 static void arena_asan_error(const char *report) {
-  LOCK(&LOCK, {
+  MTX_LOCK(&LOCK, {
     // DEBUG_ASSERT(__asan_report_present(), "wot");
     // void *addr = __asan_get_report_address();
 
@@ -152,7 +152,7 @@ void arena_allocator_free(struct arena_allocator **allocator) {
     };
 
     // TODO: not very efficient
-    LOCK(&LOCK, { vector_push_back(ALLOCATORS, &info); });
+    MTX_LOCK(&LOCK, { vector_push_back(ALLOCATORS, &info); });
 #endif
 
     void *p = arena;
