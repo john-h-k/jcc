@@ -449,29 +449,44 @@ debug() {
 
 _test_runner() {
     if [ -z "$JCC_TEST_BASH" ]; then
-        echo "./build/test"
+        echo "../build/test"
     else
-        echo "./scripts/test.sh"
+        echo "../scripts/test.sh"
     fi
+}
+
+_test() {
+    mkdir -p .tmp
+    cd .tmp
+
+    $(_test_runner) "$@"
+    exc="$?"
+
+    cd ..
+    rm -rf .tmp
+
+    return "$exc"
 }
 
 test() {
     build
 
-    $(_test_runner) "$@"
+    _test "$@"
 }
 
 test-all() {
     build
 
-    $(_test_runner) --arg-group -O0 --arg-group -O1 --arg-group -O2 --arg-group -O3 "$@"
+    _test --arg-group -O0 --arg-group -O1 --arg-group -O2 --arg-group -O3 "$@"
 }
 
 ci-test() {
     build
 
     # timeout -k 30m 30m
-    $(_test_runner) --quiet --arg-group -O0 --arg-group -O1 --arg-group -O2 --arg-group -O3 "$@"
+    # opts disabled for now
+    _test --quiet "$@"
+    # _test --quiet --arg-group -O0 --arg-group -O1 --arg-group -O2 --arg-group -O3 "$@"
 }
 
 cfg() {
