@@ -614,12 +614,13 @@ static bool parse_args(struct arena_allocator *arena, int argc,
                                .arg_groups = NULL};
 
   struct vector *paths = vector_create_in_arena(sizeof(char *), arena);
+  struct vector *args = vector_create_in_arena(sizeof(char *), arena);
   struct vector *arg_groups = vector_create_in_arena(sizeof(char *), arena);
 
   int i = 1;
   for (; i < argc; i++) {
     if (!strcmp(argv[i], "--")) {
-      i++;
+      vector_extend(args, &argv[i + 1], argc - i - 1);
       break;
     }
 
@@ -629,6 +630,21 @@ static bool parse_args(struct arena_allocator *arena, int argc,
       opts->use_process = true;
     } else if (strcmp(argv[i], "--quiet") == 0) {
       opts->quiet = true;
+    } else if (strcmp(argv[i], "-arch") == 0 && i + 1 < argc) {
+      i++;
+      vector_push_back(arg_groups, &argv[i]);
+
+      opts->arch = MK_USTR(argv[i]);
+    } else if (strcmp(argv[i], "-target") == 0 && i + 1 < argc) {
+      i++;
+      vector_push_back(arg_groups, &argv[i]);
+
+      ustr_t target = MK_USTR(argv[i]);
+      ustr_t arch, rest;
+      if (!ustr_split(target, '-', &arch, &rest)) {
+        arch = target;
+      }
+      opts->arch = arch;
     } else if (strcmp(argv[i], "-n") == 0 && i + 1 < argc) {
       opts->num_tests = atoi(argv[++i]);
     } else if (strcmp(argv[i], "--jcc") == 0 && i + 1 < argc) {
@@ -643,8 +659,8 @@ static bool parse_args(struct arena_allocator *arena, int argc,
     }
   }
 
-  opts->args = &argv[i];
-  opts->num_args = (size_t)(argc - MIN(i, argc));
+  opts->num_args = vector_length(args);
+  opts->args = vector_head(args);
 
   if (vector_empty(paths)) {
     opts->num_paths = 1;
