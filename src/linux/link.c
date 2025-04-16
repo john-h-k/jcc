@@ -77,6 +77,8 @@ enum link_result linux_link_objects(const struct link_args *args) {
     unsupported("bad target for linux linker");
   }
 
+  syscmd_add_arg_val(cmd, "-z", "noexecstack");
+
   syscmd_add_arg_val(cmd, "-o", args->output);
 
   for (size_t i = 0; i < args->num_objects; i++) {
