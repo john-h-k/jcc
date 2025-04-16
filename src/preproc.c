@@ -176,13 +176,13 @@ static void preproc_create_builtin_macros(struct preproc *preproc,
     struct preproc_define define = {                                           \
         .name = {.ty = PREPROC_TOKEN_TY_IDENTIFIER,                            \
                  .span = MK_INVALID_TEXT_SPAN(0, name_len),                    \
-                 .text = (n)},                                                 \
+                 .text = MK_USTR((n))},                                        \
         .value =                                                               \
             {                                                                  \
                 .ty = PREPROC_DEFINE_VALUE_TY_TOKEN,                           \
                 .token = {.ty = tok_ty,                                        \
                           .span = MK_INVALID_TEXT_SPAN(0, strlen((v))),        \
-                          .text = (v)},                                        \
+                          .text = MK_USTR((v))},                               \
             },                                                                 \
         .flags = f};                                                           \
                                                                                \
@@ -273,7 +273,7 @@ static void preproc_create_builtin_macros(struct preproc *preproc,
     struct preproc_define define = {
         .name = {.ty = PREPROC_TOKEN_TY_IDENTIFIER,
                  .span = MK_INVALID_TEXT_SPAN(0, strlen("__DARWIN_OS_INLINE")),
-                 .text = "__DARWIN_OS_INLINE"},
+                 .text = MK_USTR("__DARWIN_OS_INLINE")},
         .value =
             {
                 .ty = PREPROC_DEFINE_VALUE_TY_TOKEN_VEC,
@@ -286,13 +286,13 @@ static void preproc_create_builtin_macros(struct preproc *preproc,
                      &(struct preproc_token){
                          .ty = PREPROC_TOKEN_TY_IDENTIFIER,
                          .span = MK_INVALID_TEXT_SPAN(0, strlen("static")),
-                         .text = "static"});
+                         .text = MK_USTR("static")});
 
     vector_push_back(define.value.vec,
                      &(struct preproc_token){
                          .ty = PREPROC_TOKEN_TY_IDENTIFIER,
                          .span = MK_INVALID_TEXT_SPAN(0, strlen("inline")),
-                         .text = "inline"});
+                         .text = MK_USTR("inline")});
 
     hashtbl_insert(preproc->defines, &MK_USTR("__DARWIN_OS_INLINE"), &define);
   }
@@ -509,12 +509,12 @@ preproc_create(struct program program, struct fcache *fcache,
       struct preproc_define def = {
           .name = {.ty = PREPROC_TOKEN_TY_IDENTIFIER,
                    .span = MK_INVALID_TEXT_SPAN(0, define->name.len),
-                   .text = define->name.str},
+                   .text = define->name},
           .value = {
               .ty = PREPROC_DEFINE_VALUE_TY_TOKEN,
               .token = {.ty = PREPROC_TOKEN_TY_IDENTIFIER,
                         .span = MK_INVALID_TEXT_SPAN(0, define->value.len),
-                        .text = define->value.str},
+                        .text = define->value},
           }};
 
       hashtbl_insert(p->defines, &define->name, &def);
@@ -522,12 +522,12 @@ preproc_create(struct program program, struct fcache *fcache,
       struct preproc_define def = {
           .name = {.ty = PREPROC_TOKEN_TY_IDENTIFIER,
                    .span = MK_INVALID_TEXT_SPAN(0, define->name.len),
-                   .text = define->name.str},
+                   .text = define->name},
           .value = {
               .ty = PREPROC_DEFINE_VALUE_TY_TOKEN,
               .token = {.ty = PREPROC_TOKEN_TY_PREPROC_NUMBER,
                         .span = MK_INVALID_TEXT_SPAN(0, define->value.len),
-                        .text = define->value.str},
+                        .text = define->value},
           }};
 
       hashtbl_insert(p->defines, &define->name, &def);
@@ -535,12 +535,12 @@ preproc_create(struct program program, struct fcache *fcache,
       struct preproc_define def = {
           .name = {.ty = PREPROC_TOKEN_TY_IDENTIFIER,
                    .span = MK_INVALID_TEXT_SPAN(0, define->name.len),
-                   .text = define->name.str},
+                   .text = define->name},
           .value = {
               .ty = PREPROC_DEFINE_VALUE_TY_TOKEN,
               .token = {.ty = PREPROC_TOKEN_TY_STRING_LITERAL,
                         .span = MK_INVALID_TEXT_SPAN(0, define->value.len),
-                        .text = define->value.str},
+                        .text = define->value},
           }};
 
       hashtbl_insert(p->defines, &define->name, &def);
@@ -765,7 +765,7 @@ void preproc_next_raw_token(struct preproc *preproc,
 
   if (start.idx >= preproc_text->len) {
     token->ty = PREPROC_TOKEN_TY_EOF;
-    token->text = NULL;
+    token->text = MK_EMPTY_USTR();
     token->span.start = start;
     token->span.end = end;
     return;
@@ -792,8 +792,9 @@ void preproc_next_raw_token(struct preproc *preproc,
     preproc->in_angle_string_context = false;
 
     token->ty = PREPROC_TOKEN_TY_NEWLINE;
-    token->text = &text[start.idx];
     token->span = (struct text_span){.start = start, .end = end};
+    token->text =
+        (ustr_t){.str = &text[start.idx], .len = text_span_len(&token->span)};
 
     preproc_text->pos = end;
     return;
@@ -807,8 +808,9 @@ void preproc_next_raw_token(struct preproc *preproc,
     // we have processed whitespace
 
     token->ty = PREPROC_TOKEN_TY_WHITESPACE;
-    token->text = &text[start.idx];
     token->span = (struct text_span){.start = start, .end = end};
+    token->text =
+        (ustr_t){.str = &text[start.idx], .len = text_span_len(&token->span)};
 
     preproc_text->pos = end;
     return;
@@ -828,8 +830,9 @@ void preproc_next_raw_token(struct preproc *preproc,
     }
 
     token->ty = PREPROC_TOKEN_TY_COMMENT;
-    token->text = &text[start.idx];
     token->span = (struct text_span){.start = start, .end = end};
+    token->text =
+        (ustr_t){.str = &text[start.idx], .len = text_span_len(&token->span)};
 
     preproc_text->pos = end;
     return;
@@ -841,8 +844,9 @@ void preproc_next_raw_token(struct preproc *preproc,
     find_multiline_comment_end(preproc_text, &end);
 
     token->ty = PREPROC_TOKEN_TY_COMMENT;
-    token->text = &text[start.idx];
     token->span = (struct text_span){.start = start, .end = end};
+    token->text =
+        (ustr_t){.str = &text[start.idx], .len = text_span_len(&token->span)};
 
     preproc_text->pos = end;
     return;
@@ -868,8 +872,9 @@ void preproc_next_raw_token(struct preproc *preproc,
     }
 
     token->ty = PREPROC_TOKEN_TY_IDENTIFIER;
-    token->text = &text[start.idx];
     token->span = (struct text_span){.start = start, .end = end};
+    token->text =
+        (ustr_t){.str = &text[start.idx], .len = text_span_len(&token->span)};
 
     preproc_text->pos = end;
     return;
@@ -911,8 +916,9 @@ void preproc_next_raw_token(struct preproc *preproc,
     next_col(&end);
 
     token->ty = PREPROC_TOKEN_TY_STRING_LITERAL;
-    token->text = &text[start.idx];
     token->span = (struct text_span){.start = start, .end = end};
+    token->text =
+        (ustr_t){.str = &text[start.idx], .len = text_span_len(&token->span)};
 
     preproc_text->pos = end;
     return;
@@ -932,8 +938,9 @@ void preproc_next_raw_token(struct preproc *preproc,
           .ty = PREPROC_TOKEN_PUNCTUATOR_TY_STRINGIFY};
     }
 
-    token->text = &text[start.idx];
     token->span = (struct text_span){.start = start, .end = end};
+    token->text =
+        (ustr_t){.str = &text[start.idx], .len = text_span_len(&token->span)};
 
     preproc_text->pos = end;
     return;
@@ -957,8 +964,9 @@ void preproc_next_raw_token(struct preproc *preproc,
         next_col(&end);
       } else {
         token->ty = PREPROC_TOKEN_TY_PREPROC_NUMBER;
-        token->text = &text[start.idx];
         token->span = (struct text_span){.start = start, .end = end};
+        token->text = (ustr_t){.str = &text[start.idx],
+                               .len = text_span_len(&token->span)};
 
         preproc_text->pos = end;
         return;
@@ -1171,9 +1179,10 @@ void preproc_next_raw_token(struct preproc *preproc,
   }
 
   *token = (struct preproc_token){.ty = PREPROC_TOKEN_TY_PUNCTUATOR,
-                                  .text = &text[start.idx],
                                   .span = {.start = start, .end = end},
                                   .punctuator = {.ty = punc_ty}};
+  token->text =
+      (ustr_t){.str = &text[start.idx], .len = text_span_len(&token->span)};
 
   preproc_text->pos = end;
   return;
@@ -1234,8 +1243,9 @@ not_punctuator: {
     }
 
     token->ty = PREPROC_TOKEN_TY_IDENTIFIER;
-    token->text = &text[start.idx];
     token->span = (struct text_span){.start = start, .end = end};
+    token->text =
+        (ustr_t){.str = &text[start.idx], .len = text_span_len(&token->span)};
 
     preproc_text->pos = end;
     return;
@@ -1244,18 +1254,16 @@ not_punctuator: {
 other:
   next_col(&end);
   token->ty = PREPROC_TOKEN_TY_OTHER;
-  token->text = &text[start.idx];
   token->span = (struct text_span){.start = start, .end = end};
+  token->text =
+      (ustr_t){.str = &text[start.idx], .len = text_span_len(&token->span)};
 
   preproc_text->pos = end;
 }
 }
 
 static bool token_streq(struct preproc_token token, const char *str) {
-  size_t token_len = token.span.end.idx - token.span.start.idx;
-  size_t len = strlen(str);
-
-  return len == token_len && strncmp(token.text, str, len) == 0;
+  return ustr_eq(token.text, MK_USTR(str));
 }
 
 static void
@@ -1317,11 +1325,11 @@ static bool well_known_token(struct preproc *preproc, ustr_t ident);
 static struct preproc_token preproc_concat(struct preproc *preproc,
                                            struct preproc_token *token,
                                            struct preproc_token *last) {
-  if (!token->text) {
+  if (!token->text.len) {
     return *last;
   }
 
-  if (!last->text) {
+  if (!last->text.len) {
     return *token;
   }
 
@@ -1329,22 +1337,22 @@ static struct preproc_token preproc_concat(struct preproc *preproc,
   ((long long)PREPROC_TOKEN_TY_##l << 32) | (PREPROC_TOKEN_TY_##r)
   switch (((long long)token->ty << 32) | last->ty) {
   case TYPE_VAL(IDENTIFIER, STRING_LITERAL): {
-    size_t llen = text_span_len(&token->span);
-    size_t rlen = text_span_len(&last->span);
+    size_t llen = token->text.len;
+    size_t rlen = last->text.len;
 
-    if (llen && (llen > 1 || token->text[0] != 'L')) {
+    if (llen && (llen > 1 || token->text.str[0] != 'L')) {
       BUG("can only concat L with string/char literal");
     }
 
     char *new = arena_alloc(preproc->arena, llen + rlen + 1);
-    memcpy(new, token->text, llen);
-    memcpy(new + llen, last->text, rlen);
+    memcpy(new, token->text.str, llen);
+    memcpy(new + llen, last->text.str, rlen);
     new[llen + rlen] = '\0';
 
     struct preproc_token new_tok = {
         .ty = PREPROC_TOKEN_TY_STRING_LITERAL,
         .span = MK_INVALID_TEXT_SPAN(0, llen + rlen),
-        .text = new,
+        .text = (ustr_t){.str = new, .len = llen + rlen},
     };
 
     return new_tok;
@@ -1360,17 +1368,17 @@ static struct preproc_token preproc_concat(struct preproc *preproc,
     // valid this isn't the best idea, we should probably re-parse it
 
     // because we use buffer as a stack, this is in REVERSE order
-    size_t llen = text_span_len(&token->span);
-    size_t rlen = text_span_len(&last->span);
+    size_t llen = token->text.len;
+    size_t rlen = last->text.len;
 
     char *new = arena_alloc(preproc->arena, llen + rlen);
-    memcpy(new, token->text, llen);
-    memcpy(new + llen, last->text, rlen);
+    memcpy(new, token->text.str, llen);
+    memcpy(new + llen, last->text.str, rlen);
 
     struct preproc_token new_tok = {
         .ty = token->ty,
         .span = MK_INVALID_TEXT_SPAN(0, llen + rlen),
-        .text = new,
+        .text = (ustr_t){.str = new, .len = llen + rlen},
     };
 
     return new_tok;
@@ -1475,7 +1483,7 @@ static bool try_expand_token(struct preproc *preproc,
   }
 
   // if identifier is a macro do something else
-  ustr_t ident = {.str = token->text, .len = text_span_len(&token->span)};
+  ustr_t ident = token->text;
 
   struct preproc_define *macro = hashtbl_lookup(preproc->defines, &ident);
   // well known macros arent expanded they just are "defined"
@@ -1497,16 +1505,21 @@ static bool try_expand_token(struct preproc *preproc,
 
     struct preproc_define_value *value = &macro->value;
     switch (value->ty) {
-    case PREPROC_DEFINE_VALUE_TY_TOKEN:
-      vector_push_back(expanded_fn, &value->token);
+    case PREPROC_DEFINE_VALUE_TY_TOKEN: {
+      struct preproc_token def_token = value->token;
+      def_token.span = token->span;
+      def_token.flags |= PREPROC_TOKEN_FLAG_MACRO_EXPANSION;
+      vector_push_back(expanded_fn, &def_token);
       break;
+    }
     case PREPROC_DEFINE_VALUE_TY_TOKEN_VEC: {
       size_t num_tokens = vector_length(value->vec);
       for (size_t i = num_tokens; i; i--) {
-        struct preproc_token *def_tok = vector_get(value->vec, i - 1);
+        struct preproc_token def_tok =
+            *(struct preproc_token *)vector_get(value->vec, i - 1);
 
-        if (def_tok->ty == PREPROC_TOKEN_TY_PUNCTUATOR &&
-            def_tok->punctuator.ty == PREPROC_TOKEN_PUNCTUATOR_TY_CONCAT) {
+        if (def_tok.ty == PREPROC_TOKEN_TY_PUNCTUATOR &&
+            def_tok.punctuator.ty == PREPROC_TOKEN_PUNCTUATOR_TY_CONCAT) {
           size_t len = vector_length(expanded_fn);
           DEBUG_ASSERT(len > 0, "first tok was concat");
           // so we concat `len - 1` and `len`
@@ -1515,7 +1528,9 @@ static bool try_expand_token(struct preproc *preproc,
           continue;
         }
 
-        vector_push_back(expanded_fn, def_tok);
+        def_tok.span = token->span;
+        def_tok.flags |= PREPROC_TOKEN_FLAG_MACRO_EXPANSION;
+        vector_push_back(expanded_fn, &def_tok);
       }
       break;
     }
@@ -1634,7 +1649,7 @@ static bool try_expand_token(struct preproc *preproc,
         struct preproc_token empty = {
             .ty = PREPROC_TOKEN_TY_IDENTIFIER,
             .span = MK_INVALID_TEXT_SPAN(0, 0),
-            .text = "",
+            .text = MK_EMPTY_USTR(),
         };
 
         vector_push_back(expanded_fn, &empty);
@@ -1670,7 +1685,7 @@ static bool try_expand_token(struct preproc *preproc,
             struct preproc_token empty = {
                 .ty = PREPROC_TOKEN_TY_IDENTIFIER,
                 .span = MK_INVALID_TEXT_SPAN(0, 0),
-                .text = "",
+                .text = MK_EMPTY_USTR(),
             };
 
             vector_push_back(expanded_fn, &empty);
@@ -1694,7 +1709,7 @@ static bool try_expand_token(struct preproc *preproc,
 
           if (num_args <= macro_fn.num_params) {
             struct preproc_token empty = {.ty = PREPROC_TOKEN_TY_IDENTIFIER,
-                                          .text = "",
+                                          .text = MK_EMPTY_USTR(),
                                           .span = MK_INVALID_TEXT_SPAN(0, 0)};
 
             vector_push_back(expanded_fn, &empty);
@@ -1710,7 +1725,7 @@ static bool try_expand_token(struct preproc *preproc,
 
               if (j - 1 != macro_fn.num_params) {
                 struct preproc_token space = {.ty = PREPROC_TOKEN_TY_WHITESPACE,
-                                              .text = " ",
+                                              .text = MK_USTR(" "),
                                               .span =
                                                   MK_INVALID_TEXT_SPAN(0, 1)};
 
@@ -1719,8 +1734,9 @@ static bool try_expand_token(struct preproc *preproc,
                 struct preproc_token comma = {
                     .ty = PREPROC_TOKEN_TY_PUNCTUATOR,
                     .punctuator = {.ty = PREPROC_TOKEN_PUNCTUATOR_TY_COMMA},
-                    .text = ",",
-                    .span = MK_INVALID_TEXT_SPAN(0, 1)};
+                    .text = MK_USTR(","),
+                    .flags = PREPROC_TOKEN_FLAG_MACRO_EXPANSION,
+                    .span = token->span};
 
                 vector_push_back(expanded_fn, &comma);
               }
@@ -1743,17 +1759,20 @@ static bool try_expand_token(struct preproc *preproc,
             vector_push_back(expanded_fn, &str_tok);
 
             if (j - 1 != macro_fn.num_params) {
-              struct preproc_token space = {.ty = PREPROC_TOKEN_TY_WHITESPACE,
-                                            .text = " ",
-                                            .span = MK_INVALID_TEXT_SPAN(0, 1)};
+              struct preproc_token space = {
+                  .ty = PREPROC_TOKEN_TY_WHITESPACE,
+                  .text = MK_USTR(" "),
+                  .flags = PREPROC_TOKEN_FLAG_MACRO_EXPANSION,
+                  .span = token->span};
 
               vector_push_back(expanded_fn, &space);
 
               struct preproc_token comma = {
                   .ty = PREPROC_TOKEN_TY_PUNCTUATOR,
                   .punctuator = {.ty = PREPROC_TOKEN_PUNCTUATOR_TY_COMMA},
-                  .text = ",",
-                  .span = MK_INVALID_TEXT_SPAN(0, 1)};
+                  .text = MK_USTR(","),
+                  .flags = PREPROC_TOKEN_FLAG_MACRO_EXPANSION,
+                  .span = token->span};
 
               vector_push_back(expanded_fn, &comma);
             }
@@ -1790,7 +1809,7 @@ static bool try_expand_token(struct preproc *preproc,
       struct preproc_token *left = vector_get(expanded_fn, concat_point - 1);
 
       for (size_t j = concat_point; j; (j--, left--)) {
-        if (left->text && !token_is_trivial(left)) {
+        if (left->text.str && !token_is_trivial(left)) {
           break;
         }
       }
@@ -1798,7 +1817,7 @@ static bool try_expand_token(struct preproc *preproc,
       struct preproc_token *right = vector_get(expanded_fn, concat_point);
 
       for (size_t j = concat_point; j < num_exp_tokens; (j++, right++)) {
-        if (right->text && !token_is_trivial(right)) {
+        if (right->text.str && !token_is_trivial(right)) {
           break;
         }
       }
@@ -1807,7 +1826,7 @@ static bool try_expand_token(struct preproc *preproc,
       *left = new;
 
       // use this as marker to skip token
-      right->text = NULL;
+      right->text = MK_NULL_USTR();
     }
 
     // reverse order
@@ -1818,13 +1837,15 @@ static bool try_expand_token(struct preproc *preproc,
     for (size_t i = 0; i < num_exp_tokens; i++) {
       struct preproc_token *tok = vector_get(expanded_fn, i);
 
-      if (!tok->text) {
+      if (!tok->text.str) {
         continue;
       }
 
       struct preproc_unexpanded_token unexp_tok = {
           .ty = PREPROC_UNEXPANDED_TOKEN_TY_TOKEN, .token = *tok};
 
+      unexp_tok.token.flags |= PREPROC_TOKEN_FLAG_MACRO_EXPANSION;
+      unexp_tok.token.span = token->span;
       vector_push_back(preproc->unexpanded_buffer_tokens, &unexp_tok);
     }
 
@@ -1855,18 +1876,19 @@ static bool try_expand_token(struct preproc *preproc,
           preproc_text->file ? preproc_text->file : "(null file)";
       size_t file_len = strlen(file) + 2;
 
-      char *buff = arena_alloc(preproc->arena, sizeof(*buff) * (file_len + 1));
-      buff[0] = '\"';
-      strcpy(&buff[1], file);
-      buff[file_len - 1] = '\"';
-      buff[file_len] = '\0';
+      char *buf = arena_alloc(preproc->arena, sizeof(*buf) * (file_len + 1));
+      buf[0] = '\"';
+      strcpy(&buf[1], file);
+      buf[file_len - 1] = '\"';
+      buf[file_len] = '\0';
 
       // FIXME: this will not properly escape weird characters (e.g null) in
       // filename
-      struct preproc_token special_tok = {.ty = PREPROC_TOKEN_TY_STRING_LITERAL,
-                                          .span =
-                                              MK_INVALID_TEXT_SPAN(0, file_len),
-                                          .text = buff};
+      struct preproc_token special_tok = {
+          .ty = PREPROC_TOKEN_TY_STRING_LITERAL,
+          .span = token->span,
+          .flags = PREPROC_TOKEN_FLAG_MACRO_EXPANSION,
+          .text = (ustr_t){.str = buf, .len = file_len}};
       vector_push_back(buffer, &special_tok);
       break;
     }
@@ -1875,13 +1897,15 @@ static bool try_expand_token(struct preproc *preproc,
       // our index is from 0
       line++;
       size_t len = num_digits(line);
-      char *buff = arena_alloc(preproc->arena, sizeof(*buff) * (len + 1));
+      char *buf = arena_alloc(preproc->arena, sizeof(*buf) * (len + 1));
 
-      snprintf(buff, len + 1, "%zu", line);
+      snprintf(buf, len + 1, "%zu", line);
 
-      struct preproc_token special_tok = {.ty = PREPROC_TOKEN_TY_PREPROC_NUMBER,
-                                          .span = MK_INVALID_TEXT_SPAN(0, len),
-                                          .text = buff};
+      struct preproc_token special_tok = {
+          .ty = PREPROC_TOKEN_TY_PREPROC_NUMBER,
+          .span = token->span,
+          .flags = PREPROC_TOKEN_FLAG_MACRO_EXPANSION,
+          .text = (ustr_t){.str = buf, .len = len}};
       vector_push_back(buffer, &special_tok);
       break;
     }
@@ -1898,15 +1922,17 @@ static bool try_expand_token(struct preproc *preproc,
       // i think it is safe to modify the return of `asctime`, but i am
       // unsure so i will copy to prevent weird bugs
       size_t len = 8 + 2;
-      char *buff = arena_alloc(preproc->arena, sizeof(*buff) * (len + 1));
-      buff[0] = '\"';
-      memcpy(&buff[1], &asc[11], sizeof(*buff) * len);
-      buff[len - 1] = '\"';
-      buff[len] = '\0';
+      char *buf = arena_alloc(preproc->arena, sizeof(*buf) * (len + 1));
+      buf[0] = '\"';
+      memcpy(&buf[1], &asc[11], sizeof(*buf) * len);
+      buf[len - 1] = '\"';
+      buf[len] = '\0';
 
-      struct preproc_token special_tok = {.ty = PREPROC_TOKEN_TY_STRING_LITERAL,
-                                          .span = MK_INVALID_TEXT_SPAN(0, len),
-                                          .text = buff};
+      struct preproc_token special_tok = {
+          .ty = PREPROC_TOKEN_TY_STRING_LITERAL,
+          .span = token->span,
+          .flags = PREPROC_TOKEN_FLAG_MACRO_EXPANSION,
+          .text = (ustr_t){.str = buf, .len = len}};
       vector_push_back(buffer, &special_tok);
       break;
     }
@@ -1921,15 +1947,17 @@ static bool try_expand_token(struct preproc *preproc,
       }
 
       size_t len = 10 + 2;
-      char *buff = arena_alloc(preproc->arena, sizeof(*buff) * (len + 1));
-      buff[0] = '\"';
-      memcpy(&buff[1], asc, sizeof(*buff) * len);
-      buff[len - 1] = '\"';
-      buff[len] = '\0';
+      char *buf = arena_alloc(preproc->arena, sizeof(*buf) * (len + 1));
+      buf[0] = '\"';
+      memcpy(&buf[1], asc, sizeof(*buf) * len);
+      buf[len - 1] = '\"';
+      buf[len] = '\0';
 
-      struct preproc_token special_tok = {.ty = PREPROC_TOKEN_TY_STRING_LITERAL,
-                                          .span = MK_INVALID_TEXT_SPAN(0, len),
-                                          .text = buff};
+      struct preproc_token special_tok = {
+          .ty = PREPROC_TOKEN_TY_STRING_LITERAL,
+          .span = token->span,
+          .flags = PREPROC_TOKEN_FLAG_MACRO_EXPANSION,
+          .text = (ustr_t){.str = buf, .len = len}};
       vector_push_back(buffer, &special_tok);
       break;
     }
@@ -1948,8 +1976,10 @@ static bool try_expand_token(struct preproc *preproc,
 
   if (flags & PREPROC_EXPAND_TOKEN_FLAG_UNDEF_ZERO) {
     struct preproc_token zero_tok = {.ty = PREPROC_TOKEN_TY_PREPROC_NUMBER,
-                                     .span = MK_INVALID_TEXT_SPAN(0, 1),
-                                     .text = "0"};
+                                     .span = token->span,
+                                     .flags =
+                                         PREPROC_TOKEN_FLAG_MACRO_EXPANSION,
+                                     .text = MK_USTR("0")};
     vector_push_back(buffer, &zero_tok);
     return true;
   }
@@ -2236,7 +2266,7 @@ static void preproc_tokens_til_eol(struct preproc *preproc,
     }
 
     DEBUG_ASSERT(token.ty != PREPROC_TOKEN_TY_IDENTIFIER ||
-                     !memchr(token.text, '\n', text_span_len(&token.span)),
+                     !ustr_chr(token.text, '\n'),
                  "newline in identifier");
 
     if (token.ty == PREPROC_TOKEN_TY_IDENTIFIER &&
@@ -2319,7 +2349,7 @@ struct include_path {
 
 static struct include_path get_include_path(struct preproc *preproc,
                                             struct preproc_token *token) {
-  size_t filename_len = text_span_len(&token->span);
+  size_t filename_len = token->text.len;
 
   DEBUG_ASSERT(filename_len >= 2, "filename token can't be <2 chars");
 
@@ -2329,9 +2359,9 @@ static struct include_path get_include_path(struct preproc *preproc,
   char *filename = arena_alloc(preproc->arena, filename_len + 1);
   filename[filename_len] = 0;
 
-  strncpy(filename, &token->text[1], filename_len);
+  strncpy(filename, &token->text.str[1], filename_len);
 
-  bool is_angle = token->text[0] == '<';
+  bool is_angle = token->text.str[0] == '<';
 
   return (struct include_path){.is_angle = is_angle, .filename = filename};
 }
@@ -2345,11 +2375,11 @@ static unsigned long long eval_has_query(struct preproc *preproc,
                                          struct preproc_text *preproc_text,
                                          struct preproc_token *token,
                                          struct preproc_token *value) {
-  ustr_t token_str = {.str = token->text, .len = text_span_len(&token->span)};
+  ustr_t token_str = token->text;
   token_str = ustr_strip_prefix(token_str, MK_USTR("__"));
 
   if (ustr_eq(token_str, MK_USTR("defined"))) {
-    ustr_t value_str = {.str = value->text, .len = text_span_len(&value->span)};
+    ustr_t value_str = value->text;
 
     return get_define(preproc, value_str) ? 1 : 0;
   } else if (ustr_eq(token_str, MK_USTR("has_include"))) {
@@ -2381,7 +2411,7 @@ static unsigned long long eval_atom(struct preproc *preproc,
       (*i)++;
 
       unsigned long long num;
-      if (!try_parse_integer(token->text, text_span_len(&token->span), &num)) {
+      if (!try_parse_integer(token->text.str, token->text.len, &num)) {
         compiler_diagnostics_add(
             preproc->diagnostics,
             MK_PREPROC_DIAGNOSTIC(BAD_TOKEN_IN_COND, bad_token_in_cond,
@@ -2398,17 +2428,17 @@ static unsigned long long eval_atom(struct preproc *preproc,
 
       (*i)++;
 
-      size_t len = text_span_len(&token->span);
+      size_t len = token->text.len;
       switch (len) {
       case 3:
-        return token->text[1];
+        return token->text.str[1];
       case 5:
         // assume `L'\0'` for test
         return 0;
       case 6:
-        return strtoul(&token->text[2], NULL, 8);
+        return strtoul(&token->text.str[2], NULL, 8);
       default:
-        TODO("proper preproc char parse ('%.*s')", (int)len, token->text);
+        TODO("proper preproc char parse ('%.*s')", (int)len, token->text.str);
       }
     }
 #define MAX_PREC 100
@@ -2493,7 +2523,7 @@ static unsigned long long eval_atom(struct preproc *preproc,
           next->ty != PREPROC_TOKEN_TY_STRING_LITERAL) {
         BUG("expected identifier after `defined/__has_feature` etc (found "
             "'%.*s')",
-            (int)text_span_len(&next->span), next->text);
+            (int)next->text.len, next->text.str);
       }
 
       return eval_has_query(preproc, preproc_text, token, next);
@@ -2589,7 +2619,7 @@ static unsigned long long eval_expr(struct preproc *preproc,
                 arena_alloc_snprintf(
                     preproc->arena,
                     "bad token in preprocessor condition '%.*s'",
-                    (int)text_span_len(&token->span), token->text)));
+                    (int)token->text.len, token->text.str)));
 
         return 0;
       }
@@ -2779,8 +2809,7 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token,
         if (enabled) {
           UNEXPANDED_DIR_TOKENS();
           struct preproc_token *def_name = vector_head(directive_tokens);
-          ustr_t def_str = {.str = def_name->text,
-                            .len = (int)text_span_len(&def_name->span)};
+          ustr_t def_str = def_name->text;
           now_enabled = get_define(preproc, def_str);
         }
         vector_push_back(preproc_text->enabled, &now_enabled);
@@ -2791,8 +2820,7 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token,
         if (enabled) {
           UNEXPANDED_DIR_TOKENS();
           struct preproc_token *def_name = vector_head(directive_tokens);
-          ustr_t def_str = {.str = def_name->text,
-                            .len = (int)text_span_len(&def_name->span)};
+          ustr_t def_str = def_name->text;
           now_enabled = !get_define(preproc, def_str);
         }
         vector_push_back(preproc_text->enabled, &now_enabled);
@@ -2846,8 +2874,7 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token,
           *(bool *)vector_tail(preproc_text->enabled) = false;
         } else {
           struct preproc_token *def_name = vector_head(directive_tokens);
-          ustr_t def_str = {.str = def_name->text,
-                            .len = (int)text_span_len(&def_name->span)};
+          ustr_t def_str = def_name->text;
           bool now_enabled = get_define(preproc, def_str);
           *(bool *)vector_tail(preproc_text->enabled) =
               outer_enabled && now_enabled;
@@ -2862,8 +2889,7 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token,
           *(bool *)vector_tail(preproc_text->enabled) = false;
         } else {
           struct preproc_token *def_name = vector_head(directive_tokens);
-          ustr_t def_str = {.str = def_name->text,
-                            .len = (int)text_span_len(&def_name->span)};
+          ustr_t def_str = def_name->text;
           bool now_enabled = !get_define(preproc, def_str);
           *(bool *)vector_tail(preproc_text->enabled) =
               outer_enabled && now_enabled;
@@ -2919,8 +2945,7 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token,
             tok = vector_get(directive_tokens, first_def_tok++);
 
             if (tok->ty == PREPROC_TOKEN_TY_IDENTIFIER) {
-              ustr_t ident = {.len = text_span_len(&tok->span),
-                              .str = tok->text};
+              ustr_t ident = tok->text;
 
               hashtbl_insert(params, &ident, &param_idx);
               param_idx++;
@@ -2990,10 +3015,7 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token,
                 if ((prev && prev->ty == PREPROC_TOKEN_TY_PUNCTUATOR &&
                      prev->punctuator.ty ==
                          PREPROC_TOKEN_PUNCTUATOR_TY_COMMA) &&
-                    (succ &&
-                     text_span_len(&succ->span) == strlen("__VA_ARGS__") &&
-                     !strncmp(succ->text, "__VA_ARGS__",
-                              strlen("__VA_ARGS__")))) {
+                    (succ && ustr_eq(succ->text, MK_USTR("__VA_ARGS__")))) {
 
                   // need to remove the preceding tokens
                   for (size_t j = 0; j < num_prev; j++) {
@@ -3011,8 +3033,7 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token,
             }
 
             if (def_tok->ty == PREPROC_TOKEN_TY_IDENTIFIER) {
-              ustr_t ident = {.len = text_span_len(&def_tok->span),
-                              .str = def_tok->text};
+              ustr_t ident = def_tok->text;
 
               size_t *idx = hashtbl_lookup(params, &ident);
               if (idx) {
@@ -3023,10 +3044,7 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token,
                     .param = *idx};
 
                 stringify = false;
-              } else if (text_span_len(&def_tok->span) ==
-                             strlen("__VA_ARGS__") &&
-                         !strncmp(def_tok->text, "__VA_ARGS__",
-                                  strlen("__VA_ARGS__"))) {
+              } else if (ustr_eq(def_tok->text, MK_USTR("__VA_ARGS__"))) {
                 fn_tok = (struct preproc_macro_fn_token){
                     .ty = stringify
                               ? PREPROC_MACRO_FN_TOKEN_TY_STRINGIFIED_VA_ARGS
@@ -3058,11 +3076,9 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token,
 
             vector_free(&directive_tokens);
 
-            struct preproc_token empty = {
-                .ty = PREPROC_TOKEN_TY_IDENTIFIER,
-                .span = MK_INVALID_TEXT_SPAN(0, 0),
-                .text = "",
-            };
+            struct preproc_token empty = {.ty = PREPROC_TOKEN_TY_IDENTIFIER,
+                                          .span = MK_INVALID_TEXT_SPAN(0, 0),
+                                          .text = MK_EMPTY_USTR()};
             define.value = (struct preproc_define_value){
                 .ty = PREPROC_DEFINE_VALUE_TY_TOKEN, .token = empty};
           } else {
@@ -3083,8 +3099,7 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token,
 
         vector_remove_range(directive_tokens, 0, first_def_tok);
 
-        ustr_t ident = {.str = def_name.text,
-                        .len = text_span_len(&def_name.span)};
+        ustr_t ident = def_name.text;
 
         // don't free them
         directive_tokens = NULL;
@@ -3109,8 +3124,7 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token,
         struct preproc_token def_name =
             *(struct preproc_token *)vector_head(directive_tokens);
 
-        ustr_t ident = {.str = def_name.text,
-                        .len = text_span_len(&def_name.span)};
+        ustr_t ident = def_name.text;
 
         // FIXME: inefficient lookup + remove
         struct preproc_define *def = hashtbl_lookup(preproc->defines, &ident);
@@ -3164,10 +3178,9 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token,
         struct preproc_token line_num_tok =
             *(struct preproc_token *)vector_head(directive_tokens);
         char *end;
-        size_t line_num = strtoull(line_num_tok.text, &end, 10);
+        size_t line_num = strtoull(line_num_tok.text.str, &end, 10);
 
-        if (end - line_num_tok.text !=
-            (long long)text_span_len(&line_num_tok.span)) {
+        if ((size_t)(end - line_num_tok.text.str) != line_num_tok.text.len) {
           TODO("handle failed line number parse");
         }
 
@@ -3177,11 +3190,11 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token,
         if (num_directive_tokens == 2) {
           struct preproc_token file_tok =
               *(struct preproc_token *)vector_head(directive_tokens);
-          size_t name_len = text_span_len(&file_tok.span);
+          size_t name_len = file_tok.text.len;
 
           char *file =
               arena_alloc(preproc->arena, sizeof(*file) * name_len + 1);
-          memcpy(file, file_tok.text, name_len);
+          memcpy(file, file_tok.text.str, name_len);
           file[name_len] = '\0';
 
           preproc_text->file = file;
@@ -3204,15 +3217,14 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token,
           // TODO: only do this in system header files
           if (is_warn &&
               (num_directive_tokens == 1 &&
-               !strncmp(warn_token->text, "\"Unsupported compiler detected\"",
-                        strlen("\"Unsupported compiler detected\"")))) {
+               ustr_eq(warn_token->text,
+                       MK_USTR("\"Unsupported compiler detected\"")))) {
             // ignore
             break;
           }
 
           wrote = true;
-          vector_extend(buf, warn_token->text,
-                        text_span_len(&warn_token->span));
+          vector_extend(buf, warn_token->text.str, warn_token->text.len);
         }
 
         if (!wrote) {
@@ -3348,11 +3360,11 @@ static struct preproc_token preproc_stringify(struct preproc *preproc,
     case PREPROC_TOKEN_TY_STRING_LITERAL:
     case PREPROC_TOKEN_TY_PUNCTUATOR:
     case PREPROC_TOKEN_TY_OTHER:
-      ADD_STR(token.text, text_span_len(&token.span));
+      ADD_STR(token.text.str, token.text.len);
       break;
     case PREPROC_TOKEN_TY_WHITESPACE:
       if (last_was_newline) {
-        ADD_STR(token.text, text_span_len(&token.span));
+        ADD_STR(token.text.str, token.text.len);
       } else if (!last_was_whitespace) {
         ADD_STR(" ", 1);
       }
@@ -3379,7 +3391,7 @@ static struct preproc_token preproc_stringify(struct preproc *preproc,
   return (struct preproc_token){
       .ty = PREPROC_TOKEN_TY_STRING_LITERAL,
       .span = MK_INVALID_TEXT_SPAN(/* garbage */ 0, vector_length(buf)),
-      .text = vector_head(buf)};
+      .text = (ustr_t){.str = vector_head(buf), .len = vector_length(buf)}};
 }
 
 void preproc_process(struct preproc *preproc, FILE *file) {
@@ -3393,7 +3405,7 @@ void preproc_process(struct preproc *preproc, FILE *file) {
   do {
     preproc_next_token(preproc, &token, PREPROC_EXPAND_TOKEN_FLAG_NONE);
 
-    int len = (int)text_span_len(&token.span);
+    int len = (int)token.text.len;
 
     if (!len) {
       fprintf(file, " ");
@@ -3401,7 +3413,8 @@ void preproc_process(struct preproc *preproc, FILE *file) {
     }
 
     if (needs_whitespace) {
-      if (token.ty != PREPROC_TOKEN_TY_NEWLINE && token.ty != PREPROC_TOKEN_TY_WHITESPACE) {
+      if (token.ty != PREPROC_TOKEN_TY_NEWLINE &&
+          token.ty != PREPROC_TOKEN_TY_WHITESPACE) {
         fprintf(file, " ");
       } else {
         last_was_newline = false;
@@ -3410,7 +3423,8 @@ void preproc_process(struct preproc *preproc, FILE *file) {
     }
 
     // FIXME: hmm think this logic might be broken
-    needs_whitespace = token.ty == PREPROC_TOKEN_TY_IDENTIFIER || token.ty == PREPROC_TOKEN_TY_PREPROC_NUMBER;
+    needs_whitespace = token.ty == PREPROC_TOKEN_TY_IDENTIFIER ||
+                       token.ty == PREPROC_TOKEN_TY_PREPROC_NUMBER;
 
     switch (token.ty) {
     case PREPROC_TOKEN_TY_UNKNOWN:
@@ -3425,7 +3439,7 @@ void preproc_process(struct preproc *preproc, FILE *file) {
     case PREPROC_TOKEN_TY_STRING_LITERAL:
     case PREPROC_TOKEN_TY_PUNCTUATOR:
     case PREPROC_TOKEN_TY_OTHER:
-      fprintf(file, "%.*s", len, token.text);
+      fprintf(file, "%.*s", len, token.text.str);
       break;
     case PREPROC_TOKEN_TY_WHITESPACE:
       if (first) {
@@ -3433,7 +3447,7 @@ void preproc_process(struct preproc *preproc, FILE *file) {
       }
 
       if (last_was_newline) {
-        fprintf(file, "%.*s", len, token.text);
+        fprintf(file, "%.*s", len, token.text.str);
       } else if (!last_was_whitespace) {
         fprintf(file, " ");
       }

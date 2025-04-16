@@ -1,3 +1,5 @@
+#include "main.h"
+
 #include "aarch64.h"
 #include "alloc.h"
 #include "args.h"
@@ -159,7 +161,6 @@ static const char *get_default_isysroot(struct fcache *fcache,
     }
 
 #if OS_APPLE
-    // POSIX!! not C-std. we should have an alternatie
     struct fcache_file sdk_path;
     if (!fcache_read_proc(fcache, MK_USTR("xcrun --sdk macosx --show-sdk-path"),
                           &sdk_path)) {
@@ -378,13 +379,9 @@ try_get_compile_args(int argc, char **argv, struct parsed_args *args,
   return PARSE_ARGS_RESULT_SUCCESS;
 }
 
-static int jcc_main(int argc, char **argv);
-
 static void signal_handle(UNUSED int signal) { debug_print_stack_trace(); }
 
-int main(int argc, char **argv) {
-  // enable_log();
-
+void jcc_init(void) {
   signal(SIGABRT, signal_handle);
 
   // we want to use the user's locale i think?
@@ -405,7 +402,11 @@ int main(int argc, char **argv) {
          "automatically)");
   }
 #endif
+ 
+}
 
+int main(int argc, char **argv) {
+  jcc_init();
   return jcc_main(argc, argv);
 }
 
@@ -449,7 +450,7 @@ static int jcc_driver_compiler(struct arena_allocator *arena,
                                const struct target *target, size_t num_sources,
                                const char **sources);
 
-static int jcc_main(int argc, char **argv) {
+int jcc_main(int argc, char **argv) {
   int exc = 0;
 
   profiler_init();
@@ -600,12 +601,16 @@ static int jcc_driver_compiler(struct arena_allocator *arena,
       }
     } else if (target_needs_linking(&compile_args, target) ||
                compile_args.output.ty == COMPILE_FILE_TY_NONE) {
+
+      // FIXME: not portable!
       char *name = arena_alloc_strdup(arena, "jcc-obj-XXXXXXXX");
       vector_push_back(tmps, &name);
-      mkstemp(name);
+      int fd = mkstemp(name);
+      FILE *f = fdopen(fd, "r");
+      fclose(f);
+
       file = (struct compile_file){
           .ty = COMPILE_FILE_TY_PATH,
-          // FIXME: not portable!
           .path = name};
       info("compiling source file '%s' into object file '%s'", source_path,
            file.path);

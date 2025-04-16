@@ -229,6 +229,10 @@ static void bad_value(struct arg *arg, ustr_t lookup_str,
 
 enum parse_args_result parse_args(int argc, char **argv,
                                   struct parsed_args *parsed) {
+  for (int i = 0; i < argc; i++) {
+    DEBUG_ASSERT(argv[i], "arg %d was null!", i);
+  }
+
   struct hashtbl *opts = hashtbl_create_ustr_keyed(sizeof(struct arg));
 
   *parsed = (struct parsed_args){.argc = argc, .argv = argv, .values = NULL};
@@ -308,6 +312,10 @@ enum parse_args_result parse_args(int argc, char **argv,
   for (; i < (size_t)argc; i++) {
     char *s = argv[i];
     size_t len = strlen(s);
+
+    if (!len) {
+      continue;
+    }
 
     if (!strcmp(s, "-")) {
       // means read from stdin. handle it seperately to avoid it getting

@@ -17,7 +17,7 @@ macos_link_objects_with_ld(const struct link_args *args) {
   // FIXME: support non `ld_classic` - requires arch and platform_version
   // -arch arm64 -platform_version macos 14.0.0 14.4"
 
-#define LINK_USE_LLD
+// #define LINK_USE_LLD
 
 #ifdef LINK_USE_LLD
   struct syscmd *cmd = syscmd_create(arena, "ld64.lld");

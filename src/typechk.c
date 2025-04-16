@@ -3381,6 +3381,8 @@ static struct td_expr type_unary_op(struct typechk *tchk,
 
 static struct td_expr type_binary_op(struct typechk *tchk,
                                      const struct ast_binary_op *binary_op) {
+  // in some weird scenarios this can stack overflow
+
   // all binary operations perform integer promotion
   struct td_expr lhs = perform_integer_promotion(
       tchk, type_expr(tchk, TYPE_EXPR_FLAGS_NONE, binary_op->lhs));
@@ -4560,8 +4562,8 @@ eval_constant_integral_expr(struct typechk *tchk, const struct td_expr *expr,
     struct td_val expr_value = {.var_ty = TD_VAR_TY_UNKNOWN,
                                 .val = MK_AP_VAL_INVALID()};
     for (size_t i = 0; i < expr->compound_expr.num_exprs; i++) {
-      if (!eval_constant_integral_expr(tchk, &expr->compound_expr.exprs[i], flags,
-                                  &expr_value)) {
+      if (!eval_constant_integral_expr(tchk, &expr->compound_expr.exprs[i],
+                                       flags, &expr_value)) {
         return false;
       }
     }
@@ -5634,8 +5636,8 @@ static struct td_deferstmt
 type_deferstmt(struct typechk *tchk, const struct ast_deferstmt *deferstmt) {
   struct td_stmt stmt = type_stmt(tchk, deferstmt->stmt);
 
-  return (struct td_deferstmt){.stmt =
-                                   arena_alloc_init(tchk->arena, sizeof(stmt), &stmt)};
+  return (struct td_deferstmt){
+      .stmt = arena_alloc_init(tchk->arena, sizeof(stmt), &stmt)};
 }
 
 static struct td_stmt type_stmt(struct typechk *tchk,
@@ -6226,6 +6228,33 @@ static struct td_init type_init(struct typechk *tchk, struct text_span context,
   return td_init;
 }
 
+static bool td_var_ty_is_const(const struct td_var_ty *var_ty) {
+  switch (var_ty->ty) {
+  case TD_VAR_TY_TY_UNKNOWN:
+  case TD_VAR_TY_TY_VOID:
+  case TD_VAR_TY_TY_FUNC:
+    return true;
+  case TD_VAR_TY_TY_ARRAY:
+    // TODO: not sure this logic is correct
+    // has to handle both
+    // ```
+    // const int arr[] = { ... };
+    // ```
+    // and
+    // ```
+    // typedef int int_arr[16]
+    // const int_arr arr = { ... };
+    // ```
+    return var_ty->type_qualifiers & TD_TYPE_QUALIFIER_FLAG_CONST || td_var_ty_is_const(var_ty->array.underlying);
+  case TD_VAR_TY_TY_WELL_KNOWN:
+  case TD_VAR_TY_TY_POINTER:
+  case TD_VAR_TY_TY_VARIADIC:
+  case TD_VAR_TY_TY_AGGREGATE:
+  case TD_VAR_TY_TY_INCOMPLETE_AGGREGATE:
+    return var_ty->type_qualifiers & TD_TYPE_QUALIFIER_FLAG_CONST;
+  }
+}
+
 static struct td_var_declaration
 type_init_declarator(struct typechk *tchk, struct text_span context,
                      struct td_specifiers *specifiers,
@@ -6234,7 +6263,6 @@ type_init_declarator(struct typechk *tchk, struct text_span context,
   struct td_var_declaration td_var_decl =
       type_declarator(tchk, specifiers, &init_declarator->declarator,
                       init_declarator->init, mode);
-
   if (!td_var_decl.var.identifier.len) {
     if (mode != TD_DECLARATOR_MODE_STRUCT) {
       tchk->result_ty = TYPECHK_RESULT_TY_FAILURE;
@@ -6257,6 +6285,14 @@ type_init_declarator(struct typechk *tchk, struct text_span context,
                             td_var_decl.var.identifier);
 
     if (specifiers->storage != TD_STORAGE_CLASS_SPECIFIER_EXTERN) {
+      if (td_var_decl.var.scope == SCOPE_GLOBAL && !td_var_ty_is_const(&td_var_decl.var_ty)) {
+        // TODO: disabled, need way to granularly enable/disable warnings
+        // compiler_diagnostics_add(
+        //     tchk->diagnostics,
+        //     MK_SEMANTIC_DIAGNOSTIC(MUT_GLOBAL, mut_global, context,
+        //                            MK_INVALID_TEXT_POS(0), arena_alloc_snprintf(tchk->arena, "mutable global %.*s", (int)td_var_decl.var.identifier.len, td_var_decl.var.identifier.str)));
+      }
+
       td_var_decl.var_ty =
           type_incomplete_var_ty(tchk, &td_var_decl.var_ty, context);
     }

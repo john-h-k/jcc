@@ -164,7 +164,7 @@ enum lex_create_result { LEX_CREATE_RESULT_SUCCESS = 0 };
 struct lex_token {
   enum lex_token_ty ty;
 
-  const char *text;
+  ustr_t text;
   struct text_span span;
 
   // FIXME: this is temporary, see `consume_token`

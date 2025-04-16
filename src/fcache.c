@@ -101,6 +101,7 @@ static bool fcache_read(struct fcache *fcache, struct fcache_key key,
   FILE *f;
   switch (key.ty) {
   case F_TY_PROC:
+    // POSIX!! not C-std. we should have an alternatie
     f = popen(key.key.str, "r");
     break;
   case F_TY_PATH:

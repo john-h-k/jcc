@@ -24,15 +24,15 @@
 
 #define PROFILE_BEGIN(name)                                                    \
   struct profiler_region profiler_##name##_region =                            \
-      profiler_begin_region(#name);
-#define PROFILE_END(name) profiler_end_region(profiler_##name##_region);
+      profiler_begin_region(#name)
+#define PROFILE_END(name) profiler_end_region(profiler_##name##_region)
 
-#define PROFILE_CREATE_MULTI(nm) static struct profiler_multi_region profiler_multi_region_##nm = {.name = #nm, .entry = {0}};
+#define PROFILE_CREATE_MULTI(nm) static struct profiler_multi_region profiler_multi_region_##nm = {.name = #nm, .entry = {0}}
 #define PROFILE_BEGIN_MULTI(name)                                              \
   struct profiler_multi_region_inst profiler_multi_##name##_inst =                            \
-      profiler_begin_multi_region(&profiler_multi_region_##name);
+      profiler_begin_multi_region(&profiler_multi_region_##name)
 #define PROFILE_END_MULTI(name)                                                \
-  profiler_end_multi_region(profiler_multi_##name##_inst);
+  profiler_end_multi_region(profiler_multi_##name##_inst)
 
 #define PROFILE(name, code)                                                    \
   PROFILE_BEGIN(name);                                                         \

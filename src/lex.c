@@ -27,9 +27,15 @@ struct lexer {
   const char **associated_texts;
 
   enum compile_preproc_mode mode;
+  enum compile_c_standard c_standard;
 };
 
 static struct hashtbl *KEYWORDS = NULL;
+
+struct lex_keyword {
+  enum lex_token_ty ty;
+  enum compile_c_standard c_standard;
+};
 
 enum lex_create_result lexer_create(struct program program,
                                     struct preproc *preproc,
@@ -39,22 +45,31 @@ enum lex_create_result lexer_create(struct program program,
   if (!KEYWORDS) {
     debug("building kw table");
 
-    KEYWORDS = hashtbl_create_ustr_keyed(sizeof(enum lex_token_ty));
+    KEYWORDS = hashtbl_create_ustr_keyed(sizeof(struct lex_keyword));
 
-#define KEYWORD(kw, ty)                                                        \
+#define KEYWORD_NEW(kw, kw_ty, std)                                            \
   do {                                                                         \
-    ustr_t k = {                                                     \
+    ustr_t k = {                                                               \
         .str = kw,                                                             \
         .len = strlen(kw),                                                     \
     };                                                                         \
-    enum lex_token_ty v = ty;                                                  \
+                                                                               \
+    struct lex_keyword v = {                                                   \
+        .ty = kw_ty,                                                           \
+        .c_standard = std,                                                     \
+    };                                                                         \
     hashtbl_insert(KEYWORDS, &k, &v);                                          \
   } while (0)
 
+#define KEYWORD(kw, ty) KEYWORD_NEW((kw), (ty), COMPILE_C_STANDARD_C11)
+
+#define KEYWORD_WITH_ALIASES_NEW(kw, ty, std)                                  \
+  KEYWORD_NEW(kw, ty, std);                                                    \
+  KEYWORD_NEW("__" kw, ty, std);                                               \
+  KEYWORD_NEW("__" kw "__", ty, std);
+
 #define KEYWORD_WITH_ALIASES(kw, ty)                                           \
-  KEYWORD(kw, ty);                                                             \
-  KEYWORD("__" kw, ty);                                                        \
-  KEYWORD("__" kw "__", ty);
+  KEYWORD_WITH_ALIASES_NEW(kw, ty, COMPILE_C_STANDARD_C11)
 
     // We falsely reserve some keywords here i believe (e.g banning `align` in
     // C11)
@@ -66,18 +81,17 @@ enum lex_create_result lexer_create(struct program program,
 
     KEYWORD("__attribute__", LEX_TOKEN_TY_KW_ATTRIBUTE);
 
-    if (c_standard >= COMPILE_C_STANDARD_C23) {
-      KEYWORD_WITH_ALIASES("typeof", LEX_TOKEN_TY_KW_TYPEOF);
-      KEYWORD_WITH_ALIASES("typeof_unqual", LEX_TOKEN_TY_KW_TYPEOF_UNQUAL);
-    }
+    KEYWORD_WITH_ALIASES_NEW("typeof", LEX_TOKEN_TY_KW_TYPEOF,
+                             COMPILE_C_STANDARD_C23);
+    KEYWORD_WITH_ALIASES_NEW("typeof_unqual", LEX_TOKEN_TY_KW_TYPEOF_UNQUAL,
+                             COMPILE_C_STANDARD_C23);
 
     KEYWORD("_Generic", LEX_TOKEN_TY_KW_GENERIC);
 
     KEYWORD("_Static_assert", LEX_TOKEN_TY_KW_STATICASSERT);
 
-    if (c_standard >= COMPILE_C_STANDARD_C23) {
-      KEYWORD("static_assert", LEX_TOKEN_TY_KW_STATICASSERT);
-    }
+    KEYWORD_NEW("static_assert", LEX_TOKEN_TY_KW_STATICASSERT,
+                COMPILE_C_STANDARD_C23);
 
     KEYWORD("_Noreturn", LEX_TOKEN_TY_KW_NORETURN);
     KEYWORD("goto", LEX_TOKEN_TY_KW_GOTO);
@@ -109,23 +123,13 @@ enum lex_create_result lexer_create(struct program program,
     KEYWORD("void", LEX_TOKEN_TY_KW_VOID);
 
     KEYWORD("_Bool", LEX_TOKEN_TY_KW_BOOL);
-    // TODO: only allow for C23 (similar with alignof)
 
-    if (c_standard >= COMPILE_C_STANDARD_C23) {
-      KEYWORD("bool", LEX_TOKEN_TY_KW_BOOL);
-      KEYWORD("true", LEX_TOKEN_TY_KW_TRUE);
-      KEYWORD("false", LEX_TOKEN_TY_KW_FALSE);
-    }
+    KEYWORD_NEW("bool", LEX_TOKEN_TY_KW_BOOL, COMPILE_C_STANDARD_C23);
+    KEYWORD_NEW("true", LEX_TOKEN_TY_KW_TRUE, COMPILE_C_STANDARD_C23);
+    KEYWORD_NEW("false", LEX_TOKEN_TY_KW_FALSE, COMPILE_C_STANDARD_C23);
 
-    if (c_standard >= COMPILE_C_STANDARD_C2Y) {
-      KEYWORD("defer", LEX_TOKEN_TY_KW_DEFER);
-    }
+    KEYWORD_NEW("defer", LEX_TOKEN_TY_KW_DEFER, COMPILE_C_STANDARD_C2Y);
 
-    // required by macOS
-    KEYWORD("__uint128_t", LEX_TOKEN_TY_KW_UINT128);
-
-    KEYWORD("__fp16", LEX_TOKEN_TY_KW_HALF);
-    KEYWORD("_Float16", LEX_TOKEN_TY_KW_HALF);
     KEYWORD("float", LEX_TOKEN_TY_KW_FLOAT);
     KEYWORD("double", LEX_TOKEN_TY_KW_DOUBLE);
     KEYWORD("char", LEX_TOKEN_TY_KW_CHAR);
@@ -144,10 +148,14 @@ enum lex_create_result lexer_create(struct program program,
     KEYWORD("_Alignof", LEX_TOKEN_TY_KW_ALIGNOF);
     KEYWORD("_Alignas", LEX_TOKEN_TY_KW_ALIGNAS);
 
-    if (c_standard >= COMPILE_C_STANDARD_C23) {
-      KEYWORD("alignof", LEX_TOKEN_TY_KW_ALIGNOF);
-      KEYWORD("alignas", LEX_TOKEN_TY_KW_ALIGNAS);
-    }
+    KEYWORD_NEW("alignof", LEX_TOKEN_TY_KW_ALIGNOF, COMPILE_C_STANDARD_C23);
+    KEYWORD_NEW("alignas", LEX_TOKEN_TY_KW_ALIGNAS, COMPILE_C_STANDARD_C23);
+
+    KEYWORD("__fp16", LEX_TOKEN_TY_KW_HALF);
+    KEYWORD("_Float16", LEX_TOKEN_TY_KW_HALF);
+
+    // required by macOS
+    KEYWORD("__uint128_t", LEX_TOKEN_TY_KW_UINT128);
 
 #undef KEYWORD
 
@@ -165,6 +173,7 @@ enum lex_create_result lexer_create(struct program program,
   l->program = program;
   l->preproc = preproc;
   l->mode = mode;
+  l->c_standard = c_standard;
 
   l->tokens = vector_create_in_arena(sizeof(struct lex_token), arena);
   l->pos = 0;
@@ -198,7 +207,7 @@ void lex_all(struct lexer *lexer) {
 
 /* The lexer parses identifiers, but these could be identifiers, typedef-names,
    or keywords. This function converts identifiers into their "real" type */
-static enum lex_token_ty refine_ty(struct preproc_token *token) {
+static enum lex_token_ty refine_ty(struct lexer *lexer, struct preproc_token *token) {
   struct keyword {
     const char *str;
     size_t len;
@@ -207,25 +216,22 @@ static enum lex_token_ty refine_ty(struct preproc_token *token) {
 
   DEBUG_ASSERT(KEYWORDS, "keywords should have been built");
 
-  ustr_t key = {.str = token->text,
-                          .len = text_span_len(&token->span)};
+  struct lex_keyword *kw = hashtbl_lookup(KEYWORDS, &token->text);
 
-  enum lex_token_ty *kw_ty = hashtbl_lookup(KEYWORDS, &key);
-
-  if (kw_ty) {
-    return *kw_ty;
+  if (kw && lexer->c_standard >= kw->c_standard) {
+    return kw->ty;
   }
 
   return LEX_TOKEN_TY_IDENTIFIER;
 }
 
 static ustr_t process_raw_string(const struct lexer *lexer,
-                                           const struct lex_token *token) {
+                                 const struct lex_token *token) {
   // TODO: this i think will wrongly accept multilines
   // FIXME: definitely wrong for wide strings
 
-  const char *text = token->text;
-  size_t len = text_span_len(&token->span);
+  const char *text = token->text.str;
+  size_t len = token->text.len;
 
   bool is_wide = token->ty == LEX_TOKEN_TY_ASCII_WIDE_CHAR_LITERAL ||
                  token->ty == LEX_TOKEN_TY_ASCII_WIDE_STR_LITERAL;
@@ -272,7 +278,7 @@ static ustr_t process_raw_string(const struct lexer *lexer,
       if (text[i] >= '0' && text[i] <= '7') {
         size_t octal_start = i;
 
-        while (i < token->span.end.idx) {
+        while (i < len) {
           if (text[i] >= '0' && text[i] <= '7') {
             i++;
           } else {
@@ -425,7 +431,9 @@ lex_string_literal(const struct preproc_token *preproc_token) {
   DEBUG_ASSERT(preproc_token->ty == PREPROC_TOKEN_TY_STRING_LITERAL,
                "wrong preproc token ty");
 
-  switch (preproc_token->text[0]) {
+  DEBUG_ASSERT(preproc_token->text.len > 1, "too short!");
+
+  switch (preproc_token->text.str[0]) {
   case '<':
     BUG("found angle-bracket string literal in lexer");
   case '\"':
@@ -433,7 +441,7 @@ lex_string_literal(const struct preproc_token *preproc_token) {
   case '\'':
     return LEX_TOKEN_TY_ASCII_CHAR_LITERAL;
   case 'L':
-    switch (preproc_token->text[1]) {
+    switch (preproc_token->text.str[1]) {
     case '\"':
       return LEX_TOKEN_TY_ASCII_WIDE_STR_LITERAL;
     case '\'':
@@ -459,11 +467,8 @@ lex_number_literal(const struct preproc_token *preproc_token) {
     LIT_TY_F = 32,
   };
 
-  struct text_pos start = preproc_token->span.start;
-  struct text_pos end = preproc_token->span.end;
-
-  const char *text = preproc_token->text;
-  size_t len = text_pos_len(start, end);
+  const char *text = preproc_token->text.str;
+  size_t len = preproc_token->text.len;
 
   enum lit_ty lit_ty = LIT_TY_NONE;
 
@@ -573,7 +578,7 @@ static void lex_next_token(struct lexer *lexer, struct lex_token *token) {
         break;
       }
     } while (preproc_token.ty != PREPROC_TOKEN_TY_EOF &&
-             !text_span_len(&preproc_token.span));
+             !preproc_token.text.len);
 
     switch (preproc_token.ty) {
     case PREPROC_TOKEN_TY_UNKNOWN:
@@ -587,7 +592,7 @@ static void lex_next_token(struct lexer *lexer, struct lex_token *token) {
                                   .span = preproc_token.span};
       return;
     case PREPROC_TOKEN_TY_IDENTIFIER: {
-      enum lex_token_ty ty = refine_ty(&preproc_token);
+      enum lex_token_ty ty = refine_ty(lexer, &preproc_token);
       *token = (struct lex_token){
           .ty = ty, .text = preproc_token.text, .span = preproc_token.span};
       return;
@@ -672,12 +677,12 @@ void lex_consume_token(struct lexer *lexer, struct lex_token token) {
 }
 
 ustr_t lex_strlike_associated_text(const struct lexer *lexer,
-                                             const struct lex_token *token) {
+                                   const struct lex_token *token) {
   return process_raw_string(lexer, token);
 }
 
 ustr_t lex_associated_text(const struct lexer *lexer,
-                                     const struct lex_token *token) {
+                           const struct lex_token *token) {
   switch (token->ty) {
   case LEX_TOKEN_TY_ASCII_STR_LITERAL:
   case LEX_TOKEN_TY_ASCII_WIDE_STR_LITERAL:
@@ -694,9 +699,10 @@ ustr_t lex_associated_text(const struct lexer *lexer,
   case LEX_TOKEN_TY_UNSIGNED_LONG_LITERAL:
   case LEX_TOKEN_TY_SIGNED_LONG_LONG_LITERAL:
   case LEX_TOKEN_TY_UNSIGNED_LONG_LONG_LITERAL: {
-    size_t len = text_span_len(&token->span);
+    // TODO: dont copy
+    size_t len = token->text.len;
     char *p = arena_alloc(lexer->arena, len + 1);
-    memcpy(p, token->text, len);
+    memcpy(p, token->text.str, len);
     p[len] = '\0';
     return (ustr_t){p, len};
   }

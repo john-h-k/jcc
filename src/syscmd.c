@@ -29,6 +29,8 @@ struct syscmd {
 
   char **stdout_buf;
   char **stderr_buf;
+
+  const char *stdin_val;
 };
 
 struct syscmd *syscmd_create(struct arena_allocator *arena,
@@ -103,12 +105,17 @@ void syscmd_write_cmd(struct syscmd *cmd, FILE *file) {
   fflush(file);
 }
 
+
+void syscmd_set_stdin(struct syscmd *syscmd, const char *value) {
+  syscmd->stdin_val = arena_alloc_strdup(syscmd->arena, value);
+}
+
 #if SYSCMD_UNIX
 
 static int syscmd_open_fd(const char *output) {
   int fd = open(output, O_WRONLY | O_CREAT | O_TRUNC, 0644);
 
-  invariant_assert(fd >= 0, "open file failed");
+  invariant_assert(fd >= 0, "open file '%s' failed", output);
 
   return fd;
 }
@@ -154,29 +161,39 @@ int syscmd_exec(struct syscmd **syscmd) {
   vector_push_back(s->args, &(char *){NULL});
   char **args = vector_head(s->args);
 
+  int stdin_pipe[2];
   int stdout_pipe[2];
   int stderr_pipe[2];
+
+  int stdout_fd;
+  int stderr_fd;
 
   posix_spawn_file_actions_t actions;
   posix_spawn_file_actions_init(&actions);
 
+  if (s->stdin_val) {
+    DEBUG_ASSERT(!pipe(stdin_pipe), "pipe failed");
+    posix_spawn_file_actions_adddup2(&actions, stdin_pipe[0], STDIN_FILENO);
+    posix_spawn_file_actions_addclose(&actions, stdin_pipe[1]);
+  }
+
   if (s->stdout_buf) {
-    pipe(stdout_pipe);
+    DEBUG_ASSERT(!pipe(stdout_pipe), "pipe failed");
     posix_spawn_file_actions_adddup2(&actions, stdout_pipe[1], STDOUT_FILENO);
     posix_spawn_file_actions_addclose(&actions, stdout_pipe[0]);
   } else if (s->stdout_redir) {
-    int stdout_fd = syscmd_open_fd(s->stdout_redir);
+    stdout_fd = syscmd_open_fd(s->stdout_redir);
 
     posix_spawn_file_actions_adddup2(&actions, stdout_fd, STDOUT_FILENO);
     posix_spawn_file_actions_addclose(&actions, stdout_fd);
   }
 
   if (s->stderr_buf) {
-    pipe(stderr_pipe);
+    DEBUG_ASSERT(!pipe(stderr_pipe), "pipe failed");
     posix_spawn_file_actions_adddup2(&actions, stderr_pipe[1], STDERR_FILENO);
     posix_spawn_file_actions_addclose(&actions, stderr_pipe[0]);
   } else if (s->stderr_redir) {
-    int stderr_fd = syscmd_open_fd(s->stderr_redir);
+    stderr_fd = syscmd_open_fd(s->stderr_redir);
 
     posix_spawn_file_actions_adddup2(&actions, stderr_fd, STDERR_FILENO);
     posix_spawn_file_actions_addclose(&actions, stderr_fd);
@@ -189,22 +206,37 @@ int syscmd_exec(struct syscmd **syscmd) {
     BUG("spawnp failed");
   }
 
+  if (s->stdin_val) {
+    size_t len = strlen(s->stdin_val);
+    size_t written = 0;
+
+    while (written < len) {
+      written += write(stdin_pipe[1], &s->stdin_val[written], len - written);
+    }
+
+    close(stdin_pipe[1]);
+  }
+
   if (waitpid(pid, &status, 0) == -1) {
     BUG("waitpid failed");
   }
 
   if (s->stdout_buf) {
     *s->stdout_buf = syscmd_read_pipe(s, s->stdout_flags, stdout_pipe);
+  } else if (s->stdout_redir) {
+    close(stdout_fd);
   }
 
   if (s->stderr_buf) {
     *s->stderr_buf = syscmd_read_pipe(s, s->stderr_flags, stderr_pipe);
+  } else if (s->stderr_redir) {
+    close(stderr_fd);
   }
 
   posix_spawn_file_actions_destroy(&actions);
 
   *syscmd = NULL;
-  return status;
+  return WEXITSTATUS(status);
 }
 
 #else
@@ -219,14 +251,16 @@ static void syscmd_child_redir(int redir_fd, const char *output) {
 int syscmd_exec(struct syscmd **syscmd) {
   struct syscmd *s = *syscmd;
 
+  // TODO: handle stdin
+
   int stdout_pipe[2];
   if (s->stdout_buf) {
-    pipe(stdout_pipe);
+    DEBUG_ASSERT(!pipe(stdout_pipe), "pipe failed");
   }
 
   int stderr_pipe[2];
   if (s->stderr_buf) {
-    pipe(stderr_pipe);
+    DEBUG_ASSERT(!pipe(stderr_pipe), "pipe failed");
   }
 
   int status;

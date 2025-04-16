@@ -29,6 +29,8 @@ void syscmd_set_stdout(struct syscmd *syscmd, enum syscmd_buf_flags flags,
 void syscmd_set_stderr(struct syscmd *syscmd, enum syscmd_buf_flags flags,
                        char **buf);
 
+void syscmd_set_stdin(struct syscmd *syscmd, const char *value);
+
 void syscmd_write_cmd(struct syscmd *cmd, FILE *file);
 
 int syscmd_exec(struct syscmd **syscmd);

@@ -134,15 +134,22 @@ struct preproc_token_punctuator {
   enum preproc_token_punctuator_ty ty;
 };
 
+enum preproc_token_flags {
+  PREPROC_TOKEN_FLAG_NONE = 0,
+  PREPROC_TOKEN_FLAG_MACRO_EXPANSION = 1 << 0,
+};
+
 struct preproc_token {
   enum preproc_token_ty ty;
 
-  const char *text;
+  ustr_t text;
   struct text_span span;
 
   union {
     struct preproc_token_punctuator punctuator;
   };
+
+  enum preproc_token_flags flags;
 };
 
 enum preproc_expand_token_flags {
