@@ -21,6 +21,13 @@
 // (A) watch out for thread safety
 // (B) is this bad?
 
+struct timestmp {
+  unsigned long long val;
+};
+
+struct timestmp get_timestamp(void);
+double timestamp_elapsed(struct timestmp start, struct timestmp end);
+void print_time(FILE *file, double nanos);
 
 #define NO_PROFILE
 
