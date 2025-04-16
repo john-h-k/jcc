@@ -120,11 +120,6 @@ struct jcc_test_result {
   const char *msg;
 };
 
-static mtx_t results_lock;
-static struct jcc_test_result *results = NULL;
-static int results_count = 0;
-static int results_size = 0;
-
 PRINTF_ARGS(1) static void echo(const char *color, const char *fmt, ...) {
   va_list args;
   printf("%s", color);
@@ -234,6 +229,8 @@ static void discover_tests(struct arena_allocator *arena, struct jobq *tests,
 
 struct jcc_worker_args {
   struct jobq *jobq;
+  struct vector *results;
+  mtx_t results_lock;
   struct arena_allocator *arena;
   struct jcc_test_opts opts;
 };
@@ -356,17 +353,24 @@ static struct jcc_test_info get_test_info(const struct jcc_worker_args *args,
     } else if (ustr_eq(spec, MK_USTR("arch"))) {
       if (!ustr_eq(value, args->opts.arch)) {
         info.skip = true;
-        info.skip_msg = MK_USTR(arena_alloc_snprintf(args->arena, "skipped due to arch (test arch: %.*s, runner arch: %.*s)", USTR_SPEC(value), USTR_SPEC(args->opts.arch)));
+        info.skip_msg = MK_USTR(arena_alloc_snprintf(
+            args->arena,
+            "skipped due to arch (test arch: %.*s, runner arch: %.*s)",
+            USTR_SPEC(value), USTR_SPEC(args->opts.arch)));
       }
     } else if (ustr_eq(spec, MK_USTR("arch-skip"))) {
       if (ustr_eq(value, args->opts.arch)) {
         info.skip = true;
-        info.skip_msg = MK_USTR(arena_alloc_snprintf(args->arena, "skipped due to arch-skip (arch: %.*s)", USTR_SPEC(value)));
+        info.skip_msg = MK_USTR(arena_alloc_snprintf(
+            args->arena, "skipped due to arch-skip (arch: %.*s)",
+            USTR_SPEC(value)));
       }
     } else if (ustr_eq(spec, MK_USTR("os"))) {
       if (!ustr_eq(value, args->opts.os)) {
         info.skip = true;
-        info.skip_msg = MK_USTR(arena_alloc_snprintf(args->arena, "skipped due to os (test os: %.*s, runner os: %.*s)", USTR_SPEC(value), USTR_SPEC(args->opts.os)));
+        info.skip_msg = MK_USTR(arena_alloc_snprintf(
+            args->arena, "skipped due to os (test os: %.*s, runner os: %.*s)",
+            USTR_SPEC(value), USTR_SPEC(args->opts.os)));
       }
     } else if (ustr_eq(spec, MK_USTR("flags"))) {
       vector_push_back(info.flags, &value);
@@ -384,24 +388,17 @@ static struct jcc_test_info get_test_info(const struct jcc_worker_args *args,
   return info;
 }
 
-static void run_test(const struct jcc_worker_args *args,
-                     const struct jcc_test *test, UNUSED const char *arggroup) {
+static void run_test(struct jcc_worker_args *args, const struct jcc_test *test,
+                     UNUSED const char *arggroup) {
   struct jcc_test_info info = get_test_info(args, test);
 
   if (info.skip) {
-    LOCK(&results_lock, {
-      if (results_count >= results_size) {
-        results_size = results_size ? results_size * 2 : 16;
-        results =
-            realloc(results, results_size * sizeof(struct jcc_test_result));
-      }
-
-      results[results_count] = (struct jcc_test_result){
-          .status = TEST_STATUS_SKIP,
-          .file = test->file,
-          .msg = arena_alloc_ustrconv(args->arena, info.skip_msg)};
-
-      results_count++;
+    LOCK(&args->results_lock, {
+      vector_push_back(args->results, &(struct jcc_test_result){
+                                          .status = TEST_STATUS_SKIP,
+                                          .file = test->file,
+                                          .msg = arena_alloc_ustrconv(
+                                              args->arena, info.skip_msg)});
     });
     return;
   }
@@ -459,46 +456,34 @@ static void run_test(const struct jcc_worker_args *args,
   int compile_ret = run_compilation(args, num_args, vector_head(comp_args));
 
   if (info.no_compile) {
-    LOCK(&results_lock, {
-      if (results_count >= results_size) {
-        results_size = results_size ? results_size * 2 : 16;
-        results =
-            realloc(results, results_size * sizeof(struct jcc_test_result));
-      }
-
+    LOCK(&args->results_lock, {
       if (compile_ret == 0) {
-        results[results_count] = (struct jcc_test_result){
-            .status = TEST_STATUS_FAIL,
-            .file = test->file,
-            .msg = "test marked 'no-compile' but it compiled!",
-        };
+        vector_push_back(args->results,
+                         &(struct jcc_test_result){
+                             .status = TEST_STATUS_FAIL,
+                             .file = test->file,
+                             .msg = "test marked 'no-compile' but it compiled!",
+                         });
       } else {
-        results[results_count] = (struct jcc_test_result){
-            .status = TEST_STATUS_PASS,
-            .file = test->file,
-        };
+        vector_push_back(args->results, &(struct jcc_test_result){
+                                            .status = TEST_STATUS_PASS,
+                                            .file = test->file,
+                                        });
       }
-      results_count++;
     });
 
     return;
   }
 
   if (compile_ret != 0) {
-    LOCK(&results_lock, {
-      if (results_count >= results_size) {
-        results_size = results_size ? results_size * 2 : 16;
-        results =
-            realloc(results, results_size * sizeof(struct jcc_test_result));
-      }
-
-      results[results_count] = (struct jcc_test_result){
-          .status = TEST_STATUS_FAIL,
-          .file = test->file,
-          .msg = arena_alloc_snprintf(args->arena, "Compile error (ret=%d)",
-                                      compile_ret)};
-
-      results_count++;
+    LOCK(&args->results_lock, {
+      vector_push_back(
+          args->results,
+          &(struct jcc_test_result){
+              .status = TEST_STATUS_FAIL,
+              .file = test->file,
+              .msg = arena_alloc_snprintf(args->arena, "Compile error (ret=%d)",
+                                          compile_ret)});
     });
     return;
   }
@@ -521,62 +506,45 @@ static void run_test(const struct jcc_worker_args *args,
   int run_ret = syscmd_exec(&cmd);
 
   if (run_ret != info.expected_exc) {
-    LOCK(&results_lock, {
-      if (results_count >= results_size) {
-        results_size = results_size ? results_size * 2 : 16;
-        results =
-            realloc(results, results_size * sizeof(struct jcc_test_result));
-      }
-
-      results[results_count] = (struct jcc_test_result){
+    LOCK(&args->results_lock, {
+      vector_push_back(
+          args->results,
+          &(struct jcc_test_result){
           .status = TEST_STATUS_FAIL,
           .file = test->file,
           .msg =
               arena_alloc_snprintf(args->arena, "Exit code %d vs expected %d",
-                                   run_ret, info.expected_exc)};
-
-      results_count++;
+                                   run_ret, info.expected_exc)});
     });
     return;
   }
 
   if (info.expected_stdout.str &&
       !ustr_eq(info.expected_stdout, MK_USTR(run_output))) {
-    LOCK(&results_lock, {
-      if (results_count >= results_size) {
-        results_size = results_size ? results_size * 2 : 16;
-        results =
-            realloc(results, results_size * sizeof(struct jcc_test_result));
-      }
-
-      results[results_count] = (struct jcc_test_result){
+    LOCK(&args->results_lock, {
+      vector_push_back(
+          args->results,
+          &(struct jcc_test_result){
           .status = TEST_STATUS_FAIL,
           .file = test->file,
           .msg = arena_alloc_snprintf(
               args->arena, "Stdout mismatch: expected \"%.*s\" got \"%s\"",
               USTR_SPEC(info.expected_stdout), run_output)
-
-      };
-
-      results_count++;
+      });
     });
     return;
   }
 
-  LOCK(&results_lock, {
-    if (results_count >= results_size) {
-      results_size = results_size ? results_size * 2 : 16;
-      results = realloc(results, results_size * sizeof(struct jcc_test_result));
-    }
-
-    results[results_count] = (struct jcc_test_result){
-        .status = TEST_STATUS_PASS, .file = test->file};
-    results_count++;
+  LOCK(&args->results_lock, {
+      vector_push_back(
+          args->results,
+          &(struct jcc_test_result){
+        .status = TEST_STATUS_PASS, .file = test->file});
   });
 }
 
 static int test_worker(void *arg) {
-  const struct jcc_worker_args *args = arg;
+  struct jcc_worker_args *args = arg;
 
   struct jcc_test job;
   size_t id;
@@ -604,7 +572,6 @@ static struct jcc_test_opts parse_args(struct arena_allocator *arena, int argc,
                                .args = NULL,
                                .num_arg_groups = 0,
                                .arg_groups = NULL};
-
 
   struct vector *paths = vector_create_in_arena(sizeof(char *), arena);
   struct vector *arg_groups = vector_create_in_arena(sizeof(char *), arena);
@@ -661,9 +628,6 @@ int main(int argc, char **argv) {
 
   jcc_init();
 
-  invariant_assert(mtx_init(&results_lock, mtx_plain) == thrd_success,
-                   "init failed");
-
   struct jcc_test_opts opts = parse_args(arena, argc, argv);
   struct jobq *jobq = jobq_create(arena, sizeof(struct jcc_test));
 
@@ -676,7 +640,14 @@ int main(int argc, char **argv) {
   echo(PR_BOLD, "Using %zu processes...", opts.jobs);
   echo(PR_BOLD, "Found %d tests.", opts.num_tests);
 
-  time_t start = time(NULL);
+  struct timestmp start = get_timestamp();
+
+  struct vector *results =
+      vector_create_in_arena(sizeof(struct jcc_test_result), arena);
+
+  mtx_t results_lock;
+  invariant_assert(mtx_init(&results_lock, mtx_plain) == thrd_success,
+                   "results mtx_init failed");
 
   thrd_t *threads = arena_alloc(arena, opts.jobs * sizeof(*threads));
   struct arena_allocator **arenas =
@@ -688,9 +659,14 @@ int main(int argc, char **argv) {
 
     arenas[i] = worker_arena;
 
-    struct jcc_worker_args worker = {
-        .jobq = jobq, .opts = opts, .arena = worker_arena};
+    struct jcc_worker_args worker = {.jobq = jobq,
+                                     .results = results,
+                                     .results_lock = results_lock,
+                                     .opts = opts,
+                                     .arena = worker_arena};
+
     void *data = arena_alloc_init(arena, sizeof(worker), &worker);
+
     invariant_assert(thrd_create(&threads[i], test_worker, data) ==
                          thrd_success,
                      "thrd_create failed");
@@ -700,9 +676,15 @@ int main(int argc, char **argv) {
     thrd_join(threads[i], NULL);
   }
 
+  struct timestmp end = get_timestamp();
+
   int passed = 0, failed = 0, skipped = 0;
-  for (int i = 0; i < results_count; i++) {
-    switch (results[i].status) {
+
+  size_t num_results = vector_length(results);
+  for (size_t i = 0; i < num_results; i++) {
+    struct jcc_test_result *result = vector_get(results, i);
+
+    switch (result->status) {
     case TEST_STATUS_PASS:
       passed++;
       break;
@@ -715,33 +697,42 @@ int main(int argc, char **argv) {
     }
   }
 
-  printf("\n");
-  echo(PR_BOLD PR_GREEN, "Pass: %d", passed);
-  echo(PR_BOLD PR_RED, "Fail: %d", failed);
-  echo(PR_BOLD PR_YELLOW, "Skip: %d", skipped);
-  echo(PR_BOLD, "Tests took %lds", time(NULL) - start);
-
-  printf("\n\n");
-
   if (skipped > 0) {
+    printf("\n");
+
     echo(PR_BOLD PR_YELLOW, "Skipped tests:");
-    for (int i = 0; i < results_count; i++) {
-      if (results[i].status == TEST_STATUS_SKIP) {
-        echo(PR_BOLD PR_YELLOW, "- '%s' skipped: '%s'", results[i].file,
-             results[i].msg);
+    for (size_t i = 0; i < num_results; i++) {
+    struct jcc_test_result *result = vector_get(results, i);
+
+      if (result->status == TEST_STATUS_SKIP) {
+        echo(PR_BOLD PR_YELLOW, "- '%s' skipped: '%s'", result->file,
+             result->msg);
       }
     }
   }
 
   if (failed > 0) {
+    printf("\n");
+
     echo(PR_BOLD PR_RED, "Failed tests:");
-    for (int i = 0; i < results_count; i++) {
-      if (results[i].status == TEST_STATUS_FAIL) {
-        echo(PR_BOLD PR_RED, "- '%s' failed: %s", results[i].file,
-             results[i].msg);
+    for (size_t i = 0; i < num_results; i++) {
+    struct jcc_test_result *result = vector_get(results, i);
+
+      if (result->status == TEST_STATUS_FAIL) {
+        echo(PR_BOLD PR_RED, "- '%s' failed: %s", result->file,
+             result->msg);
       }
     }
   }
+
+  printf("\n");
+  echo(PR_BOLD PR_GREEN, "Pass: %d", passed);
+  echo(PR_BOLD PR_RED, "Fail: %d", failed);
+  echo(PR_BOLD PR_YELLOW, "Skip: %d", skipped);
+
+  printf(PR_BOLD "Tests took ");
+  print_time(stdout, timestamp_elapsed(start, end));
+  printf(PR_RESET "\n");
 
   for (size_t i = 0; i < opts.jobs; i++) {
     arena_allocator_free(&arenas[i]);

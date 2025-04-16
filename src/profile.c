@@ -37,6 +37,14 @@ static unsigned long long get_time(void) {
 }
 #endif
 
+struct timestmp get_timestamp(void) {
+  return (struct timestmp){ .val = get_time() };
+}
+
+double timestamp_elapsed(struct timestmp start, struct timestmp end) {
+  return (double)end.val - (double)start.val;
+}
+
 static once_flag lock_once = ONCE_FLAG_INIT;
 static mtx_t lock;
 
@@ -215,7 +223,7 @@ void profiler_end_region(struct profiler_region region) {
   data->span.ended = true;
 }
 
-static void print_time(FILE *file, double nanos) {
+void print_time(FILE *file, double nanos) {
   if (nanos >= 1e9) {
     fprintf(file, "%.3fs", nanos / 1e9);
   } else if (nanos >= 1e6) {
