@@ -157,6 +157,7 @@ static char *syscmd_read_pipe(struct syscmd *cmd, enum syscmd_buf_flags flags,
 #include <spawn.h>
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <errno.h>
 
 extern char **environ;
 
@@ -205,9 +206,8 @@ int syscmd_exec(struct syscmd **syscmd) {
   }
 
   pid_t pid;
-  if (posix_spawnp(&pid, s->process, &actions, NULL, args, environ) != 0) {
+  if ((errno = posix_spawnp(&pid, s->process, &actions, NULL, args, environ) != 0)) {
     perror("spawnp failed");
-    BUG("");
   }
 
   if (s->stdin_val) {
