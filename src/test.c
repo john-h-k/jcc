@@ -683,6 +683,10 @@ static bool parse_args(struct arena_allocator *arena, int argc,
   return true;
 }
 
+static int void_strcmp(const void *l, const void *r) {
+  return strcmp(l, r);
+}
+
 int main(int argc, char **argv) {
   struct arena_allocator *arena;
   arena_allocator_create("test", &arena);
@@ -709,9 +713,7 @@ int main(int argc, char **argv) {
     return 1;
   }
 
-  PUSH_NO_WARN("-Wcast-function-type-strict");
-  vector_sort(tests, (int (*)(const void *, const void *))strcmp);
-  POP_NO_WARN();
+  vector_sort(tests, void_strcmp);
 
   struct jobq *jobq = jobq_create(arena, sizeof(struct jcc_test));
 
