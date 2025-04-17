@@ -777,6 +777,41 @@ static struct interval_data register_alloc_pass(struct ir_func *irb,
   return data;
 }
 
+static void hash_ir_reg(struct hasher *hasher, const void *value) {
+  const struct ir_reg *r = value;
+
+  hasher_hash_integer(hasher, r->ty, sizeof(r->ty));
+  switch (r->ty) {
+  case IR_REG_TY_NONE:
+  case IR_REG_TY_SPILLED:
+  case IR_REG_TY_FLAGS:
+    break;
+  case IR_REG_TY_INTEGRAL:
+  case IR_REG_TY_FP:
+    hasher_hash_integer(hasher, r->idx, sizeof(r->idx));
+    break;
+  }
+}
+
+static bool eq_ir_reg(const void *l, const void *r) {
+  const struct ir_reg *sl = l;
+  const struct ir_reg *sr = r;
+
+  if (sl->ty != sr->ty) {
+    return false;
+  }
+
+  switch (sl->ty) {
+  case IR_REG_TY_NONE:
+  case IR_REG_TY_SPILLED:
+  case IR_REG_TY_FLAGS:
+    return true;
+  case IR_REG_TY_INTEGRAL:
+  case IR_REG_TY_FP:
+    return sl->idx == sr->idx;
+  }
+}
+
 /* Performs register allocation on the IR
      - phi elimination must have occured earlier
      - registers may be spilt to new local variables
@@ -786,7 +821,7 @@ void lsra_register_alloc(struct ir_func *irb, struct reg_info reg_info) {
   // FIXME: is `NULL` safe here? padding may be problem...
 
   struct hashtbl *nonvolatile_registers_used =
-      hashtbl_create(sizeof(struct ir_reg), 0, NULL, NULL);
+      hashtbl_create(sizeof(struct ir_reg), 0, hash_ir_reg, eq_ir_reg);
 
   bool has_ssp = false;
   size_t ssp_reg = 0;

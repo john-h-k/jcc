@@ -5,6 +5,8 @@ set(CMAKE_C_STANDARD 11)
 set(CMAKE_COMPILE_WARNING_AS_ERROR ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+include(CheckCCompilerFlag)
+
 # set(
 #   CMAKE_C_CLANG_TIDY
 #   clang-tidy
@@ -161,33 +163,44 @@ endforeach()
 
 # TODO: use hwaddress if possible, and allow using threadsanitizer instead of addresssanitizer (plus if hwaddress supported use hwaddress + thread)
 
+set(SANITIZER_TYPE "none" CACHE STRING "Sanitizer type")
+set_property(CACHE SANITIZER_TYPE PROPERTY STRINGS none address memory thread)
+
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
   message(STATUS "Debug build detected")
   
-  if(NOT DEFINED NO_SAN OR NO_SAN STREQUAL "")
+  if(NOT SANITIZER_TYPE STREQUAL "none")
     if(CMAKE_C_COMPILER_ID STREQUAL "GNU")
       message(WARNING "Debug mode may be VERY SLOW on GCC due to ASan problems - Clang w/ ASan is significantly faster")
     endif()
 
-    if(NOT CMAKE_C_COMPILER_ID STREQUAL "JCC")
-      add_link_options(-fsanitize=address,undefined)
-      add_compile_options(-fsanitize=address,undefined -fno-sanitize-recover=all)
+    # TODO: run CI tests with all san options
 
-      add_compile_options(-g)
-      add_link_options(-g3 -ldl)
-      add_link_options(-rdynamic)
+    if(SANITIZER_TYPE STREQUAL "address")
+      # try enable leak san
+
+      check_c_compiler_flag("-fsanitize=leak" HAS_C_LEAK_SAN)
+      if(HAS_C_LEAK_SAN)
+        add_link_options(-fsanitize=leak)
+        add_compile_options(-fsanitize=leak)
+      endif()
+    endif()
+
+    if(SANITIZER_TYPE STREQUAL "memory")
+      add_compile_options(-fsanitize-memory-track-origins)
+    endif()
+
+    if(NOT CMAKE_C_COMPILER_ID STREQUAL "JCC")
+      add_link_options(-fsanitize=${SANITIZER_TYPE},undefined)
+      add_compile_options(-fsanitize=${SANITIZER_TYPE},undefined -fno-sanitize-recover=all)
     endif()
   else()
     message(STATUS "Sanitisers disabled")
   endif()
 elseif(CMAKE_BUILD_TYPE STREQUAL "Release" OR CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo")
-  # add_compile_options(-g)
-  # add_link_options(-g3 -ldl)
-
   add_compile_options(
     -O3
     -mcpu=native
-    -funroll-loops
   )
 
   add_link_options(
@@ -260,8 +273,6 @@ elseif(CMAKE_C_COMPILER_ID STREQUAL "AppleClang")
 
     -fstrict-enums
   )
-
-  include(CheckCCompilerFlag)
 
   check_c_compiler_flag("-Wno-pre-c11-compat" HAS_C11_COMPAT_WARN)
   if(HAS_C11_COMPAT_WARN)
