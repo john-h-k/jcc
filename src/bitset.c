@@ -60,7 +60,7 @@ unsigned long long bitset_lzcnt(struct bitset *bitset) {
     size_t lz = (size_t)lzcnt(chunk);
 
     if (lz < bits_per_chunk) {
-      return MIN(i * bits_per_chunk + lz, bitset->num_elements);
+      return MIN((i * bits_per_chunk) + lz, bitset->num_elements);
     }
   }
 
@@ -76,7 +76,7 @@ unsigned long long bitset_tzcnt(struct bitset *bitset) {
     size_t tz = chunk ? (size_t)tzcnt(chunk) : bits_per_chunk;
 
     if (tz < bits_per_chunk) {
-      return MIN(i * bits_per_chunk + tz, bitset->num_elements);
+      return MIN((i * bits_per_chunk) + tz, bitset->num_elements);
     }
   }
 

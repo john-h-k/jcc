@@ -125,7 +125,7 @@ static int syscmd_open_fd(const char *output) {
   return fd;
 }
 
-static char *syscmd_read_pipe(struct syscmd *cmd, enum syscmd_buf_flags flags,
+static char *syscmd_read_pipe(const struct syscmd *cmd, enum syscmd_buf_flags flags,
                               int pipe[static 2]) {
   close(pipe[1]);
 
@@ -161,8 +161,8 @@ static char *syscmd_read_pipe(struct syscmd *cmd, enum syscmd_buf_flags flags,
 
 extern char **environ;
 
-int syscmd_exec(struct syscmd **syscmd) {
-  struct syscmd *s = *syscmd;
+int syscmd_exec(const struct syscmd **syscmd) {
+  const struct syscmd *s = *syscmd;
 
   vector_push_back(s->args, &(char *){NULL});
   char **args = vector_head(s->args);

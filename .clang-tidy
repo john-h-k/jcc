@@ -1,4 +1,9 @@
 ---
+
+# after newline is ones i wish to enable eventually
+# (can't put comment in yaml string!)
+# -clang-analyzer-optin.core.EnumCastOutOfRange does not understand FLAG_ENUM
+
 Checks: >
   -*,
   bugprone-*,
@@ -18,14 +23,20 @@ Checks: >
   -readability-function-cognitive-complexity,
   -readability-magic-numbers,
   -readability-uppercase-literal-suffix,
+  -readability-suspicious-call-argument,
   -misc-no-recursion,
   -bugprone-multi-level-implicit-pointer-conversion,
-  -bugprone-assigment-in-if-condition,
+  -bugprone-assignment-in-if-condition,
   -clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferHandling,
   -clang-analyzer-security.insecureAPI.strcpy,
 
-  # TEMP: want to enable
-  -clang-analyzer-optin.core.EnumCastOutOfRange, # doesn't understand flags
+
+  -performance-no-int-to-ptr,
+  -clang-analyzer-optin.performance.Padding,
+  -misc-unused-parameters,
+  -cppcoreguidelines-interfaces-global-init,
+  -clang-analyzer-optin.core.EnumCastOutOfRange,
+  -clang-analyzer-deadcode.DeadStores,
   -bugprone-branch-clone,
   -bugprone-narrowing-conversions,
   -cppcoreguidelines-narrowing-conversions,

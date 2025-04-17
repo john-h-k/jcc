@@ -6,10 +6,10 @@
 #include "fcache.h"
 #include "hashtbl.h"
 #include "io.h"
-#include "thrd.h"
 #include "log.h"
 #include "profile.h"
 #include "program.h"
+#include "thrd.h"
 #include "util.h"
 #include "vector.h"
 
@@ -948,6 +948,8 @@ void preproc_next_raw_token(struct preproc *preproc,
 
     preproc_text->pos = end;
     return;
+  default:
+    break;
   }
 
   // we need to check for preproccessing number first as they can begin with `.`
@@ -1206,6 +1208,8 @@ not_punctuator: {
     case (size_t)-2:
       // invalid in some manner
       goto other;
+    default:
+      break;
     }
 
     for (size_t i = 0; i < read; i++) {
@@ -1234,6 +1238,8 @@ not_punctuator: {
         case (size_t)-2:
           // invalid in some manner
           goto other;
+        default:
+          break;
         }
 
         if (read == 1 && !is_identifier_char((char)wch)) {

@@ -1773,6 +1773,8 @@ static void codegen_fprintf(const struct codegen_debug_state *state,
       BUG("unrecognised format starting '%%%s'", format);
     }
   }
+
+  va_end(list);
 #endif
 }
 

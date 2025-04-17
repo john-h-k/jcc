@@ -1291,9 +1291,9 @@ enum x64_reg_attr_flags reg_attr_flags(struct x64_reg reg) {
     case REG_IDX_SP:
     case REG_IDX_BP:
       return X64_REG_ATTR_FLAG_RESERVED;
+    default:
+      return X64_REG_ATTR_FLAG_NONE;
     }
-
-    return X64_REG_ATTR_FLAG_NONE;
   case X64_REG_TY_XMM:
     if (!reg.idx) {
       return X64_REG_ATTR_FLAG_VOLATILE | X64_REG_ATTR_FLAG_ARG_REG |
@@ -1793,6 +1793,7 @@ static void codegen_fprintf(FILE *file, const char *format, ...) {
     }
   }
 
+  va_end(list);
 #endif
 }
 

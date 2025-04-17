@@ -307,7 +307,7 @@ static void lsp_write_diagnostics(struct lsp_ctx *ctx, struct lsp_doc *doc_ctx,
           struct text_span span = diagnostic.span;
 
           if (span.start.file && span.end.file &&
-              strcmp(span.start.file, span.end.file)) {
+              strcmp(span.start.file, span.end.file) != 0) {
             // diff files, LSP does not support
             continue;
           }
