@@ -25,6 +25,12 @@ static unsigned long long get_time(void) {
 static unsigned long long get_time(void) {
 #ifdef TIME_UTC
   struct timespec ts;
+
+#ifdef MSAN
+  // msan does not properly recognise this function as initing it
+  __msan_unpoison(&ts, sizeof(ts));
+#endif
+
   invariant_assert(TIME_UTC == timespec_get(&ts, TIME_UTC),
                    "timespec_get failed");
 

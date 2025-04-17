@@ -86,18 +86,20 @@
 #if HAS_FEATURE(memory_sanitizer) || defined(MEMORY_SANITIZER) ||              \
     defined(__SANITIZE_MEMORY__)
 #define MSAN 1
+#include <sanitizer/msan_interface.h>
 #endif
 
 #if HAS_FEATURE(address_sanitizer) || defined(ADDRESS_SANITIZER) ||            \
     defined(__SANITIZE_ADDRESS__)
 #define ASAN 1
+#include <sanitizer/asan_interface.h>
 #endif
 
 #if HAS_FEATURE(leak_sanitizer) || defined(LEAK_SANITIZER) ||            \
     defined(__SANITIZE_LEAK__)
 #define LSAN 1
+#include <sanitizer/lsan_interface.h>
 
-void __lsan_ignore_object(const void* p);
 #define LSAN_IGNORE(p) __lsan_ignore_object(p)
 #else
 #define LSAN_IGNORE(p) ((void)(p))
@@ -106,11 +108,13 @@ void __lsan_ignore_object(const void* p);
 #if HAS_FEATURE(hwaddress_sanitizer) || defined(HWADDRESS_SANITIZER) ||        \
     defined(__SANITIZE_HWADDRESS__)
 #define HWASAN 1
+#include <sanitizer/hwasan_interface.h>
 #endif
 
 #if HAS_FEATURE(thread_sanitizer) || defined(THREAD_SANITIZER) ||              \
     defined(__SANITIZE_THREAD__)
 #define TSAN 1
+#include <sanitizer/tsan_interface.h>
 #endif
 
 // NOTE: for reasons, there is no __SANITIZE_UNDEFINED__, and so we cannot
@@ -122,7 +126,7 @@ void __lsan_ignore_object(const void* p);
 #define UBSAN 0
 #endif
 
-#if MSAN || ASAN || LSAN || HWASAN || TSAN
+#if MSAN || ASAN || LSAN || HWASAN || TSAN || UBSAN
 #define SAN 1
 #endif
 

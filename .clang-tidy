@@ -1,0 +1,23 @@
+---
+Checks: >
+  -*,
+  bugprone-*,
+  clang-analyzer-*,
+  cppcoreguidelines-*,
+  misc-*,
+  performance-*,
+  portability-*,
+  readability-*,
+  -bugprone-implicit-widening-of-multiplication-result,
+  -bugprone-easily-swappable-parameters,
+  -cppcoreguidelines-avoid-non-const-global-variables,
+  -cppcoreguidelines-macro-to-enum,
+  -misc-include-cleaner,
+  -clang-diagnostic-unsafe-buffer-usage,
+  -cppcoreguidelines-init-variables,
+  -cppcoreguidelines-avoid-magic-numbers,
+  -readability-else-after-return,
+  -readability-identifier-length,
+  -readability-function-cognitive-complexity,
+  -bugprone-multi-level-implicit-pointer-conversion,
+  -clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferHandling

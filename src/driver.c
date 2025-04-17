@@ -186,6 +186,76 @@ static const char *get_default_isysroot(struct fcache *fcache,
   }
 }
 
+static void print_ver(FILE *file, const char *location) {
+  fprintf(file,
+          "jcc version %s\n"
+          "John Kelly <johnharrykelly@gmail.com>\n"
+          "location:  %s\n"
+          "OS_NAME:   %s\n"
+          "ARCH_NAME: %s\n",
+          JCC_VERSION, location, OS_NAME, ARCH_NAME);
+
+#ifndef NDEBUG
+  fprintf(file, "SANITIZERS: ");
+  bool any = false;
+#if MSAN
+  if (any) {
+    fprintf(file, "|");
+  }
+  fprintf(file, "memory");
+  any = true;
+#endif
+#if ASAN
+  if (any) {
+    fprintf(file, "|");
+  }
+  fprintf(file, "address");
+  any = true;
+#endif
+#if LSAN
+  if (any) {
+    fprintf(file, "|");
+  }
+  fprintf(file, "leak");
+  any = true;
+#endif
+#if HWASAN
+  if (any) {
+    fprintf(file, "|");
+  }
+  fprintf(file, "hwaddress");
+  any = true;
+#endif
+#if TSAN
+  if (any) {
+    fprintf(file, "|");
+  }
+  fprintf(file, "thread");
+  any = true;
+#endif
+#if UBSAN
+  if (any) {
+    fprintf(file, "|");
+  }
+  fprintf(file, "undefined");
+  any = true;
+#endif
+
+  if (!any) {
+    fprintf(file, "none");
+  }
+
+  fprintf(file, "\n");
+
+#endif
+
+#ifdef JCC_DEFAULT_TARGET
+#define MKSTR_INNER(x) #x
+#define MKSTR(x) MKSTR_INNER(x)
+  fprintf(file, "JCC_DEFAULT_TARGET: %s\n", MKSTR(JCC_DEFAULT_TARGET));
+#endif
+}
+
 static enum parse_args_result
 try_get_compile_args(int argc, char **argv, struct parsed_args *args,
                      struct arena_allocator *arena, struct fcache **fcache,
@@ -201,19 +271,7 @@ try_get_compile_args(int argc, char **argv, struct parsed_args *args,
   }
 
   if (args->version || args->verbose) {
-    fprintf(args->version ? stdout : stderr,
-            "jcc version %s\n"
-            "John Kelly <johnharrykelly@gmail.com>\n"
-            "location:  %s\n"
-            "OS_NAME:   %s\n"
-            "ARCH_NAME: %s\n",
-            JCC_VERSION, argv[0], OS_NAME, ARCH_NAME);
-
-#ifdef JCC_DEFAULT_TARGET
-#define MKSTR_INNER(x) #x
-#define MKSTR(x) MKSTR_INNER(x)
-    printf("JCC_DEFAULT_TARGET: %s\n", MKSTR(JCC_DEFAULT_TARGET));
-#endif
+    print_ver(args->version ? stdout : stderr, argv[0]);
 
     if (args->version) {
       return PARSE_ARGS_RESULT_HELP;
@@ -337,7 +395,8 @@ try_get_compile_args(int argc, char **argv, struct parsed_args *args,
 
     const char *val_str = strchr(def_macro, '=');
 
-    ustr_t name, value;
+    ustr_t name;
+    ustr_t value;
     if (val_str) {
       name = (ustr_t){.str = def_macro, .len = (size_t)(val_str - def_macro)};
       value = MK_USTR(val_str + 1);
@@ -398,13 +457,12 @@ void jcc_init(void) {
   // inability to reserve vm space.' messages unless `MallocNanoZone=0` can be
   // resolved by https://github.com/google/sanitizers/issues/1666
   const char *val = getenv("MallocNanoZone");
-  if (!val || strcmp(val, "0")) {
+  if (!val || strcmp(val, "0") != 0) {
     warn("With sanitisers enabled on macOS, buggy warning messages can appear. "
          "Set `MallocNanoZone=0` to fix (or run via `jcc.sh` which does this "
          "automatically)");
   }
 #endif
- 
 }
 
 // FIXME: in clang you can do `-x c foo.c -x object foo`
@@ -483,7 +541,7 @@ int jcc_main(int argc, char **argv) {
   switch (args.driver) {
   case JCC_DRIVER_COMPILER:
     exc = jcc_driver_compiler(arena, fcache, args, compile_args, target,
-                               num_sources, sources);
+                              num_sources, sources);
     break;
   case JCC_DRIVER_LSP:
     exc = jcc_driver_lsp(arena, fcache, args, compile_args, target);
@@ -606,9 +664,7 @@ static int jcc_driver_compiler(struct arena_allocator *arena,
       FILE *f = fdopen(fd, "r");
       fclose(f);
 
-      file = (struct compile_file){
-          .ty = COMPILE_FILE_TY_PATH,
-          .path = name};
+      file = (struct compile_file){.ty = COMPILE_FILE_TY_PATH, .path = name};
       info("compiling source file '%s' into object file '%s'", source_path,
            file.path);
     } else {
@@ -735,4 +791,3 @@ exit:
 
   return exc;
 }
-

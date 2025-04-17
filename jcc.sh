@@ -505,6 +505,10 @@ format() {
     fd -e c -e h -x sed -i '' -E 's/[[:space:]]+$//' {}
 }
 
+check() {
+    clang-tidy src/*.c -p build  
+}
+
 view-trace() {
     jq '
 def format_time:
@@ -530,6 +534,18 @@ sub_fns=()
 
 _register_sub_fn() {
     sub_fns+=("$1")
+}
+
+b() {
+    build "$@"
+}
+
+r() {
+    run "$@"
+}
+
+d() {
+    debug "$@"
 }
 
 _invoke-subcommand() {
@@ -589,6 +605,7 @@ _invoke-subcommand() {
 
         if [ "${#matches[@]}" -eq "1" ]; then
             "${matches[0]}" "${@}"
+            return $?
         elif [ "${#matches[@]}" -gt "1" ]; then
             echo "'${name}' is ambiguous; did you mean one of the following?" >&2
             for match in "${matches[@]}"; do

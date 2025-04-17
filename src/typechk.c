@@ -274,7 +274,6 @@ static bool td_var_ty_compatible(struct typechk *tchk,
 
   switch (l.ty) {
   case TD_VAR_TY_TY_UNKNOWN:
-    return true;
   case TD_VAR_TY_TY_VOID:
     return true;
   case TD_VAR_TY_TY_VARIADIC:
@@ -928,6 +927,7 @@ static struct td_var_ty resolve_usual_arithmetic_conversions(
       //     pointer_type_mismatch,
       //                            context, MK_INVALID_TEXT_POS(0),
       //                            "pointer type mismatch"));
+      return *lhs_ty;
     }
   }
 
@@ -941,8 +941,9 @@ static struct td_var_ty resolve_usual_arithmetic_conversions(
                    rhs_ty->well_known >= WELL_KNOWN_TY_SIGNED_INT,
                "integer promotion should have occurred");
 
-  struct td_var_ty result_ty;
-  result_ty.ty = TD_VAR_TY_TY_WELL_KNOWN;
+  struct td_var_ty result_ty = {
+    .ty = TD_VAR_TY_TY_WELL_KNOWN
+  };
 
   if (lhs_ty->well_known == rhs_ty->well_known) {
     // they are the same type
@@ -1030,7 +1031,9 @@ resolve_binary_op_types(struct typechk *tchk, const struct td_expr *lhs_expr,
     }
   }
 
-  struct td_var_ty lhs_op_ty, rhs_op_ty, result_ty;
+  struct td_var_ty lhs_op_ty;
+  struct td_var_ty rhs_op_ty;
+  struct td_var_ty result_ty;
 
   if (ty == TD_BINARY_OP_TY_LOGICAL_OR || ty == TD_BINARY_OP_TY_LOGICAL_AND) {
     lhs_op_ty = *lhs;
@@ -6111,6 +6114,7 @@ static struct td_init_list type_init_list_for_aggregate_or_array(
       struct td_expr typed =
           type_expr(tchk, TYPE_EXPR_FLAGS_NONE, &init->init->expr);
 
+        (void)typed.ty;
       if (td_var_ty_compatible(tchk, &member_var_ty, &typed.var_ty,
                                TD_VAR_TY_COMPATIBLE_FLAG_NONE)) {
         td_init_list_init =

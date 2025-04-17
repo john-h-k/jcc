@@ -6,10 +6,6 @@
 
 #include <stdlib.h>
 
-#ifdef ASAN
-#include <sanitizer/asan_interface.h>
-#endif
-
 #ifdef ALWAYS_MALLOC
 #define BLOCK_SIZE (0)
 #else
@@ -219,7 +215,8 @@ char *arena_alloc_snprintf(struct arena_allocator *allocator,
     return arena_alloc_strdup(allocator, "");
   }
 
-  va_list args, args_copy;
+  va_list args;
+  va_list args_copy;
 
   va_start(args, format);
   va_copy(args_copy, args);
@@ -230,7 +227,7 @@ char *arena_alloc_snprintf(struct arena_allocator *allocator,
 
   DEBUG_ASSERT(len >= 0, "vnsprintf call failed");
 
-  char *buf = arena_alloc(allocator, (size_t)(len + 1));
+  char *buf = arena_alloc(allocator, len + 1);
 
   if (!buf) {
     va_end(args);
@@ -289,7 +286,7 @@ COLD static void *arena_alloc_large(struct arena_allocator *allocator,
   metadata->arena = NULL;
   metadata->size = size;
 
-  vector_push_back(allocator->large_allocs, &alloc);
+  vector_push_back(allocator->large_allocs, (const void *)&alloc);
   return metadata + 1;
 }
 

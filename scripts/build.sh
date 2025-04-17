@@ -60,8 +60,8 @@ configure() {
         echo "    --enable-arch "
         echo "        Enable architecture"
         echo ""
-        echo "    --no-san "
-        echo "        Disable sanitisers in debug mode - can speedup build and testing"
+        echo "    --san [none|address|memory|thread]"
+        echo "        Set sanitizer mode - (default: 'address' if debug, else 'none')"
         echo ""
         echo "    --cc "
         echo "        C compiler to use"
@@ -89,7 +89,7 @@ configure() {
 
     generator=""
     archs=""
-    no_san=""
+    san=""
     cc=""
     fresh=""
 
@@ -113,8 +113,9 @@ configure() {
           shift
           fresh="--fresh"
           ;;
-        --no-san)
-          no_san="1"
+        --san)
+          shift
+          san="$1"
           shift
           ;;
         --enable-arch)
@@ -171,6 +172,12 @@ configure() {
       esac
     done
 
+    if [[ "$mode" == "Debug" ]]; then
+        san="${san:-address}"
+    else
+        san="${san:-none}"
+    fi
+
     mkdir -p build
 
     echo -e "${BOLD}Build configuration: ${RESET}"
@@ -182,6 +189,7 @@ configure() {
     fi
     echo -e "${BOLD}    mode=$mode${RESET}"
     echo -e "${BOLD}    generator=$generator${RESET}"
+    echo -e "${BOLD}    san=$san${RESET}"
     if [ -n "$archs" ]; then
         echo -e "${BOLD}    architectures=$archs"
     fi
@@ -202,7 +210,7 @@ configure() {
 
     if [ -z "$cc" ]; then
         # if ASan on try and use clang
-        if [[ "$mode" == "Debug" ]] && [ -z "$no_san" ] && command -v clang &>/dev/null; then
+        if [[ "$mode" == "Debug" ]] && [[ "$san" != "none" ]] && command -v clang &>/dev/null; then
            { cc --version 2>/dev/null | grep clang; } && cc="cc" || cc="clang"
         else
             cc="cc"
@@ -224,8 +232,7 @@ configure() {
 
     cd build
 
-    no_san_flag=$( [ -n "$no_san" ] && echo "-DNO_SAN=1" || echo "" )
-    if ! (cmake $fresh $no_san_flag -DARCHITECTURES="$archs" -DCMAKE_C_COMPILER="$cc" -G "$generator" -DCMAKE_C_FLAGS="$flags" -DCMAKE_BUILD_TYPE=$mode ..); then
+    if ! (cmake $fresh -DSANITIZER_TYPE="$san" -DARCHITECTURES="$archs" -DCMAKE_C_COMPILER="$cc" -G "$generator" -DCMAKE_C_FLAGS="$flags" -DCMAKE_BUILD_TYPE=$mode ..); then
         echo -e "${BOLDRED}Configuring build failed!${RESET}"
         return -1
     fi
