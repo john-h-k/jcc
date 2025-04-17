@@ -2799,7 +2799,7 @@ static struct printf_args parse_printf_format(struct typechk *tchk,
   for (size_t i = 0; i < fmt.len; i++) {
     unsigned char c = fmt.value[i];
 
-    if (c >= 128 || c != '%') {
+    if (c != '%') {
       continue;
     }
 

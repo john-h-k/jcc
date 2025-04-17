@@ -22,7 +22,6 @@
 #if ARCH_AARCH64 && __has_include(<arm_neon.h>)
 #define USE_NEON 1
 #include <arm_neon.h>
-#include <stddef.h>
 #include <stdint.h>
 #endif
 
@@ -1920,23 +1919,19 @@ static bool try_expand_token(struct preproc *preproc,
       break;
     }
     case PREPROC_SPECIAL_MACRO_TIME: {
-      const char *asc;
+      size_t len = 8 + 2;
+      char *buf = arena_alloc(preproc->arena, sizeof(*buf) * (len + 1));
       if (preproc->args.fixed_timestamp) {
-        asc = preproc->args.fixed_timestamp;
+        buf[0] = '"';
+        memcpy(buf + 1, preproc->args.fixed_timestamp + 12, 8);
+        buf[9] = '"';
+        buf[10] = '\0';
       } else {
         time_t epoch = time(NULL);
         struct tm *tm = localtime(&epoch);
-        asc = asctime(tm);
-      }
 
-      // i think it is safe to modify the return of `asctime`, but i am
-      // unsure so i will copy to prevent weird bugs
-      size_t len = 8 + 2;
-      char *buf = arena_alloc(preproc->arena, sizeof(*buf) * (len + 1));
-      buf[0] = '\"';
-      memcpy(&buf[1], &asc[11], sizeof(*buf) * len);
-      buf[len - 1] = '\"';
-      buf[len] = '\0';
+        strftime(buf, len + 1, "\"%H:%M:%S\"", tm);
+      }
 
       struct preproc_token special_tok = {
           .ty = PREPROC_TOKEN_TY_STRING_LITERAL,
@@ -1947,21 +1942,19 @@ static bool try_expand_token(struct preproc *preproc,
       break;
     }
     case PREPROC_SPECIAL_MACRO_DATE: {
-      const char *asc;
+      size_t len = 11 + 2;
+      char *buf = arena_alloc(preproc->arena, sizeof(*buf) * (len + 1));
       if (preproc->args.fixed_timestamp) {
-        asc = preproc->args.fixed_timestamp;
+        buf[0] = '"';
+        memcpy(buf + 1, preproc->args.fixed_timestamp, 11);
+        buf[12] = '"';
+        buf[13] = '\0';
       } else {
         time_t epoch = time(NULL);
         struct tm *tm = localtime(&epoch);
-        asc = asctime(tm);
-      }
 
-      size_t len = 10 + 2;
-      char *buf = arena_alloc(preproc->arena, sizeof(*buf) * (len + 1));
-      buf[0] = '\"';
-      memcpy(&buf[1], asc, sizeof(*buf) * len);
-      buf[len - 1] = '\"';
-      buf[len] = '\0';
+        strftime(buf, len + 1, "\"%b %e %Y\"", tm);
+      }
 
       struct preproc_token special_tok = {
           .ty = PREPROC_TOKEN_TY_STRING_LITERAL,

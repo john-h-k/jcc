@@ -1,4 +1,4 @@
-#if 0
+#if 0 // NOLINT(readability-avoid-unconditional-preprocessor-if)
 
 #include "object.h"
 

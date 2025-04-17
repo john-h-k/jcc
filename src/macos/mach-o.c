@@ -64,8 +64,6 @@ static struct reloc_info build_reloc_info(const struct build_object_args *args,
 
   for (size_t i = 0; i < args->num_entries; i++) {
     const struct object_entry *entry = &args->entries[i];
-    size_t entry_offset = entry_offsets[i];
-
     if (!entry->num_relocations) {
       continue;
     }
@@ -90,6 +88,8 @@ static struct reloc_info build_reloc_info(const struct build_object_args *args,
     case OBJECT_ENTRY_TY_DECL:
       BUG("reloc for cstring/decl makes no sense");
     }
+
+    size_t entry_offset = entry_offsets[i];
 
     for (size_t j = 0; j < entry->num_relocations; j++) {
       struct relocation reloc = entry->relocations[j];

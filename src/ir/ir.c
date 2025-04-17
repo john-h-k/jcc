@@ -2759,7 +2759,7 @@ struct ir_var_ty_info ir_var_ty_info(struct ir_unit *iru,
                                    .alignment = element_info.alignment};
   }
   case IR_VAR_TY_TY_STRUCT: {
-    size_t max_alignment = 0;
+    size_t max_alignment = 1;
     size_t size = 0;
     size_t num_fields = ty->aggregate.num_fields;
     size_t *offsets = arena_alloc(iru->arena, sizeof(*offsets) * num_fields);
@@ -2784,7 +2784,7 @@ struct ir_var_ty_info ir_var_ty_info(struct ir_unit *iru,
                                    .offsets = offsets};
   }
   case IR_VAR_TY_TY_UNION: {
-    size_t max_alignment = 0;
+    size_t max_alignment = 1;
     size_t size = 0;
     size_t num_fields = ty->aggregate.num_fields;
 

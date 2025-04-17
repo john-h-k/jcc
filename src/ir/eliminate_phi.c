@@ -144,6 +144,7 @@ static void gen_moves(struct ir_func *irb, struct ir_basicblock *basicblock,
         addr->reg = (struct ir_reg){.ty = IR_REG_TY_INTEGRAL,
                                     .idx = irb->unit->target->reg_info.ssp};
 
+        store_var_ty = value->var_ty;
         struct ir_op *load =
             ir_append_op(irb, stmt, IR_OP_TY_LOAD, store_var_ty);
         load->reg = to;

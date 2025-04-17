@@ -273,6 +273,8 @@ enum parse_args_result parse_args(int argc, char **argv,
     case ARG_TY_STRING_LIST:                                                   \
       arg.arg_string_list = (struct arg_string_list *)&parsed->arg_name;       \
       break;                                                                   \
+    default:                                                                   \
+      BUG("invalid arg ty");                                                   \
     }                                                                          \
     if (sh[0]) {                                                               \
       ustr_t full_sh = {.str = sh, .len = strlen(sh)};                         \

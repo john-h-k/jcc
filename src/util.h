@@ -229,7 +229,7 @@ static inline size_t num_digits(size_t num) {
 
 #ifdef SANITIZER_PRINT_STACK_TRACE
 static inline void debug_print_stack_trace(void) {
-  __sanitizer_print_stack_trace();
+  __sanitizer_print_stack_trace(); // NOLINT(bugprone-signal-handler)
 }
 #elif !defined(NDEBUG) &&                                                      \
     __has_include(                                                             \
