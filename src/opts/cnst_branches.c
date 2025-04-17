@@ -95,9 +95,7 @@ static void remove_dead_phi_entries(struct ir_basicblock *basicblock,
       struct ir_phi_entry *entry = &op->phi.values[j];
 
       bool remove = false;
-      if (entry->basicblock->id == DETACHED_BASICBLOCK) {
-        remove = true;
-      } else if (!ir_basicblock_is_pred(op->stmt->basicblock,
+      if (entry->basicblock->id == DETACHED_BASICBLOCK || !ir_basicblock_is_pred(op->stmt->basicblock,
                                         entry->basicblock)) {
         // must be dominated by another, so removing it is fine?
         remove = true;

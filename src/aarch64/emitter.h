@@ -22,9 +22,9 @@ void aarch64_emit_nop(struct aarch64_emitter *emitter);
 /* Single reg FP data processing */
 
 void aarch64_emit_scvtf(struct aarch64_emitter *emitter,
-                        const struct aarch64_reg_1_source ucvtf);
-void aarch64_emit_ucvtf(struct aarch64_emitter *emitter,
                         const struct aarch64_reg_1_source scvtf);
+void aarch64_emit_ucvtf(struct aarch64_emitter *emitter,
+                        const struct aarch64_reg_1_source ucvtf);
 void aarch64_emit_fcvt(struct aarch64_emitter *emitter,
                        const struct aarch64_reg_1_source fcvt);
 void aarch64_emit_fmov(struct aarch64_emitter *emitter,

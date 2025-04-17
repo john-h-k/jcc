@@ -318,7 +318,7 @@ void hashtbl_insert_with_hash(struct hashtbl *hashtbl, const void *key,
   // this prevents false rebuild when `hashtbl_insert` overwrites
   size_t num_buckets = vector_length(hashtbl->buckets);
 
-  if (hashtbl->len + 1 > num_buckets * MAX_FILL) {
+  if ((float)(hashtbl->len + 1) > (float)num_buckets * MAX_FILL) {
     hashtbl_rebuild(hashtbl);
   }
 }

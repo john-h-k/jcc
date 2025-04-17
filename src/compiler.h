@@ -11,7 +11,7 @@ struct compiler;
 
 enum jcc_driver { JCC_DRIVER_COMPILER, JCC_DRIVER_LSP };
 
-enum codegen_flags {
+enum FLAG_ENUM codegen_flags {
   CODEGEN_FLAG_NONE = 0,
 
   // use mnemonics in assembly output
@@ -69,7 +69,7 @@ static inline void compile_target_decomp(enum compile_target target,
   }
 }
 
-enum compile_log_flags {
+enum FLAG_ENUM compile_log_flags {
   COMPILE_LOG_FLAGS_NONE = 0,
   COMPILE_LOG_FLAGS_ARGS = 1 << 0,
   COMPILE_LOG_FLAGS_PREPROC = 1 << 1,

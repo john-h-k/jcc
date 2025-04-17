@@ -5,7 +5,7 @@
 #include "../typechk.h"
 #include "ir.h"
 
-enum ir_build_flags {
+enum FLAG_ENUM ir_build_flags {
   IR_BUILD_FLAG_NONE = 0,
 
   // for debugging. does not generate phis

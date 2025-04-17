@@ -164,7 +164,7 @@ enum rv32i_reg_class {
   RV32I_REG_CLASS_FP,
 };
 
-enum rv32i_reg_attr_flags {
+enum FLAG_ENUM rv32i_reg_attr_flags {
   RV32I_REG_ATTR_FLAG_NONE = 0,
   RV32I_REG_ATTR_FLAG_VOLATILE =
       1, // v8-15 are upper half only volatile, we don't support this yet

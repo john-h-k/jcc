@@ -7,7 +7,7 @@
 // of the compiler
 struct fcache;
 
-enum fcache_flags {
+enum FLAG_ENUM fcache_flags {
   FCACHE_FLAG_NONE = 0,
 
   // assume files on-disk don't change

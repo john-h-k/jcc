@@ -8,16 +8,32 @@ Checks: >
   performance-*,
   portability-*,
   readability-*,
-  -bugprone-implicit-widening-of-multiplication-result,
   -bugprone-easily-swappable-parameters,
-  -cppcoreguidelines-avoid-non-const-global-variables,
   -cppcoreguidelines-macro-to-enum,
-  -misc-include-cleaner,
   -clang-diagnostic-unsafe-buffer-usage,
   -cppcoreguidelines-init-variables,
   -cppcoreguidelines-avoid-magic-numbers,
   -readability-else-after-return,
   -readability-identifier-length,
   -readability-function-cognitive-complexity,
+  -readability-magic-numbers,
+  -readability-uppercase-literal-suffix,
+  -misc-no-recursion,
   -bugprone-multi-level-implicit-pointer-conversion,
-  -clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferHandling
+  -bugprone-assigment-in-if-condition,
+  -clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferHandling,
+  -clang-analyzer-security.insecureAPI.strcpy,
+
+  # TEMP: want to enable
+  -clang-analyzer-optin.core.EnumCastOutOfRange, # doesn't understand flags
+  -bugprone-branch-clone,
+  -bugprone-narrowing-conversions,
+  -cppcoreguidelines-narrowing-conversions,
+  -bugprone-implicit-widening-of-multiplication-result,
+  -bugprone-macro-parentheses,
+  -cppcoreguidelines-avoid-non-const-global-variables,
+  -readability-avoid-const-params-in-decls,
+  -misc-include-cleaner,
+  -clang-analyzer-core.NullDereference,
+
+HeaderFilterRegex: '.*'

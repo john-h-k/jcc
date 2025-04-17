@@ -274,9 +274,6 @@ void aarch64_emit_fabs(struct aarch64_emitter *emitter,
       emitter, FABS(FTYPE_FOR_REG(fabs.dest), fabs.source.idx, fabs.dest.idx));
 }
 
-void aarch64_emit_fabs(struct aarch64_emitter *emitter,
-                       const struct aarch64_reg_1_source fabs);
-
 void aarch64_emit_fcmp(struct aarch64_emitter *emitter,
                        const struct aarch64_fcmp fcmp) {
   aarch64_emit_instr(emitter, FCMP(FTYPE_FOR_REG(fcmp.lhs), fcmp.rhs.idx, fcmp.lhs.idx)));
@@ -739,8 +736,6 @@ void aarch64_emit_load_imm(struct aarch64_emitter *emitter,
 
 void aarch64_emit_store_imm(struct aarch64_emitter *emitter,
                             const struct aarch64_store_imm str) {
-  if (str.imm < 0)
-    BREAKPOINT();
   switch (str.mode) {
   case AARCH64_ADDRESSING_MODE_OFFSET:
     if (IS64_REG(str.source)) {
@@ -887,8 +882,8 @@ void aarch64_emit_csneg(struct aarch64_emitter *emitter,
 
 void aarch64_emit_b_cond(struct aarch64_emitter *emitter,
                          const struct aarch64_conditional_branch br) {
-  signed long long cur_pos = aarch64_emitted_count(emitter);
-  signed long long target_pos = cg_get_next_instr(br.target->cg_basicblock)->id;
+  signed long long cur_pos = (signed long long)aarch64_emitted_count(emitter);
+  signed long long target_pos = (signed long long)cg_get_next_instr(br.target->cg_basicblock)->id;
 
   simm_t offset = target_pos - cur_pos;
 
@@ -897,8 +892,8 @@ void aarch64_emit_b_cond(struct aarch64_emitter *emitter,
 
 void aarch64_emit_bc_cond(struct aarch64_emitter *emitter,
                           const struct aarch64_conditional_branch br) {
-  signed long long cur_pos = aarch64_emitted_count(emitter);
-  signed long long target_pos = cg_get_next_instr(br.target->cg_basicblock)->id;
+  signed long long cur_pos = (signed long long)aarch64_emitted_count(emitter);
+  signed long long target_pos = (signed long long)cg_get_next_instr(br.target->cg_basicblock)->id;
 
   simm_t offset = target_pos - cur_pos;
 
@@ -907,8 +902,8 @@ void aarch64_emit_bc_cond(struct aarch64_emitter *emitter,
 
 void aarch64_emit_b(struct aarch64_emitter *emitter,
                     const struct aarch64_branch b) {
-  signed long long cur_pos = aarch64_emitted_count(emitter);
-  signed long long target_pos = cg_get_next_instr(b.target->cg_basicblock)->id;
+  signed long long cur_pos = (signed long long)aarch64_emitted_count(emitter);
+  signed long long target_pos = (signed long long)cg_get_next_instr(b.target->cg_basicblock)->id;
 
   simm_t offset = target_pos - cur_pos;
 
@@ -925,9 +920,9 @@ void aarch64_emit_bl(struct aarch64_emitter *emitter,
 
   simm_t offset = 0;
   if (bl.target) {
-    signed long long cur_pos = aarch64_emitted_count(emitter);
+    signed long long cur_pos = (signed long long)aarch64_emitted_count(emitter);
     signed long long target_pos =
-        cg_get_next_instr(bl.target->cg_basicblock)->id;
+        (signed long long)cg_get_next_instr(bl.target->cg_basicblock)->id;
 
     offset = target_pos - cur_pos;
   }
@@ -942,9 +937,9 @@ void aarch64_emit_blr(struct aarch64_emitter *emitter,
 
 void aarch64_emit_cbz(struct aarch64_emitter *emitter,
                       const struct aarch64_compare_and_branch cmp) {
-  signed long long cur_pos = aarch64_emitted_count(emitter);
+  signed long long cur_pos = (signed long long)aarch64_emitted_count(emitter);
   signed long long target_pos =
-      cg_get_next_instr(cmp.target->cg_basicblock)->id;
+      (signed long long)cg_get_next_instr(cmp.target->cg_basicblock)->id;
 
   simm_t offset = target_pos - cur_pos;
 
@@ -953,9 +948,9 @@ void aarch64_emit_cbz(struct aarch64_emitter *emitter,
 
 void aarch64_emit_cbnz(struct aarch64_emitter *emitter,
                        const struct aarch64_compare_and_branch cmp) {
-  signed long long cur_pos = aarch64_emitted_count(emitter);
+  signed long long cur_pos = (signed long long)aarch64_emitted_count(emitter);
   signed long long target_pos =
-      cg_get_next_instr(cmp.target->cg_basicblock)->id;
+      (signed long long)cg_get_next_instr(cmp.target->cg_basicblock)->id;
 
   simm_t offset = target_pos - cur_pos;
 

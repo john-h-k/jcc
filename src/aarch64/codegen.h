@@ -173,7 +173,7 @@ enum aarch64_reg_class {
   AARCH64_REG_CLASS_FP,
 };
 
-enum aarch64_reg_attr_flags {
+enum FLAG_ENUM aarch64_reg_attr_flags {
   AARCH64_REG_ATTR_FLAG_NONE = 0,
   AARCH64_REG_ATTR_FLAG_VOLATILE =
       1, // v8-15 are upper half only volatile, we don't support this yet

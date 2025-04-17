@@ -23,13 +23,13 @@ enum td_storage_class_specifier {
   TD_STORAGE_CLASS_SPECIFIER_REGISTER,
 };
 
-enum td_function_specifier_flags {
+enum FLAG_ENUM td_function_specifier_flags {
   TD_FUNCTION_SPECIFIER_FLAG_NONE = 0,
   TD_FUNCTION_SPECIFIER_FLAG_INLINE = 1 << 0,
   TD_FUNCTION_SPECIFIER_FLAG_NORETURN = 1 << 1,
 };
 
-enum td_type_qualifier_flags {
+enum FLAG_ENUM td_type_qualifier_flags {
   TD_TYPE_QUALIFIER_FLAG_NONE = 0,
   TD_TYPE_QUALIFIER_FLAG_CONST = 1 << 0,
   TD_TYPE_QUALIFIER_FLAG_VOLATILE = 1 << 1,
@@ -189,7 +189,7 @@ struct td_var_ty {
   };
 };
 
-enum td_struct_field_flags {
+enum FLAG_ENUM td_struct_field_flags {
   TD_STRUCT_FIELD_FLAG_NONE = 0,
   TD_STRUCT_FIELD_FLAG_BITFIELD = 1,
 };

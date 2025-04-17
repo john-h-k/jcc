@@ -76,7 +76,8 @@ static bool opts_cnst_fold_binary_op(struct ir_func *func, struct ir_op *op) {
   struct ir_op *lhs = opts_follow_movs(op->binary_op.lhs);
   struct ir_op *rhs = opts_follow_movs(op->binary_op.rhs);
 
-  unsigned long long lhs_cnst, rhs_cnst;
+  unsigned long long lhs_cnst;
+  unsigned long long rhs_cnst;
 
   if (!lhs || lhs->ty != IR_OP_TY_CNST ||
       !ir_var_ty_is_integral(&lhs->var_ty) || !rhs ||
