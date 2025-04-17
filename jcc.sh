@@ -483,7 +483,7 @@ ci-test() {
     # opts disabled for now
     JCC_BUILD_FLAGS="--san address" _test --quiet "$@"
 
-    if [[ "$(uname)" != "darwin" ]]; then
+    if [[ "$(uname)" != "Darwin" ]]; then
         JCC_BUILD_FLAGS="--san memory" _test --quiet "$@"
         JCC_BUILD_FLAGS="--san thread" _test --quiet "$@"
     fi
