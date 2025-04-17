@@ -22,7 +22,7 @@
 
 #define DEFAULT_JCC "../build/jcc"
 #define DEFAULT_TEST_DIR "../tests"
-#define TM_STR "Tue Dec 10 10:04:33 2024"
+#define TM_STR "Dec 10 2025 10:04:33 2024"
 
 struct jobq;
 
@@ -291,6 +291,8 @@ static struct jcc_comp_info run_compilation(const struct jcc_worker_args *args,
     size_t n = 0;
 
     FILE *file = fopen(sink, "r");
+    invariant_assert(file, "open file failed");
+
     char buf[1024];
     while (fgets(buf, sizeof(buf), file)) {
       size_t len = strlen(buf);

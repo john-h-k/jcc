@@ -440,7 +440,9 @@ try_get_compile_args(int argc, char **argv, struct parsed_args *args,
   return PARSE_ARGS_RESULT_SUCCESS;
 }
 
-static void signal_handle(UNUSED int signal) { debug_print_stack_trace(); }
+static void signal_handle(UNUSED int signal) {
+  debug_print_stack_trace(); // NOLINT(bugprone-signal-handler)
+}
 
 void jcc_init(void) {
   signal(SIGABRT, signal_handle);
@@ -662,7 +664,9 @@ static int jcc_driver_compiler(struct arena_allocator *arena,
       vector_push_back(tmps, &name);
       int fd = mkstemp(name);
       invariant_assert(fd >= 0, "mkstemp failed");
+
       FILE *f = fdopen(fd, "r");
+      invariant_assert(f, "fdopen failed");
       fclose(f);
 
       file = (struct compile_file){.ty = COMPILE_FILE_TY_PATH, .path = name};
@@ -778,6 +782,7 @@ exit:
     } else {
       file = fopen(args.profile_json, "w");
     }
+    invariant_assert(file, "open file failed");
     profiler_print_json(file);
     fclose(file);
   }

@@ -274,6 +274,11 @@ static void compiler_print_diagnostics(struct compiler *compiler) {
   if (compiler->args.diagnostics_sink) {
     file = fopen(compiler->args.diagnostics_sink, "w");
     close = true;
+
+    if (!file) {
+      err("opening diagnostic sink '%s' failed!", compiler->args.diagnostics_sink);
+      return;
+    }
   } else {
     file = stderr;
     close = false;

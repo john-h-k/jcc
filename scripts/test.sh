@@ -214,7 +214,7 @@ if [[ "$arch" == "rv32i" && -z "$RUNNER" ]]; then
   RUNNER=riscy
 fi
 
-tm="Tue Dec 10 10:04:33 2024"
+tm="Dec 10 2025 10:04:33 2024"
 
 fifo=$(mktemp -u)
 mkfifo "$fifo"

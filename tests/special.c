@@ -1,5 +1,5 @@
 // expected value: 8
-// stdout: special.c 7 10:04:33 Tue Dec 10
+// stdout: special.c 7 10:04:33 Dec 10 2025
 
 int printf(const char *, ...);
 
