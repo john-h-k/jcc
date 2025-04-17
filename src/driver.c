@@ -661,7 +661,7 @@ static int jcc_driver_compiler(struct arena_allocator *arena,
       char *name = arena_alloc_strdup(arena, "jcc-obj-XXXXXXXX");
       vector_push_back(tmps, &name);
       int fd = mkstemp(name);
-      DEBUG_ASSERT(fd >= 0, "mkstemp failed");
+      invariant_assert(fd >= 0, "mkstemp failed");
       FILE *f = fdopen(fd, "r");
       fclose(f);
 

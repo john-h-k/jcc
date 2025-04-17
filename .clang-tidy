@@ -24,13 +24,15 @@ Checks: >
   -readability-magic-numbers,
   -readability-uppercase-literal-suffix,
   -readability-suspicious-call-argument,
+  -readability-function-size,
+  -readability-avoid-nested-conditional-operator,
   -misc-no-recursion,
   -bugprone-multi-level-implicit-pointer-conversion,
   -bugprone-assignment-in-if-condition,
   -clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferHandling,
   -clang-analyzer-security.insecureAPI.strcpy,
 
-
+  -misc-static-assert,
   -performance-no-int-to-ptr,
   -clang-analyzer-optin.performance.Padding,
   -misc-unused-parameters,

@@ -196,6 +196,9 @@ static size_t json_parse_chunk(struct json_ctx *context, ustr_t str,
         str.str++;
         str.len--;
         rd++;
+        break;
+      default:
+        break;
       }
 
       struct json_result value;
@@ -245,6 +248,9 @@ static size_t json_parse_chunk(struct json_ctx *context, ustr_t str,
         str.str++;
         str.len--;
         rd++;
+        break;
+      default:
+        break;
       }
 
       struct json_result name;

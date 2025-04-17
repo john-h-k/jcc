@@ -126,6 +126,8 @@ void debug_print_parsed_args(FILE *file, const struct parsed_args *args) {
   case ARG_TY_STRING_LIST:                                                     \
     debug_print_arg_string_list(file, (const void *)&args->name, string_fn);   \
     break;                                                                     \
+  default:                                                                     \
+    BUG("invalid arg ty");                                                     \
   }
 
   ARG_OPT_LIST
@@ -208,8 +210,7 @@ static void print_help(void) {
 #undef ARG_OPT
 }
 
-static void bad_value(struct arg *arg, ustr_t lookup_str,
-                      const char *value) {
+static void bad_value(struct arg *arg, ustr_t lookup_str, const char *value) {
   errsl("Invalid value '%s' for option '%.*s'. Valid values: ", value,
         (int)lookup_str.len, lookup_str.str);
 
@@ -274,11 +275,11 @@ enum parse_args_result parse_args(int argc, char **argv,
       break;                                                                   \
     }                                                                          \
     if (sh[0]) {                                                               \
-      ustr_t full_sh = {.str = sh, .len = strlen(sh)};               \
+      ustr_t full_sh = {.str = sh, .len = strlen(sh)};                         \
       hashtbl_insert(opts, &full_sh, &arg);                                    \
     }                                                                          \
     if (lo[0]) {                                                               \
-      ustr_t full_lo = {.str = lo, .len = strlen(lo)};               \
+      ustr_t full_lo = {.str = lo, .len = strlen(lo)};                         \
       hashtbl_insert(opts, &full_lo, &arg);                                    \
     }                                                                          \
     POP_NO_WARN();                                                             \

@@ -333,7 +333,7 @@ enum print_op_ctx {
 };
 
 static void debug_print_op_with_ctx(FILE *file, struct ir_func *irb,
-                                    struct ir_op *ir, enum print_op_ctx ctx);
+                                    struct ir_op *op, enum print_op_ctx ctx);
 
 static void debug_print_op_use(FILE *file, struct ir_func *irb,
                                struct ir_op *ir) {

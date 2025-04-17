@@ -311,7 +311,8 @@ static ustr_t process_raw_string(const struct lexer *lexer,
         unsigned long codepoint = strtoul(u_buff, NULL, 16);
 
         if (is_wide) {
-          PUSH_CHAR(codepoint);
+          uint32_t pc = (uint32_t)(unsigned char)codepoint;
+          vector_push_back(buff, &pc);
         } else if (codepoint <= 0x7F) {
           char c = codepoint & 0x7F;
           PUSH_CHAR(c);
@@ -451,10 +452,15 @@ lex_string_literal(const struct preproc_token *preproc_token) {
       return LEX_TOKEN_TY_ASCII_WIDE_STR_LITERAL;
     case '\'':
       return LEX_TOKEN_TY_ASCII_WIDE_CHAR_LITERAL;
+    default:
+      break;
     }
+    break;
   default:
-    TODO("other string/char literal types");
+    break;
   }
+
+  TODO("other string/char literal types");
 }
 
 static enum lex_token_ty
@@ -507,6 +513,8 @@ lex_number_literal(const struct preproc_token *preproc_token) {
     case 'z':
     case 'Z':
       lit_ty |= LIT_TY_Z;
+      break;
+    default:
       break;
     }
 

@@ -491,12 +491,16 @@ cfg() {
         dot -Tpng "$file" > "$name.png" && open "$name.png"
     done
 }
+ 
+_chk_status() {
+    [ -n "$(git status --porcelain -- '*.c' '*.h')" ] && {
+        echo "$1"
+        exit 1
+    }
+}
 
 format() {
-    [ -n "$(git status --porcelain -- '*.c' '*.h')" ] && {
-        echo "git changes present, not formatting"
-        return 1
-    }
+    _chk_status "git changes present, not formatting"
 
     echo "Formatting..."
     fd '.*\.[hc]' src -x clang-format --style=file -i
@@ -511,6 +515,8 @@ check() {
 }
 
 fix() {
+    _chk_status "git changes present, not fixing"
+
     fd . src -e c -e h -x clang-tidy --use-color --fix --quiet -p build {}
     # clang-tidy src/**/.c -p build  
 }
