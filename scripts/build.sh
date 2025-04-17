@@ -178,6 +178,15 @@ configure() {
         san="${san:-none}"
     fi
 
+    if [ -z "$cc" ]; then
+        # if ASan on try and use clang
+        if [[ "$mode" == "Debug" ]] && [[ "$san" != "address" ]] && command -v clang &>/dev/null; then
+           { cc --version 2>/dev/null | grep clang; } && cc="cc" || cc="clang"
+        else
+            cc="cc"
+        fi
+    fi
+
     mkdir -p build
 
     echo -e "${BOLD}Build configuration: ${RESET}"
@@ -206,15 +215,6 @@ configure() {
     # ninja causes colours to get dropped, so force them
     if ! [[ "$cc" == *"jcc"* ]]; then
         flags="$flags -fdiagnostics-color=always"
-    fi
-
-    if [ -z "$cc" ]; then
-        # if ASan on try and use clang
-        if [[ "$mode" == "Debug" ]] && [[ "$san" != "none" ]] && command -v clang &>/dev/null; then
-           { cc --version 2>/dev/null | grep clang; } && cc="cc" || cc="clang"
-        else
-            cc="cc"
-        fi
     fi
 
     if [ -n "$profile_build" ]; then
