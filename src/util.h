@@ -344,7 +344,7 @@ static inline void debug_print_stack_trace(void) {}
 //   * DEBUG_ASSERT is understood by clang analyzer
 //   * DEBUG_ASSERT does not double evaluate its arguments
 
-#if HAS_FEATURE(attribute_analyzer_noreturn) && 0
+#if HAS_FEATURE(attribute_analyzer_noreturn)
 #define DEBUG_ASSERT(b, ...)                                                   \
   (util_debug_assert((b), #b, __func__, __FILE__, __LINE__, __VA_ARGS__),      \
    assert((b)), 0)
@@ -373,12 +373,17 @@ PRINTF_ARGS(0) NORETURN void unsupported(const char *msg, ...);
 
 // present in all mode, always causes program exit if fails
 // FIXME: clang static analyzer does not recognise this as an assertion function
-PRINTF_ARGS(1)
-static inline void invariant_assert(bool b, const char *msg, ...) {
-  if (!b) {
-    FMTPRINT(stderr, "invariant_assertion failed, program exiting: ", msg);
-    EXIT_FAIL(-1)
-  }
+#define invariant_assert(b, ...)                                               \
+  do {                                                                         \
+    if (!(b)) {                                                                \
+      invariant_assert_fail(__VA_ARGS__);                                      \
+    }                                                                          \
+  } while (0)
+
+PRINTF_ARGS(0)
+NORETURN static inline void invariant_assert_fail(const char *msg, ...) {
+  FMTPRINT(stderr, "invariant_assertion failed, program exiting: ", msg);
+  EXIT_FAIL(-1)
 }
 
 #if HAS_BUILTIN(__builtin_debugtrap)
@@ -579,7 +584,7 @@ static inline bool ustr_split(ustr_t str, char delim, ustr_t *l, ustr_t *r) {
 
   size_t len = (size_t)(pos - str.str);
 
-  *l = (ustr_t){.str = str.str, .len = len };
+  *l = (ustr_t){.str = str.str, .len = len};
   *r = (ustr_t){.str = pos + 1, .len = str.len - len - 1};
   return true;
 }

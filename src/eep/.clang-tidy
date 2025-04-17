@@ -1,0 +1,4 @@
+InheritParentConfig: true
+
+Checks: '-readability-avoid-unconditional-preprocessor-if'
+

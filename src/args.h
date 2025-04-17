@@ -381,7 +381,7 @@ enum parse_args_result {
 };
 
 enum parse_args_result parse_args(int argc, char **argv,
-                                  struct parsed_args *args);
+                                  struct parsed_args *parsed);
 void free_args(struct parsed_args *args);
 
 #endif

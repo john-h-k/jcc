@@ -2369,7 +2369,7 @@ type_specifiers(struct typechk *tchk,
         wk = unsigned_count ? WELL_KNOWN_TY_UNSIGNED_LONG
                             : WELL_KNOWN_TY_SIGNED_LONG;
         break;
-      case 2:
+      default:
         wk = unsigned_count ? WELL_KNOWN_TY_UNSIGNED_LONG_LONG
                             : WELL_KNOWN_TY_SIGNED_LONG_LONG;
         break;
