@@ -21,7 +21,7 @@ struct bitset *bitset_create(size_t num_elements, bool init_value) {
   size_t num_chunks = (num_elements + (bits_per_chunk - 1)) / bits_per_chunk;
 
   struct bitset *bitset =
-      nonnull_malloc(sizeof(*bitset) + sizeof(chunk_t) * num_chunks);
+      nonnull_malloc(sizeof(*bitset) + (sizeof(chunk_t) * num_chunks));
   bitset->num_elements = num_elements;
   bitset->num_chunks = num_chunks;
   bitset->num_set = 0;

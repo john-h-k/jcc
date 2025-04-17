@@ -370,7 +370,7 @@ static void profiler_print_subregions(struct profiler_print_cb cb,
     unsigned long long sub_gap = region->span.start - last_end;
 
     // only show gaps <10us
-    double sub_gap_proportion = (double)gap / parent_len;
+    double sub_gap_proportion = gap / parent_len;
 
     sub_region_gap_sum += gap;
 
@@ -386,7 +386,7 @@ static void profiler_print_subregions(struct profiler_print_cb cb,
     unsigned long long total_gap = parent->span.end - last_end;
     sub_region_gap_sum += gap;
 
-    double total_gap_proportion = (double)gap / parent_len;
+    double total_gap_proportion = gap / parent_len;
 
     struct parent_gap_info info = {
         .name = parent->name,
@@ -558,7 +558,7 @@ profiler_print_text_region(void *metadata,
                            const struct profiler_region_data *region) {
   struct profiler_print_data *data = metadata;
   FILE *file = data->file;
-  fprintf(file, "%*s%s: ", (int)((data->depth + 1) * 4), "", region->name);
+  fprintf(file, "%*s%s: ", ((data->depth + 1) * 4), "", region->name);
 
   double nanos = profiler_elapsed_nanos(region->span);
   if (nanos < 0.5) {
@@ -577,7 +577,7 @@ static void profiler_print_text_gap(void *metadata, double gap,
   FILE *file = data->file;
 
   if (gap_proportion > 0.15) {
-    fprintf(file, "%*s", (int)((data->depth + 2) * 4), "");
+    fprintf(file, "%*s", ((data->depth + 2) * 4), "");
     fprintf(file, "(profiling gap ");
     print_time(file, gap);
     fprintf(file, ")\n");
@@ -592,12 +592,12 @@ static void profiler_print_text_parent_gap(void *metadata,
   if (info.gap_proportion > 0.15) {
     // only mention gaps if they are more than 15%
 
-    fprintf(file, "%*s", (int)((data->depth + 2) * 4), "");
+    fprintf(file, "%*s", ((data->depth + 2) * 4), "");
     fprintf(file, "(profiling gap ");
     print_time(file, info.gap);
     fprintf(file, ")\n");
 
-    fprintf(file, "%*s", (int)((data->depth + 1) * 4), "");
+    fprintf(file, "%*s", ((data->depth + 1) * 4), "");
     fprintf(file, "(subregions of %s took ", info.name);
     print_time(file, info.sub_region_sum);
     fprintf(file, ", total time was ");

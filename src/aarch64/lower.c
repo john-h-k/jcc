@@ -468,7 +468,8 @@ struct ir_func_info aarch64_lower_func_ty(struct ir_func *func,
     ret_info = arena_alloc(func->arena, sizeof(*ret_info));
 
     struct ir_var_ty member_ty;
-    size_t num_hfa_members, hfa_member_size;
+    size_t num_hfa_members;
+    size_t hfa_member_size;
     if (try_get_hfa_info(func, func_ty.ret_ty, &member_ty, &num_hfa_members,
                          &hfa_member_size)) {
       // nop
@@ -827,7 +828,7 @@ static struct ir_aarch64_save_info lower_va_args_generic(struct ir_func *func) {
     struct ir_op *addr =
         ir_insert_after_op(func, last, IR_OP_TY_ADDR_OFFSET, IR_VAR_TY_POINTER);
     addr->addr_offset = (struct ir_op_addr_offset){
-        .base = base, .offset = gp_save_sz + idx * 16};
+        .base = base, .offset = gp_save_sz + (idx * 16)};
 
     struct ir_op *value =
         ir_insert_after_op(func, movs, IR_OP_TY_MOV, IR_VAR_TY_F64);

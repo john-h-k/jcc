@@ -712,7 +712,7 @@ static void codegen_cnst_op(struct cg_state *state,
     case IR_VAR_PRIMITIVE_TY_I32:
     case IR_VAR_PRIMITIVE_TY_I64:
       codegen_int(state, basicblock, dest,
-                  (union b64){.ull = (unsigned long long)op->cnst.int_value});
+                  (union b64){.ull = op->cnst.int_value});
       break;
     case IR_VAR_PRIMITIVE_TY_I128:
       TODO("codegen uint128");

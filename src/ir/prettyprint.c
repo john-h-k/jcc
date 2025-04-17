@@ -683,7 +683,7 @@ void debug_print_op(FILE *file, struct ir_func *irb, struct ir_op *op) {
   fprintf(file, "\n");
 }
 
-extern const struct prettyprint_callbacks GRAPH_WRITER_CALLBACKS;
+
 
 struct prettyprint_file_metadata {
   FILE *file;

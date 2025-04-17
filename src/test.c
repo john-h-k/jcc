@@ -379,7 +379,8 @@ static struct jcc_test_info get_test_info(const struct jcc_worker_args *args,
 
     line = ustr_strip_suffix(line, MK_USTR("\n"));
 
-    ustr_t spec, value;
+    ustr_t spec;
+    ustr_t value;
     if (!ustr_split(line, ':', &spec, &value)) {
       spec = line;
       value = MK_NULL_USTR();
@@ -663,7 +664,8 @@ static bool parse_args(struct arena_allocator *arena, int argc, char *argv[],
       vector_push_back(arg_groups, &argv[i]);
 
       ustr_t target = MK_USTR(argv[i]);
-      ustr_t arch, rest;
+      ustr_t arch;
+      ustr_t rest;
       if (!ustr_split(target, '-', &arch, &rest)) {
         arch = target;
       }
@@ -836,7 +838,9 @@ int main(int argc, char **argv) {
 
   struct timestmp end = get_timestamp();
 
-  int passed = 0, failed = 0, skipped = 0;
+  int passed = 0;
+  int failed = 0;
+  int skipped = 0;
 
   struct vector *results = status.results;
 

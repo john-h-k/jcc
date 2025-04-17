@@ -1357,7 +1357,8 @@ static bool parse_direct_abstract_declarator(
     return true;
   }
 
-  struct text_span start, end;
+  struct text_span start;
+  struct text_span end;
 
   struct ast_abstract_declarator abstract_declarator;
   if (parse_token(parser, LEX_TOKEN_TY_OPEN_BRACKET, &start) &&
@@ -1462,7 +1463,8 @@ parse_direct_declarator(struct parser *parser,
     return true;
   }
 
-  struct text_span start, end;
+  struct text_span start;
+  struct text_span end;
 
   struct ast_declarator declarator;
   if (parse_token(parser, LEX_TOKEN_TY_OPEN_BRACKET, &start) &&
@@ -1958,7 +1960,7 @@ static bool parse_cnst(struct parser *parser, struct ast_cnst *cnst) {
   }
 }
 
-static bool parse_expr(struct parser *parser, struct ast_expr *expr);
+
 static bool parse_atom_0(struct parser *parser, struct ast_expr *expr);
 static bool parse_atom_1(struct parser *parser, struct ast_expr *expr);
 static bool parse_atom_2(struct parser *parser, struct ast_expr *expr);
@@ -2031,7 +2033,8 @@ static bool parse_arglist(struct parser *parser, struct ast_arglist *arg_list) {
 
   struct ast_compoundexpr compound_expr;
 
-  struct text_span start, end;
+  struct text_span start;
+  struct text_span end;
   if (parse_token(parser, LEX_TOKEN_TY_OPEN_BRACKET, &start) &&
       parse_compoundexpr_raw(parser, &compound_expr) &&
       parse_token(parser, LEX_TOKEN_TY_CLOSE_BRACKET, &end)) {
@@ -2696,7 +2699,8 @@ static bool parse_ternary(struct parser *parser, const struct ast_expr *cond,
                           struct ast_expr *expr) {
   struct lex_pos pos = lex_get_position(parser->lexer);
 
-  struct ast_expr true_expr, false_expr;
+  struct ast_expr true_expr;
+  struct ast_expr false_expr;
   if (!parse_token(parser, LEX_TOKEN_TY_QMARK, NULL)) {
     lex_backtrack(parser->lexer, pos);
     return false;

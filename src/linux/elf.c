@@ -135,7 +135,7 @@ static struct reloc_info build_reloc_info(const struct build_object_args *args,
 
 static void write_relocations_elf(FILE *file,
                                   const struct build_object_args *args,
-                                  size_t *sym_id_to_idx, struct vector *relocs,
+                                  const size_t *sym_id_to_idx, struct vector *relocs,
                                   enum compile_target target) {
   size_t n = vector_length(relocs);
   for (size_t i = 0; i < n; i++) {
@@ -241,7 +241,8 @@ static void write_relocations_elf(FILE *file,
     }
     case RELOCATION_TY_LOCAL_PAIR: {
       if (target == COMPILE_TARGET_LINUX_ARM64) {
-        Elf64_Rela rela1, rela2;
+        Elf64_Rela rela1;
+        Elf64_Rela rela2;
         memset(&rela1, 0, sizeof(rela1));
         memset(&rela2, 0, sizeof(rela2));
         rela1.r_offset = r->address;
@@ -255,7 +256,8 @@ static void write_relocations_elf(FILE *file,
         fwrite(&rela1, sizeof(rela1), 1, file);
         fwrite(&rela2, sizeof(rela2), 1, file);
       } else if (target == COMPILE_TARGET_LINUX_RV32I) {
-        Elf32_Rela rela1, rela2;
+        Elf32_Rela rela1;
+        Elf32_Rela rela2;
         memset(&rela1, 0, sizeof(rela1));
         memset(&rela2, 0, sizeof(rela2));
         rela1.r_offset = r->address;
@@ -298,7 +300,8 @@ static void write_relocations_elf(FILE *file,
     }
     case RELOCATION_TY_UNDEF_PAIR: {
       if (target == COMPILE_TARGET_LINUX_ARM64) {
-        Elf64_Rela rela1, rela2;
+        Elf64_Rela rela1;
+        Elf64_Rela rela2;
         memset(&rela1, 0, sizeof(rela1));
         memset(&rela2, 0, sizeof(rela2));
         rela1.r_offset = r->address;
@@ -312,7 +315,8 @@ static void write_relocations_elf(FILE *file,
         fwrite(&rela1, sizeof(rela1), 1, file);
         fwrite(&rela2, sizeof(rela2), 1, file);
       } else if (target == COMPILE_TARGET_LINUX_RV32I) {
-        Elf32_Rela rela1, rela2;
+        Elf32_Rela rela1;
+        Elf32_Rela rela2;
         memset(&rela1, 0, sizeof(rela1));
         memset(&rela2, 0, sizeof(rela2));
         rela1.r_offset = r->address;
@@ -473,9 +477,19 @@ static void write_elf_object(const struct build_object_args *args) {
 
   const char shstrtab[] = "\0.text\0.rodata\0.data\0.rela.text\0.rela."
                           "rodata\0.rela.data\0.symtab\0.strtab\0.shstrtab\0";
-  size_t offset, text_off, const_off, data_off, rela_text_off, total_sym_str,
-      rela_const_off, rela_data_off, symtab_off, strtab_off, shstr_size,
-      shstr_off, shoff;
+  size_t offset;
+  size_t text_off;
+  size_t const_off;
+  size_t data_off;
+  size_t rela_text_off;
+  size_t total_sym_str;
+  size_t rela_const_off;
+  size_t rela_data_off;
+  size_t symtab_off;
+  size_t strtab_off;
+  size_t shstr_size;
+  size_t shstr_off;
+  size_t shoff;
 
   switch (args->compile_args->target) {
   case COMPILE_TARGET_LINUX_RV32I: {

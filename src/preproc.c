@@ -3197,7 +3197,7 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token,
           size_t name_len = file_tok.text.len;
 
           char *file =
-              arena_alloc(preproc->arena, sizeof(*file) * name_len + 1);
+              arena_alloc(preproc->arena, (sizeof(*file) * name_len) + 1);
           memcpy(file, file_tok.text.str, name_len);
           file[name_len] = '\0';
 

@@ -459,10 +459,10 @@ void eliminate_phi(struct ir_func *irb) {
        i++, basicblock = basicblock->succ) {
 
     for (size_t j = 0; j < 2; j++) {
-      struct vector *gp_move_from = bb_moves[basicblock->id * 2 + j].gp_from;
-      struct vector *gp_move_to = bb_moves[basicblock->id * 2 + j].gp_to;
-      struct vector *fp_move_from = bb_moves[basicblock->id * 2 + j].fp_from;
-      struct vector *fp_move_to = bb_moves[basicblock->id * 2 + j].fp_to;
+      struct vector *gp_move_from = bb_moves[(basicblock->id * 2) + j].gp_from;
+      struct vector *gp_move_to = bb_moves[(basicblock->id * 2) + j].gp_to;
+      struct vector *fp_move_from = bb_moves[(basicblock->id * 2) + j].fp_from;
+      struct vector *fp_move_to = bb_moves[(basicblock->id * 2) + j].fp_to;
 
       size_t tmp_index = SIZE_MAX;
 
