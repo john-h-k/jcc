@@ -274,7 +274,7 @@ bool ap_int_neq(struct ap_int lhs, struct ap_int rhs) {
 static int ap_int_cmp_unsigned(const struct ap_int *a, const struct ap_int *b) {
   size_t n = NUM_CHUNKS(*a);
 
-  for (int i = n - 1; i >= 0; i--) {
+  for (int i = (int)(n - 1); i >= 0; i--) {
     if (a->chunks[i] < b->chunks[i]) {
       return -1;
     }

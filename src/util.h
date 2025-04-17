@@ -189,7 +189,7 @@ typedef unsigned _BitInt(128) uint128_t;
 #define ROUND_UP(value, pow2) (((value) + ((pow2) - 1ull)) & ~((pow2) - 1ull))
 
 #define ISPOW2(value) (popcntl((value)) == 1)
-#define ILOG2(value) (sizeof(unsigned long long) * 8 - 1 - lzcnt((value)))
+#define ILOG2(value) ((sizeof(unsigned long long) * 8) - 1 - lzcnt((value)))
 
 #if STDC_MIN_23 && __GNUC__
 #define UNUSED_ARG(arg) [gnu::unused] arg
@@ -224,7 +224,7 @@ typedef unsigned _BitInt(128) uint128_t;
 #endif
 
 static inline size_t num_digits(size_t num) {
-  return (num ? (size_t)log10(num) : 0) + 1;
+  return (num ? (size_t)log10((double)num) : 0) + 1;
 }
 
 #ifdef SANITIZER_PRINT_STACK_TRACE

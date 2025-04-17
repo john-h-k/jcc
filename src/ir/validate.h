@@ -3,7 +3,7 @@
 
 #include "ir.h"
 
-enum ir_validate_flags {
+enum FLAG_ENUM ir_validate_flags {
   IR_VALIDATE_FLAG_NONE = 0,
   IR_VALIDATE_FLAG_ALLOW_MIXED_PHIS = 1,
   IR_VALIDATE_FLAG_LOWERED_POINTERS = 2,

@@ -154,7 +154,7 @@ enum x64_reg_ty {
   X64_REG_TY_XMM, // 128 bit
 };
 
-enum x64_reg_attr_flags {
+enum FLAG_ENUM x64_reg_attr_flags {
   X64_REG_ATTR_FLAG_NONE = 0,
   X64_REG_ATTR_FLAG_VOLATILE =
       1, // v8-15 are upper half only volatile, we don't support this yet

@@ -108,7 +108,7 @@ enum preproc_define_value_ty {
   PREPROC_DEFINE_VALUE_TY_MACRO_FN
 };
 
-enum preproc_macro_fn_flags {
+enum FLAG_ENUM preproc_macro_fn_flags {
   PREPROC_MACRO_FN_FLAG_NONE = 0,
   PREPROC_MACRO_FN_FLAG_VARIADIC = 1,
 };
@@ -149,7 +149,7 @@ struct preproc_define_value {
   };
 };
 
-enum preproc_define_flags {
+enum FLAG_ENUM preproc_define_flags {
   PREPROC_DEFINE_FLAG_NONE = 0,
   // e.g `defined`, `__has_include`
   PREPROC_DEFINE_FLAG_WELL_KNOWN = 1 << 0,

@@ -184,7 +184,8 @@ static void read_file_content(struct fcache *fcache, FILE *file, char **buf,
     return;
   }
 
-  rewind(file);
+  fseek(file, 0, SEEK_END);
+  fseek(file, 0, SEEK_SET);
 
   char *content = arena_alloc(fcache->arena, (unsigned long)fsize + 1);
   size_t read = fread(content, 1, (unsigned long)fsize, file);

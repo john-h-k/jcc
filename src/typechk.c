@@ -155,7 +155,7 @@ static bool try_get_completed_aggregate(struct typechk *tchk,
                                         const struct td_var_ty *var_ty,
                                         struct td_var_ty *complete);
 
-enum td_var_ty_compatible_flags {
+enum FLAG_ENUM td_var_ty_compatible_flags {
   TD_VAR_TY_COMPATIBLE_FLAG_NONE = 0,
   TD_VAR_TY_COMPATIBLE_FLAG_LVALUE_CONVERT_LHS = 1 << 0,
   TD_VAR_TY_COMPATIBLE_FLAG_LVALUE_CONVERT_RHS = 1 << 1,
@@ -2474,7 +2474,7 @@ type_specifiers(struct typechk *tchk,
   return specifiers;
 }
 
-enum type_expr_flags {
+enum FLAG_ENUM type_expr_flags {
   TYPE_EXPR_FLAGS_NONE = 0,
   // negative flag because in most places arrays *do* decay
   TYPE_EXPR_FLAGS_ARRAYS_DONT_DECAY = 1,
@@ -2549,7 +2549,7 @@ static struct td_arglist type_arglist(struct typechk *tchk,
   return td_arg_list;
 }
 
-enum printf_argspec_flags {
+enum FLAG_ENUM printf_argspec_flags {
   PRINTF_ARGSPEC_FLAG_NONE = 0,
   PRINTF_ARGSPEC_FLAG_LJUST = 1 << 0,
   PRINTF_ARGSPEC_FLAG_SIGN = 1 << 1,
@@ -4520,7 +4520,7 @@ static struct td_var_ty_info td_var_ty_info(struct typechk *tchk,
   }
 }
 
-enum eval_constant_integral_expr_flags {
+enum FLAG_ENUM eval_constant_integral_expr_flags {
   EVAL_CONSTANT_INTEGRAL_EXPR_FLAG_NONE = 0,
   EVAL_CONSTANT_INTEGRAL_EXPR_FLAG_EMIT_DIAGNOSTICS = 1 << 0,
 };

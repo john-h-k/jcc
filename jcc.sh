@@ -506,7 +506,8 @@ format() {
 }
 
 check() {
-    clang-tidy src/*.c -p build  
+    fd -e c -e h -x clang-tidy --use-color --quiet -p build {}
+    # clang-tidy src/**/.c -p build  
 }
 
 view-trace() {

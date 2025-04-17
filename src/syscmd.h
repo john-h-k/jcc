@@ -5,7 +5,7 @@
 
 struct syscmd;
 
-enum syscmd_buf_flags {
+enum FLAG_ENUM syscmd_buf_flags {
   SYSCMD_BUF_FLAG_NONE = 0,
   SYSCMD_BUF_FLAG_STRIP_TRAILING_NEWLINE = 1 << 0,
 };

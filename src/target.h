@@ -50,7 +50,7 @@ enum symbol_visibility {
   SYMBOL_VISIBILITY_UNDEF,
 };
 
-enum symbol_flags {
+enum FLAG_ENUM symbol_flags {
   SYMBOL_FLAG_NONE = 0,
   SYMBOL_FLAG_WEAK = 1 << 0,
 };
@@ -228,7 +228,7 @@ struct lower_info {
   target_lower_func_ty lower_func_ty;
 };
 
-enum target_variadic_info_flags {
+enum FLAG_ENUM target_variadic_info_flags {
   TARGET_VARIADIC_INFO_FLAG_NONE = 0,
 
   // e.g if `va_list` is an array, then this is true

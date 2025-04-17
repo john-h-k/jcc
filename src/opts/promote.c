@@ -2,7 +2,6 @@
 
 #include "../alloc.h"
 #include "../hashtbl.h"
-#include "../ir/prettyprint.h"
 #include "../log.h"
 #include "../vector.h"
 #include "opts.h"
@@ -165,10 +164,10 @@ static void check_addr_uses(struct addr_uses_data *data, struct ir_op *op,
         break;
       case IR_VAR_TY_TY_UNION:
         // don't promote unions
-        *data->candidate = false;
-        return;
       case IR_VAR_TY_TY_VARIADIC:
         // does this even make sense?
+        *data->candidate = false;
+        return;
         *data->candidate = false;
         return;
       }
@@ -375,7 +374,8 @@ static void opts_do_promote(struct ir_func *func, struct vector *lcl_uses,
     } else if (op->ty == IR_OP_TY_LOAD) {
       struct ir_gather_value *gather_values;
 
-      size_t first_field, num_fields;
+      size_t first_field;
+      size_t num_fields;
       struct ir_var_ty *fields;
       if (ir_var_ty_is_aggregate(&op->var_ty)) {
         first_field = use->field_idx;

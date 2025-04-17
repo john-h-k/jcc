@@ -131,16 +131,4 @@ DECL_LOG_FN(slog)
   slog("\n\n****************************** " name                              \
        " ******************************\n")
 
-#define _DBG_FORMAT_STR(val, specifier) #val ": " specifier "\n"
-#define _GENERIC_DBG_FORMAT_SPECIFIER(val)                                     \
-  _Generic((val),                                                              \
-      char *: _DBG_FORMAT_STR(val, "%s"),                                      \
-      int: _DBG_FORMAT_STR(val, "%d"),                                         \
-      size_t: _DBG_FORMAT_STR(val, "%zu"),                                     \
-      float: _DBG_FORMAT_STR(val, "%f"),                                       \
-      double: _DBG_FORMAT_STR(val, "%lf"),                                     \
-      default: _DBG_FORMAT_STR(val, "unknown type for `DEBUG` macro"))
-
-#define DEBUG(val) fprintf(stderr, _GENERIC_DBG_FORMAT_SPECIFIER(val), (val))
-
 #endif

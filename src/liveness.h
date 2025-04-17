@@ -6,7 +6,7 @@
 #include <stddef.h>
 #include <stdio.h>
 
-enum interval_flags {
+enum FLAG_ENUM interval_flags {
   INTERVAL_FLAG_NONE = 0,
   INTERVAL_FLAG_LIVE_ACROSS_BASICBLOCKS = 1 << 0,
 };

@@ -23,7 +23,7 @@ typedef void (*hash_fn)(struct hasher *hasher, const void *obj);
 typedef bool (*eq_fn)(const void *l, const void *r);
 
 struct hashtbl *hashtbl_create(size_t key_size, size_t element_size,
-                               hash_fn hash_fn, eq_fn eq_gn);
+                               hash_fn hash_fn, eq_fn eq_fn);
 
 struct hashtbl *hashtbl_create_str_keyed(size_t element_size);
 

@@ -204,7 +204,8 @@ static void codegen_br_cond_op(struct cg_state *state,
 
   enum rv32i_instr_ty br_ty;
   bool invert_ops;
-  struct rv32i_reg lhs, rhs;
+  struct rv32i_reg lhs;
+  struct rv32i_reg rhs;
 
   if (cond->flags & IR_OP_FLAG_CONTAINED) {
     lhs = codegen_reg(cond->binary_op.lhs);
@@ -1068,7 +1069,7 @@ static void codegen_addr_offset_op(struct cg_state *state,
   DEBUG_ASSERT(!op->addr_offset.index, "rv32i doesn't support index");
 
   struct ir_op_addr_offset *addr_offset = &op->addr_offset;
-  ssize_t offset = addr_offset->offset;
+  ssize_t offset = (ssize_t)addr_offset->offset;
 
   struct rv32i_reg base;
 
@@ -1096,7 +1097,7 @@ static void codegen_addr_op(struct cg_state *state,
     struct ir_lcl *lcl = op->addr.lcl;
 
     // op is NULL as we want the absolute offset
-    size_t offset = get_lcl_stack_offset(state, NULL, lcl);
+    ssize_t offset = get_lcl_stack_offset(state, NULL, lcl);
 
     codegen_add_imm(state, basicblock, dest, STACK_PTR_REG, offset);
 
@@ -1134,7 +1135,7 @@ static void codegen_sext_op(struct cg_state *state,
   invariant_assert(op->cast_op.value->var_ty.ty == IR_VAR_TY_TY_PRIMITIVE,
                    "can't sext from non-primitive");
 
-  size_t sh_sz;
+  ssize_t sh_sz;
   switch (op->cast_op.value->var_ty.primitive) {
   case IR_VAR_PRIMITIVE_TY_I1:
     BUG("sext i1 makes no sense (never negative)");
@@ -1525,7 +1526,7 @@ static bool rv32i_instr_is_branch(const struct rv32i_instr *instr) {
   }
 }
 
-static unsigned long long pessimistic_bb_distance(struct cg_instr *from,
+static long long pessimistic_bb_distance(struct cg_instr *from,
                                                   struct cg_basicblock *to) {
   // we never insert more 4 instructions for a jump
   // the 4 instr case is:
