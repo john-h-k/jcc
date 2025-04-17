@@ -344,7 +344,7 @@ static inline void debug_print_stack_trace(void) {}
 //   * DEBUG_ASSERT is understood by clang analyzer
 //   * DEBUG_ASSERT does not double evaluate its arguments
 
-#if HAS_FEATURE(attribute_analyzer_noreturn)
+#if HAS_FEATURE(attribute_analyzer_noreturn) && 0
 #define DEBUG_ASSERT(b, ...)                                                   \
   (util_debug_assert((b), #b, __func__, __FILE__, __LINE__, __VA_ARGS__),      \
    assert((b)), 0)
