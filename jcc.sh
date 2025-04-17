@@ -511,7 +511,11 @@ format() {
 
 _run_tidy() {
     echo "Running clang-tidy (may be slow!)"
-    fd . src -e c -e h -x clang-tidy "$@" --warnings-as-errors='*' --use-color --quiet -p build {} 2>&1 | grep --color=always -vE '[0-9]+ warnings? generated\.'
+
+    fd . src -e c -e h -x \
+        clang-tidy "$@" --warnings-as-errors='*' --header-filter='.*' --use-color --quiet -p build {} 2>&1 \
+        | grep --color=always -vE '[0-9]+ warnings? generated\.'
+
     return "${PIPESTATUS[0]}"
     # clang-tidy src/**/.c -p build  
 }
