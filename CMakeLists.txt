@@ -170,13 +170,11 @@ if(CMAKE_BUILD_TYPE STREQUAL "Debug")
   message(STATUS "Debug build detected")
   
   if(NOT SANITIZER_TYPE STREQUAL "none")
-    if(CMAKE_C_COMPILER_ID STREQUAL "GNU")
-      message(WARNING "Debug mode may be VERY SLOW on GCC due to ASan problems - Clang w/ ASan is significantly faster")
-    endif()
-
-    # TODO: run CI tests with all san options
-
     if(SANITIZER_TYPE STREQUAL "address")
+      if(CMAKE_C_COMPILER_ID STREQUAL "GNU")
+        message(WARNING "Debug mode may be VERY SLOW on GCC due to ASan problems - Clang w/ ASan is significantly faster")
+      endif()
+
       # try enable leak san
 
       check_c_compiler_flag("-fsanitize=leak" HAS_C_LEAK_SAN)
