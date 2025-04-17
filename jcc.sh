@@ -481,11 +481,11 @@ test-all() {
 ci-test() {
     # timeout -k 30m 30m
     # opts disabled for now
-    JCC_BUILD_FLAGS="address" _test --quiet "$@"
+    JCC_BUILD_FLAGS="--san address" _test --quiet "$@"
 
     if [[ "$(uname)" != "darwin" ]]; then
-        JCC_BUILD_FLAGS="memory" _test --quiet "$@"
-        JCC_BUILD_FLAGS="thread" _test --quiet "$@"
+        JCC_BUILD_FLAGS="--san memory" _test --quiet "$@"
+        JCC_BUILD_FLAGS="--san thread" _test --quiet "$@"
     fi
     # _test --quiet --arg-group -O0 --arg-group -O1 --arg-group -O2 --arg-group -O3 "$@"
 }
