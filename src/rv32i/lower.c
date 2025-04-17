@@ -88,7 +88,8 @@ struct ir_func_info rv32i_lower_func_ty(struct ir_func *func,
     ret_info = arena_alloc(func->arena, sizeof(*ret_info));
 
     struct hfa_info hfa_info[2];
-    size_t num_int, num_fp;
+    size_t num_int;
+    size_t num_fp;
     if (try_get_hfa_info(func, func_ty.ret_ty, &num_int, &num_fp,
                          &hfa_info[0])) {
       // nop
@@ -170,7 +171,8 @@ struct ir_func_info rv32i_lower_func_ty(struct ir_func *func,
     struct ir_var_ty_info info = ir_var_ty_info(func->unit, var_ty);
 
     struct hfa_info hfa_info[2];
-    size_t num_int, num_fp;
+    size_t num_int;
+    size_t num_fp;
     if (ir_var_ty_is_fp(var_ty) && nsrn < 8 && !variadic) {
       vector_push_back(params, var_ty);
 

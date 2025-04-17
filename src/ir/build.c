@@ -508,8 +508,10 @@ static struct ir_op *alloc_binaryop(struct ir_func_builder *irb,
                                     const struct ir_build_binaryop *args) {
 
   enum td_binary_op_ty ty = args->ty;
-  struct td_var_ty lhs_ty = args->lhs_ty, rhs_ty = args->rhs_ty;
-  struct ir_op *lhs = args->lhs, *rhs = args->rhs;
+  struct td_var_ty lhs_ty = args->lhs_ty;
+  struct td_var_ty rhs_ty = args->rhs_ty;
+  struct ir_op *lhs = args->lhs;
+  struct ir_op *rhs = args->rhs;
   const struct td_var_ty *td_var_ty = &args->result_ty;
 
   invariant_assert(lhs->var_ty.ty != IR_VAR_TY_TY_ARRAY ||
@@ -1997,7 +1999,8 @@ static struct ir_op *build_ir_for_array_address(struct ir_func_builder *irb,
                                                 struct ir_stmt **stmt,
                                                 struct td_expr *lhs_expr,
                                                 struct td_expr *rhs_expr) {
-  struct td_var_ty pointer_ty, lhs_ty;
+  struct td_var_ty pointer_ty;
+  struct td_var_ty lhs_ty;
 
   struct ir_op *lhs;
   if (lhs_expr->var_ty.ty == TD_VAR_TY_TY_ARRAY) {
@@ -4015,9 +4018,7 @@ static size_t get_designator_offset(struct ir_unit *iru,
   return offset;
 }
 
-static struct ir_var_value
-build_ir_for_var_value(struct ir_var_builder *irb, struct td_init *init,
-                       const struct td_var_ty *var_ty);
+
 
 enum init_list_layout_ty {
   INIT_LIST_LAYOUT_TY_STRUCT,
@@ -4494,9 +4495,7 @@ build_ir_for_var_value_unary_op(struct ir_var_builder *irb,
   }
 }
 
-static struct ir_glb *build_str_literal(struct ir_unit *iru,
-                                        const struct td_var_ty *td_var_ty,
-                                        const struct td_cnst *cnst);
+
 
 static struct ir_var_value
 build_ir_for_var_value_var(struct ir_var_builder *irb,

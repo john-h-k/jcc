@@ -478,7 +478,8 @@ static void json_writer_snprintf(struct json_writer *writer, const char *format,
     return;
   }
 
-  va_list args, args_copy;
+  va_list args;
+  va_list args_copy;
 
   va_start(args, format);
   va_copy(args_copy, args);

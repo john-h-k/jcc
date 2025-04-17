@@ -1258,7 +1258,7 @@ static void lower_params_registers(struct ir_func *func) {
                   lcl->alloc_ty = IR_LCL_ALLOC_TY_FIXED;
                   lcl->alloc = (struct ir_lcl_alloc){.padding = 0,
                                                      .size = info.size,
-                                                     .offset = (ssize_t)offset};
+                                                     .offset = offset};
 
                   // if (param_op->ty == IR_OP_TY_MOV) {
 

@@ -1178,7 +1178,7 @@ static ustr_t anonymous_name(struct typechk *tchk) {
   size_t len_prefix = strlen("<anonymous>");
   size_t len = len_prefix + char_size;
 
-  char *buff = arena_alloc(tchk->arena, sizeof(*buff) * len + 1);
+  char *buff = arena_alloc(tchk->arena, (sizeof(*buff) * len) + 1);
   snprintf(buff, len, "<anonymous>%zu", id);
   buff[len] = '\0';
 
@@ -2087,7 +2087,10 @@ type_specifiers(struct typechk *tchk,
   struct td_var_attrs attrs = {0};
   enum td_type_qualifier_flags type_qualifiers = TD_TYPE_QUALIFIER_FLAG_NONE;
 
-  int long_count = 0, int_count = 0, signed_count = 0, unsigned_count = 0;
+  int long_count = 0;
+  int int_count = 0;
+  int signed_count = 0;
+  int unsigned_count = 0;
   int type_specifier_count = 0;
 
   struct ast_type_specifier last_specifier;
@@ -5398,7 +5401,8 @@ type_static_init_expr(struct typechk *tchk, struct td_expr expr,
         type_static_init_expr(tchk, *expr.binary_op.rhs, expr.var_ty, is_addr);
 
     struct td_val cnst_val;
-    struct td_expr ptr, cnst;
+    struct td_expr ptr;
+    struct td_expr cnst;
     if (eval_constant_integral_expr(
             tchk, &lhs, EVAL_CONSTANT_INTEGRAL_EXPR_FLAG_NONE, &cnst_val)) {
       ptr = rhs;
@@ -5711,10 +5715,7 @@ type_selectstmt(struct typechk *tchk, const struct ast_selectstmt *selectstmt) {
   return td_select;
 }
 
-static struct td_declaration
-type_declaration(struct typechk *tchk,
-                 const struct ast_declaration *declaration,
-                 enum td_declarator_mode mode);
+
 
 static struct td_compoundstmt
 type_compoundstmt(struct typechk *tchk,

@@ -40,12 +40,12 @@ void deque_ensure_capacity(struct deque *d, size_t capacity) {
   char *new_data = nonnull_malloc(new_capacity * d->element_size);
 
   size_t head_cpy = MIN(d->len, d->capacity - d->head);
-  memcpy(new_data, (char *)d->data + (d->element_size * d->head),
+  memcpy(new_data, d->data + (d->element_size * d->head),
          head_cpy * d->element_size);
 
   if (head_cpy != d->len) {
     size_t tail_cpy = d->len - head_cpy;
-    memcpy((char *)new_data + (d->element_size * head_cpy), d->data,
+    memcpy(new_data + (d->element_size * head_cpy), d->data,
            tail_cpy * d->element_size);
   }
 
@@ -70,7 +70,7 @@ void *deque_push_front(struct deque *d, const void *data) {
   }
 
   d->len++;
-  return memcpy((char *)d->data + (d->head * d->element_size), data,
+  return memcpy(d->data + (d->head * d->element_size), data,
                 d->element_size);
 }
 
@@ -131,7 +131,7 @@ void deque_extend(struct deque *d, const void *data, size_t num_elems) {
     // there is at most one discontinuity in the copy, so we split it into two
 
     size_t head_cpy = MIN(num_elems, d->capacity - end);
-    memcpy((char *)d->data + (end * d->element_size), data,
+    memcpy(d->data + (end * d->element_size), data,
            d->element_size * head_cpy);
 
     if (head_cpy != num_elems) {
@@ -157,10 +157,10 @@ size_t deque_element_size(struct deque *d) { return d->element_size; }
 size_t deque_byte_size(struct deque *d) { return d->len * d->element_size; }
 
 void *deque_head(struct deque *d) {
-  return (char *)d->data + (d->head * d->element_size);
+  return d->data + (d->head * d->element_size);
 }
 void *deque_tail(struct deque *d) {
-  return (char *)d->data + (GET_IDX(d->len - 1) * d->element_size);
+  return d->data + (GET_IDX(d->len - 1) * d->element_size);
 }
 
 void *deque_get(struct deque *d, size_t index) {
@@ -172,7 +172,7 @@ void *deque_get(struct deque *d, size_t index) {
 
 void deque_copy_to(struct deque *d, void *dest) {
   size_t head_cpy = MIN(d->len, d->capacity - d->head);
-  memcpy(dest, (char *)d->data + (d->element_size * d->head),
+  memcpy(dest, d->data + (d->element_size * d->head),
          head_cpy * d->element_size);
 
   if (head_cpy != d->len) {

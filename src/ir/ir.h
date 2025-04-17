@@ -181,7 +181,7 @@ enum ir_op_binary_op_ty ir_flip_binary_comparison(enum ir_op_binary_op_ty ty);
 
 enum ir_op_sign { IR_OP_SIGN_NA, IR_OP_SIGN_SIGNED, IR_OP_SIGN_UNSIGNED };
 
-enum ir_op_sign ir_binary_op_sign(enum ir_op_binary_op_ty);
+enum ir_op_sign ir_binary_op_sign(enum ir_op_binary_op_ty /*ty*/);
 
 struct ir_op_binary_op {
   enum ir_op_binary_op_ty ty;
@@ -1204,7 +1204,7 @@ void ir_initialise_basicblock(struct ir_basicblock *basicblock, size_t id);
 void ir_initialise_stmt(struct ir_stmt *stmt, size_t id);
 
 void ir_initialise_op(struct ir_op *op, size_t id, enum ir_op_ty ty,
-                      struct ir_var_ty var_ty, struct ir_reg,
+                      struct ir_var_ty var_ty, struct ir_reg /*reg*/,
                       struct ir_lcl *lcl);
 
 void ir_insert_basicblock_chain(struct ir_func *irb,

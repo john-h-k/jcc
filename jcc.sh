@@ -506,7 +506,12 @@ format() {
 }
 
 check() {
-    fd -e c -e h -x clang-tidy --use-color --quiet -p build {}
+    fd . src -e c -e h -x clang-tidy --use-color --quiet -p build {}
+    # clang-tidy src/**/.c -p build  
+}
+
+fix() {
+    fd . src -e c -e h -x clang-tidy --use-color --fix --quiet -p build {}
     # clang-tidy src/**/.c -p build  
 }
 

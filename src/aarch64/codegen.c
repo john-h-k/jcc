@@ -1418,7 +1418,7 @@ static void codegen_binary_op(struct cg_state *state,
             (struct aarch64_bitfield){.dest = dest,
                                       .source = codegen_reg(lhs_op),
                                       .immr = immr,
-                                      .imms = size * 8 - 1};
+                                      .imms = (size * 8) - 1};
       } else {
         *instr->aarch64 = MOV_ALIAS(dest, codegen_reg(lhs_op));
       }
@@ -1444,7 +1444,7 @@ static void codegen_binary_op(struct cg_state *state,
             (struct aarch64_bitfield){.dest = dest,
                                       .source = codegen_reg(lhs_op),
                                       .immr = immr,
-                                      .imms = size * 8 - 1};
+                                      .imms = (size * 8) - 1};
       } else {
         *instr->aarch64 = MOV_ALIAS(dest, codegen_reg(lhs_op));
       }

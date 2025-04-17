@@ -3017,7 +3017,7 @@ struct ir_op_use_map ir_build_op_uses_map(struct ir_func *func) {
 }
 
 size_t ir_unique_idx_for_reg(struct ir_reg reg) {
-  return reg.idx * /* num tys */ 5 + reg.ty;
+  return (reg.idx * /* num tys */ 5) + reg.ty;
 }
 
 struct ir_reg ir_reg_for_unique_idx(size_t idx) {
@@ -3228,7 +3228,7 @@ bool ir_basicblock_succ_iter_next(struct ir_basicblock_succ_iter *iter,
 static struct ir_basicblock *intersect(struct ir_basicblock **idoms,
                                        struct ir_basicblock *left,
                                        struct ir_basicblock *right,
-                                       size_t *rpo) {
+                                       const size_t *rpo) {
   while (left != right) {
     while (rpo[left->id] > rpo[right->id]) {
       left = idoms[left->id];
