@@ -6962,11 +6962,11 @@ struct td_printstate {
 
 #define DEBUG_FUNC_ENUM(ty, name)                                              \
   static void typechk_debug_print_##ty(struct td_printstate *state,            \
-                                       enum td_##ty *name)
+                                       const enum td_##ty *name)
 
 #define DEBUG_FUNC(ty, name)                                                   \
   static void typechk_debug_print_##ty(struct td_printstate *state,            \
-                                       struct td_##ty *name)
+                                       const struct td_##ty *name)
 #define DEBUG_CALL(ty, val) typechk_debug_print_##ty(state, val)
 
 #define TD_PRINT_SAMELINE_Z_NOINDENT(fmt) slogsl(fmt)

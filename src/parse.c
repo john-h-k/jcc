@@ -3830,12 +3830,12 @@ struct ast_printstate {
 #define DEBUG_FUNC_ENUM(ty, name)                                              \
   START_NO_UNUSED_ARGS                                                         \
   static void parse_debug_print_##ty(struct ast_printstate *state,             \
-                                     enum ast_##ty *name) END_NO_UNUSED_ARGS
+                                     const enum ast_##ty *name) END_NO_UNUSED_ARGS
 
 #define DEBUG_FUNC(ty, name)                                                   \
   START_NO_UNUSED_ARGS                                                         \
   static void parse_debug_print_##ty(struct ast_printstate *state,             \
-                                     struct ast_##ty *name) END_NO_UNUSED_ARGS
+                                     const struct ast_##ty *name) END_NO_UNUSED_ARGS
 
 #define DEBUG_CALL(ty, val) parse_debug_print_##ty(state, val)
 

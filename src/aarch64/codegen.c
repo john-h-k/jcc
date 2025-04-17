@@ -41,9 +41,9 @@ static enum aarch64_reg_ty gp_reg_ty_for_size(size_t size) {
     return AARCH64_REG_TY_X;
   case 4:
     return AARCH64_REG_TY_W;
+  default:
+    BUG("bad size %zu", size);
   }
-
-  BUG("bad size %zu", size);
 }
 
 static enum aarch64_reg_ty fp_reg_ty_for_size(size_t size) {
@@ -58,9 +58,9 @@ static enum aarch64_reg_ty fp_reg_ty_for_size(size_t size) {
     return AARCH64_REG_TY_H;
   case 1:
     return AARCH64_REG_TY_B;
+  default:
+    BUG("bad size %zu", size);
   }
-
-  BUG("bad size %zu", size);
 }
 
 UNUSED static enum aarch64_reg_ty
@@ -2718,6 +2718,8 @@ static void codegen_fprintf(FILE *file, const char *format, ...) {
       BUG("unrecognised format starting '%%%s'", format);
     }
   }
+
+  va_end(list);
 #endif
 }
 
