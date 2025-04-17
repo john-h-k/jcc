@@ -712,6 +712,8 @@ static bool parse_args(struct arena_allocator *arena, int argc, char *argv[],
 
 static int void_strcmp(const void *l, const void *r) { return strcmp(l, r); }
 
+// FIXME: known issue with seemingly wrong TSAN "data race" warnings when using
+// process mode (-p) but none of the attributes to disable them seem to work?
 int main(int argc, char **argv) {
   struct arena_allocator *arena;
   arena_allocator_create("test", &arena);
@@ -778,7 +780,7 @@ int main(int argc, char **argv) {
     struct jcc_worker_args worker = {
         .jobq = jobq, .results = &status, .opts = opts, .arena = worker_arena};
 
-    void *data = arena_alloc_init(arena, sizeof(worker), &worker);
+    void *data = arena_alloc_init(worker_arena, sizeof(worker), &worker);
 
     invariant_assert(thrd_create(&threads[i], test_worker, data) ==
                          thrd_success,
@@ -800,9 +802,7 @@ int main(int argc, char **argv) {
       invariant_assert(mtx_lock(&status.lock) == thrd_success,
                        "mtx_lock failed");
 
-      struct timespec ts = {
-        .tv_nsec = 50000000
-      };
+      struct timespec ts = {.tv_nsec = 50000000};
 
       int st = cnd_timedwait(&status.cond, &status.lock, &ts);
       invariant_assert(st == thrd_success || st == thrd_timedout,

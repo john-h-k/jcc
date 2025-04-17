@@ -1,6 +1,11 @@
 #include "log.h"
 
+// only known data race in compiler is this value
+#ifdef TSAN
+static _Thread_local bool LOG_ENABLED = false;
+#else
 static bool LOG_ENABLED = false;
+#endif
 
 void enable_log(void) { LOG_ENABLED = true; }
 

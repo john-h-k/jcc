@@ -51,9 +51,6 @@ double timestamp_elapsed(struct timestmp start, struct timestmp end) {
   return (double)end.val - (double)start.val;
 }
 
-static once_flag lock_once = ONCE_FLAG_INIT;
-static mtx_t lock;
-
 static struct vector *REGIONS = NULL;
 static struct hashtbl *MULTI_REGIONS = NULL;
 static size_t VER = 0;
@@ -80,6 +77,14 @@ struct profiler_region_data {
 
   struct profiler_span span;
 };
+
+#ifdef NO_PROFILE
+void profiler_init(void) {}
+void profiler_reset(void) {}
+#else
+
+static once_flag lock_once = ONCE_FLAG_INIT;
+static mtx_t lock;
 
 static void lock_init(void) { mtx_init(&lock, mtx_plain); }
 
@@ -123,6 +128,7 @@ void profiler_reset(void) {
 
   profiler_init();
 }
+#endif
 
 struct profiler_multi_region_inst
 profiler_begin_multi_region(struct profiler_multi_region *multi_region) {
