@@ -1,5 +1,5 @@
-// skip: opts_cnst_branches has known bug (see file)
 // expected value: 10
+
 int main() {
   int a = 10;
   int b = 0;
