@@ -1,10 +1,15 @@
 #ifndef IR_IR_H
 #define IR_IR_H
 
-#include "../util.h"
-
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
+
+#ifndef FLAG_ENUM
+#define FLAG_ENUM
+#endif
+
+typedef ptrdiff_t ssize_t;
 
 enum ir_op_ty {
   IR_OP_TY_UNKNOWN,
@@ -266,10 +271,12 @@ struct ir_var_ty {
 extern const struct ir_var_ty IR_VAR_TY_UNKNOWN;
 extern const struct ir_var_ty IR_VAR_TY_POINTER;
 extern const struct ir_var_ty IR_VAR_TY_NONE;
+extern const struct ir_var_ty IR_VAR_TY_I1;
 extern const struct ir_var_ty IR_VAR_TY_I8;
 extern const struct ir_var_ty IR_VAR_TY_I16;
 extern const struct ir_var_ty IR_VAR_TY_I32;
 extern const struct ir_var_ty IR_VAR_TY_I64;
+extern const struct ir_var_ty IR_VAR_TY_I128;
 extern const struct ir_var_ty IR_VAR_TY_F16;
 extern const struct ir_var_ty IR_VAR_TY_F32;
 extern const struct ir_var_ty IR_VAR_TY_F64;
@@ -952,7 +959,6 @@ struct ir_func {
 
 struct ir_unit {
   struct arena_allocator *arena;
-  struct typechk *tchk;
   const struct target *target;
 
   struct ir_glb *first_global;

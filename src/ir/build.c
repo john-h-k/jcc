@@ -2985,7 +2985,7 @@ struct ir_build_init_list_layout {
 };
 
 static struct ir_build_init_list_layout
-build_init_list_layout(struct ir_unit *iru,
+build_init_list_layout(struct ir_unit *iru, struct typechk *tchk,
                        const struct td_init_list *init_list);
 
 struct init_range {
@@ -3048,7 +3048,7 @@ static void build_ir_for_init_list(struct ir_func_builder *irb,
   }
 
   struct ir_build_init_list_layout layout =
-      build_init_list_layout(irb->unit, init_list);
+      build_init_list_layout(irb->unit, irb->tchk, init_list);
 
   struct vector *init_ranges = vector_create(sizeof(struct init_range));
 
@@ -3671,6 +3671,7 @@ static void validate_op_tys_callback(struct ir_op **op,
 }
 
 static struct ir_func *build_ir_for_function(struct ir_unit *unit,
+                                             struct typechk *tchk,
                                              struct arena_allocator *arena,
                                              struct td_funcdef *def,
                                              struct var_refs *global_var_refs,
@@ -3700,7 +3701,7 @@ static struct ir_func *build_ir_for_function(struct ir_unit *unit,
       .arena = arena,
       .unit = unit,
       .func = f,
-      .tchk = unit->tchk,
+      .tchk = tchk,
       .var_writes =
           hashtbl_create(sizeof(struct td_var), sizeof(struct vector *),
                          hash_td_var, eq_td_var),
@@ -3931,13 +3932,13 @@ static struct ir_func *build_ir_for_function(struct ir_unit *unit,
 // }
 
 static size_t
-get_member_index_offset(struct ir_unit *iru, const struct td_var_ty *var_ty,
+get_member_index_offset(struct ir_unit *iru, struct typechk *tchk, const struct td_var_ty *var_ty,
                         size_t member_index, struct td_var_ty *member_ty,
                         bool *is_bitfield, struct ir_bitfield *bitfield) {
   *is_bitfield = false;
 
   if (var_ty->ty == TD_VAR_TY_TY_ARRAY) {
-    *member_ty = td_var_ty_get_underlying(iru->tchk, var_ty);
+    *member_ty = td_var_ty_get_underlying(tchk, var_ty);
     struct ir_var_ty el_ty = ir_var_ty_for_td_var_ty(iru, member_ty);
     struct ir_var_ty_info info = ir_var_ty_info(iru, &el_ty);
 
@@ -4026,7 +4027,7 @@ enum init_list_layout_ty {
   INIT_LIST_LAYOUT_TY_ARRAY,
 };
 
-static void build_init_list_layout_entry(struct ir_unit *iru,
+static void build_init_list_layout_entry(struct ir_unit *iru, struct typechk *tchk,
                                          const struct td_init_list *init_list,
                                          const struct td_var_ty *var_ty,
                                          size_t offset, struct vector *inits) {
@@ -4047,7 +4048,7 @@ static void build_init_list_layout_entry(struct ir_unit *iru,
     el_size = ir_var_ty_info(iru, &ir_el_ty).size;
     break;
   default:
-    BUG("bad type for init list (%s)", tchk_type_name(iru->tchk, var_ty));
+    BUG("bad type for init list (%s)", tchk_type_name(tchk, var_ty));
   }
 
   size_t num_elements = init_list->num_inits;
@@ -4070,7 +4071,7 @@ static void build_init_list_layout_entry(struct ir_unit *iru,
       case INIT_LIST_LAYOUT_TY_STRUCT:
       case INIT_LIST_LAYOUT_TY_UNION:
         init_offset += get_member_index_offset(
-            iru, var_ty, member_idx, &member_ty, &is_bitfield, &bitfield);
+            iru, tchk, var_ty, member_idx, &member_ty, &is_bitfield, &bitfield);
         break;
       case INIT_LIST_LAYOUT_TY_ARRAY:
         member_ty = el_ty;
@@ -4086,7 +4087,7 @@ static void build_init_list_layout_entry(struct ir_unit *iru,
           !td_var_ty_is_scalar_ty(&member_ty)) {
         // again broken if cast needed
         build_init_list_layout_entry(
-            iru, &init->init->expr.compound_literal.init_list, &member_ty,
+            iru, tchk, &init->init->expr.compound_literal.init_list, &member_ty,
             init_offset, inits);
       } else {
         struct ir_build_init build_init = {
@@ -4101,7 +4102,7 @@ static void build_init_list_layout_entry(struct ir_unit *iru,
       break;
     }
     case TD_INIT_TY_INIT_LIST:
-      build_init_list_layout_entry(iru, &init->init->init_list, &member_ty,
+      build_init_list_layout_entry(iru, tchk, &init->init->init_list, &member_ty,
                                    init_offset, inits);
       break;
     }
@@ -4109,11 +4110,11 @@ static void build_init_list_layout_entry(struct ir_unit *iru,
 }
 
 static struct ir_build_init_list_layout
-build_init_list_layout(struct ir_unit *iru,
+build_init_list_layout(struct ir_unit *iru, struct typechk *tchk,
                        const struct td_init_list *init_list) {
   struct vector *inits = vector_create(sizeof(struct ir_build_init));
 
-  build_init_list_layout_entry(iru, init_list, &init_list->var_ty, 0, inits);
+  build_init_list_layout_entry(iru, tchk, init_list, &init_list->var_ty, 0, inits);
 
   struct ir_build_init_list_layout layout = {
       .num_inits = vector_length(inits),
@@ -4601,7 +4602,7 @@ build_ir_for_var_value_init_list(struct ir_var_builder *irb,
                                  const struct td_var_ty *var_ty) {
 
   struct ir_build_init_list_layout layout =
-      build_init_list_layout(irb->unit, init_list);
+      build_init_list_layout(irb->unit, irb->tchk, init_list);
 
   struct ir_var_value_list value_list = {
       .num_values = layout.num_inits,
@@ -4678,7 +4679,6 @@ build_ir_for_translationunit(const struct target *target, struct typechk *tchk,
 
   struct ir_unit *iru = arena_alloc(arena, sizeof(*iru));
   *iru = (struct ir_unit){.arena = arena,
-                          .tchk = tchk,
                           .target = target,
                           .first_global = NULL,
                           .last_global = NULL,
@@ -4695,7 +4695,7 @@ build_ir_for_translationunit(const struct target *target, struct typechk *tchk,
     case TD_EXTERNAL_DECLARATION_TY_DECLARATION: {
       struct ir_var_builder builder = {
           .arena = iru->arena,
-          .tchk = iru->tchk,
+          .tchk = tchk,
           .unit = iru,
           .global_var_refs = global_var_refs,
       };
@@ -4707,7 +4707,7 @@ build_ir_for_translationunit(const struct target *target, struct typechk *tchk,
     case TD_EXTERNAL_DECLARATION_TY_FUNC_DEF: {
       struct ir_var_builder var_builder = {
           .arena = iru->arena,
-          .tchk = iru->tchk,
+          .tchk = tchk,
           .unit = iru,
           .global_var_refs = global_var_refs,
       };
@@ -4719,7 +4719,7 @@ build_ir_for_translationunit(const struct target *target, struct typechk *tchk,
           def->function_specifier_flags, &def->var_declaration);
 
       struct ir_func *func =
-          build_ir_for_function(iru, arena, def, global_var_refs, flags);
+          build_ir_for_function(iru, tchk, arena, def, global_var_refs, flags);
 
       struct var_key key = {.name = def->var_declaration.var.identifier,
                             .scope = SCOPE_GLOBAL};

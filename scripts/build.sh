@@ -423,7 +423,9 @@ bootstrap() {
         cc_name=$(basename "$cc")
         profile_end "stage$n (cc=$cc_name) took " $start
 
+        cp build/libjcc.a "build/libjcc$n.a"
         cp build/jcc "build/jcc$n"
+        cp build/test "build/test$n"
 
         echo -e "${BOLD}stage$n built to 'jcc$n'${RESET}"
     }

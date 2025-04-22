@@ -64,12 +64,12 @@ static struct var_table_entry *add_entry(struct var_table_scope *scope,
   return entry;
 }
 
-struct var_table_entry *vt_create_top_level_entry(struct var_table *var_table,
-                                                  enum var_table_ns ns,
-                                                  ustr_t name) {
-  struct var_table_scope *first = vector_head(var_table->scopes);
+struct var_table_entry *vt_create_entry_at_scope(struct var_table *var_table,
+                                                 enum var_table_ns ns,
+                                                 ustr_t name, size_t scope) {
+  struct var_table_scope *tbl = vector_get(var_table->scopes, scope);
 
-  return add_entry(first, ns, name);
+  return add_entry(tbl, ns, name);
 }
 
 struct var_table_entry *vt_create_entry(struct var_table *var_table,

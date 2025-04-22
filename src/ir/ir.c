@@ -641,6 +641,8 @@ enum ir_op_sign ir_binary_op_sign(enum ir_op_binary_op_ty ty) {
 
 const struct ir_var_ty IR_VAR_TY_NONE = {.ty = IR_VAR_TY_TY_NONE};
 const struct ir_var_ty IR_VAR_TY_POINTER = {.ty = IR_VAR_TY_TY_POINTER};
+const struct ir_var_ty IR_VAR_TY_I1 = {.ty = IR_VAR_TY_TY_PRIMITIVE,
+                                       .primitive = IR_VAR_PRIMITIVE_TY_I1};
 const struct ir_var_ty IR_VAR_TY_I8 = {.ty = IR_VAR_TY_TY_PRIMITIVE,
                                        .primitive = IR_VAR_PRIMITIVE_TY_I8};
 const struct ir_var_ty IR_VAR_TY_I16 = {.ty = IR_VAR_TY_TY_PRIMITIVE,
@@ -649,6 +651,8 @@ const struct ir_var_ty IR_VAR_TY_I32 = {.ty = IR_VAR_TY_TY_PRIMITIVE,
                                         .primitive = IR_VAR_PRIMITIVE_TY_I32};
 const struct ir_var_ty IR_VAR_TY_I64 = {.ty = IR_VAR_TY_TY_PRIMITIVE,
                                         .primitive = IR_VAR_PRIMITIVE_TY_I64};
+const struct ir_var_ty IR_VAR_TY_I128 = {.ty = IR_VAR_TY_TY_PRIMITIVE,
+                                        .primitive = IR_VAR_PRIMITIVE_TY_I128};
 const struct ir_var_ty IR_VAR_TY_F16 = {.ty = IR_VAR_TY_TY_PRIMITIVE,
                                         .primitive = IR_VAR_PRIMITIVE_TY_F16};
 const struct ir_var_ty IR_VAR_TY_F32 = {.ty = IR_VAR_TY_TY_PRIMITIVE,

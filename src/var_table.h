@@ -44,12 +44,12 @@ struct var_table_scope {
 struct var_table vt_create(struct arena_allocator *arena);
 void vt_free(struct var_table *var_table);
 
-struct var_table_entry *vt_create_top_level_entry(struct var_table *var_table,
-                                                  enum var_table_ns ns,
-                                                  ustr_t name);
+struct var_table_entry *vt_create_entry_at_scope(struct var_table *var_table,
+                                                 enum var_table_ns ns,
+                                                 ustr_t name, size_t scope);
+
 struct var_table_entry *vt_create_entry(struct var_table *var_table,
-                                        enum var_table_ns ns,
-                                        ustr_t name);
+                                        enum var_table_ns ns, ustr_t name);
 
 int vt_cur_scope(struct var_table *var_table);
 
@@ -57,8 +57,7 @@ void vt_push_scope(struct var_table *var_table);
 void vt_pop_scope(struct var_table *var_table);
 
 struct var_table_entry *vt_get_entry(struct var_table *var_table,
-                                     enum var_table_ns ns,
-                                     ustr_t name);
+                                     enum var_table_ns ns, ustr_t name);
 
 struct var_table_entry *vt_get_or_create_entry(struct var_table *var_table,
                                                enum var_table_ns ns,

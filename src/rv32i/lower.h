@@ -1,6 +1,7 @@
 #ifndef RV32I_LOWER_H
 #define RV32I_LOWER_H
 
+#include <stdio.h>
 #include "../ir/ir.h"
 
 // performs platform specific lowering transformations to the IR

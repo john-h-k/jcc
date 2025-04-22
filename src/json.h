@@ -131,8 +131,8 @@ void json_writer_clear(struct json_writer *writer);
                                                                                \
       /* Integer */                                                            \
       size_t: json_writer_write_integer,                                       \
-      long: json_writer_write_integer,                                         \
       long long: json_writer_write_integer,                                    \
+      long: json_writer_write_integer,                                         \
       unsigned: json_writer_write_integer,                                     \
       int: json_writer_write_integer,                                          \
                                                                                \

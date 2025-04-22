@@ -941,9 +941,7 @@ static struct td_var_ty resolve_usual_arithmetic_conversions(
                    rhs_ty->well_known >= WELL_KNOWN_TY_SIGNED_INT,
                "integer promotion should have occurred");
 
-  struct td_var_ty result_ty = {
-    .ty = TD_VAR_TY_TY_WELL_KNOWN
-  };
+  struct td_var_ty result_ty = {.ty = TD_VAR_TY_TY_WELL_KNOWN};
 
   if (lhs_ty->well_known == rhs_ty->well_known) {
     // they are the same type
@@ -1174,15 +1172,9 @@ static bool is_anonymous_name(ustr_t name) {
 
 static ustr_t anonymous_name(struct typechk *tchk) {
   size_t id = tchk->next_anonymous_type_name_id++;
-  size_t char_size = num_digits(id);
-  size_t len_prefix = strlen("<anonymous>");
-  size_t len = len_prefix + char_size;
 
-  char *buff = arena_alloc(tchk->arena, (sizeof(*buff) * len) + 1);
-  snprintf(buff, len, "<anonymous>%zu", id);
-  buff[len] = '\0';
-
-  return (ustr_t){buff, len};
+  char *buf = arena_alloc_snprintf(tchk->arena, "<anonymous>%zu", id);
+  return MK_USTR(buf);
 }
 
 static struct td_var_ty
@@ -1242,15 +1234,11 @@ td_var_ty_for_enum(struct typechk *tchk,
                            .enumerator = value,
                            .span = enumerator->span};
 
-      struct var_table_entry *entry;
+
       // enums have same behaviour as types, but are in the var table
       // so if type table is at global level, insert enum there too
-      if (vt_cur_scope(&tchk->ty_table) == SCOPE_GLOBAL) {
-        entry = vt_create_top_level_entry(&tchk->var_table, VAR_TABLE_NS_NONE,
-                                          enum_name);
-      } else {
-        entry = vt_create_entry(&tchk->var_table, VAR_TABLE_NS_NONE, enum_name);
-      }
+      struct var_table_entry *entry = vt_create_entry_at_scope(&tchk->var_table, VAR_TABLE_NS_NONE,
+                                          enum_name, vt_cur_scope(&tchk->ty_table));
       entry->var = arena_alloc(tchk->arena, sizeof(*entry->var));
       *entry->var = var;
       entry->var_ty = arena_alloc(tchk->arena, sizeof(*entry->var_ty));
@@ -3407,11 +3395,13 @@ static struct td_expr type_expr_iter(struct typechk *tchk,
     const struct ast_expr *expr;
   };
 
-  struct vector *exprs = vector_create_in_arena(sizeof(struct type_state), tchk->arena);
-  struct vector *results = vector_create_in_arena(sizeof(struct td_expr), tchk->arena);
+  struct vector *exprs =
+      vector_create_in_arena(sizeof(struct type_state), tchk->arena);
+  struct vector *results =
+      vector_create_in_arena(sizeof(struct td_expr), tchk->arena);
 
   // kick things off: push binary op node.
-  vector_push_back(exprs, &(struct type_state){ .state = LHS, .expr = expr });
+  vector_push_back(exprs, &(struct type_state){.state = LHS, .expr = expr});
 
   while (vector_length(exprs)) {
     struct type_state *state = vector_tail(exprs);
@@ -3423,10 +3413,9 @@ static struct td_expr type_expr_iter(struct typechk *tchk,
         vector_push_back(results, &((struct td_expr){0}));
         state->state = RHS;
         // FIX: Use the current node’s left child.
-        vector_push_back(exprs, &(struct type_state){
-                                  .state = LHS,
-                                  .expr = state->expr->binary_op.lhs
-                                });
+        vector_push_back(
+            exprs, &(struct type_state){.state = LHS,
+                                        .expr = state->expr->binary_op.lhs});
         break;
       case RHS: {
         state->state = DONE;
@@ -3435,20 +3424,17 @@ static struct td_expr type_expr_iter(struct typechk *tchk,
         // FIX: Update the reserved slot.
         *(struct td_expr *)vector_revget(results, 0) = *lhs;
         // FIX: Use current node’s right child.
-        vector_push_back(exprs, &(struct type_state){
-                                  .state = LHS,
-                                  .expr = state->expr->binary_op.rhs
-                                });
+        vector_push_back(
+            exprs, &(struct type_state){.state = LHS,
+                                        .expr = state->expr->binary_op.rhs});
         break;
       }
       case DONE: {
         // Now both subtrees are computed.
         struct td_expr *rhs = vector_pop(results);
         struct td_expr *lhs = vector_pop(results);
-        struct td_expr typed = type_binary_op_typed(tchk,
-                                                    state->expr->binary_op.ty,
-                                                    state->expr->span,
-                                                    lhs, rhs);
+        struct td_expr typed = type_binary_op_typed(
+            tchk, state->expr->binary_op.ty, state->expr->span, lhs, rhs);
         vector_push_back(results, &typed);
         // Remove this binary op node’s state.
         vector_pop(exprs);
@@ -3462,10 +3448,9 @@ static struct td_expr type_expr_iter(struct typechk *tchk,
       vector_push_back(results, &tmp);
     }
   }
-  
+
   return *(struct td_expr *)vector_head(results);
 }
-
 
 // once sub expressions have been typed, this does the binary op specific stuff
 static struct td_expr type_binary_op_typed(struct typechk *tchk,
@@ -4230,6 +4215,8 @@ static struct td_expr type_generic(struct typechk *tchk,
   // do a first pass through to validate
   // TODO: also validate for duplicate types (not just duplicate `default`)
 
+  size_t selected_idx;
+  struct td_var_ty selected_var_ty;
   struct ast_generic_association *selected_association = NULL;
   struct ast_generic_association *default_association = NULL;
 
@@ -4246,19 +4233,31 @@ static struct td_expr type_generic(struct typechk *tchk,
       if (td_var_ty_compatible(tchk, &assoc_var_ty, &ctrl_var_ty,
                                TD_VAR_TY_COMPATIBLE_FLAG_NONE)) {
         if (selected_association) {
+          char *msg = arena_alloc_snprintf(
+              tchk->arena,
+              "multiple associations in '_Generic' matched ("
+              "controlling type '%s' matched associations for '%s' (assocation %zu) and '%s' (association %zu))",
+              tchk_type_name(tchk, &ctrl_var_ty),
+              tchk_type_name(tchk, &selected_var_ty),
+              selected_idx,
+              tchk_type_name(tchk, &assoc_var_ty),
+              i
+            );
+
           tchk->result_ty = TYPECHK_RESULT_TY_FAILURE;
           compiler_diagnostics_add(
               tchk->diagnostics,
-              MK_SEMANTIC_DIAGNOSTIC(
-                  COMPATIBLE_GENERIC_ASSOCIATIONS,
-                  compatible_generic_associations, association->span,
-                  MK_INVALID_TEXT_POS(0),
-                  "multiple associations in '_Generic' matched"));
+              MK_SEMANTIC_DIAGNOSTIC(COMPATIBLE_GENERIC_ASSOCIATIONS,
+                                     compatible_generic_associations,
+                                     association->span, MK_INVALID_TEXT_POS(0),
+                                     msg));
 
           return (struct td_expr){.ty = TD_EXPR_TY_INVALID,
                                   .var_ty = TD_VAR_TY_UNKNOWN};
         } else {
+          selected_idx = i;
           selected_association = association;
+          selected_var_ty = assoc_var_ty;
         }
       }
       break;
@@ -5715,8 +5714,6 @@ type_selectstmt(struct typechk *tchk, const struct ast_selectstmt *selectstmt) {
   return td_select;
 }
 
-
-
 static struct td_compoundstmt
 type_compoundstmt(struct typechk *tchk,
                   const struct ast_compoundstmt *compound_stmt);
@@ -6115,7 +6112,7 @@ static struct td_init_list type_init_list_for_aggregate_or_array(
       struct td_expr typed =
           type_expr(tchk, TYPE_EXPR_FLAGS_NONE, &init->init->expr);
 
-        (void)typed.ty;
+      (void)typed.ty;
       if (td_var_ty_compatible(tchk, &member_var_ty, &typed.var_ty,
                                TD_VAR_TY_COMPATIBLE_FLAG_NONE)) {
         td_init_list_init =

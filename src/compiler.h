@@ -96,6 +96,7 @@ enum compile_language {
   COMPILE_LANGUAGE_C_HEADER,
   COMPILE_LANGUAGE_CPP_OUTPUT,
   COMPILE_LANGUAGE_OBJECT,
+  COMPILE_LANGUAGE_SHAREDLIB,
 };
 
 enum compile_c_standard {

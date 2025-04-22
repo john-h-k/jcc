@@ -2,6 +2,7 @@
 #define IR_VAR_REFS_H
 
 #include "ir.h"
+#include "../util.h"
 
 // uniquely tracks vars by (name, scope)
 struct var_refs;

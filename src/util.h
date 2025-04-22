@@ -69,12 +69,15 @@ typedef unsigned _BitInt(128) uint128_t;
 #define UNLIKELY(x) x
 #endif
 
+// FIXME: shouldn't need this check but temp included so `ir.h` doesn't need to import this header
+#ifndef FLAG_ENUM
 #if STDC_MIN_23 && HAS_C_ATTRIBUTE(flag_enum)
 #define FLAG_ENUM [gnu::flag_enum]
 #elif HAS_ATTRIBUTE(flag_enum)
 #define FLAG_ENUM __attribute__((flag_enum))
 #else
 #define FLAG_ENUM
+#endif
 #endif
 
 #if (ASAN || MSAN || TSAN || UBSAN) &&                                         \

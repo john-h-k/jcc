@@ -477,6 +477,12 @@ static bool try_get_language_for_file(struct path_components components,
     return true;
   }
 
+  if (!strcmp(components.ext, "a")) {
+    // intermediate (already preprocessed) file
+    *language = COMPILE_LANGUAGE_SHAREDLIB;
+    return true;
+  }
+
   if (!strcmp(components.ext, "i")) {
     // intermediate (already preprocessed) file
     *language = COMPILE_LANGUAGE_CPP_OUTPUT;
@@ -599,6 +605,8 @@ static int jcc_driver_compiler(struct arena_allocator *arena,
     }
 
     switch (language) {
+    case COMPILE_LANGUAGE_NONE:
+      unreachable();
     case COMPILE_LANGUAGE_C:
       break;
     case COMPILE_LANGUAGE_C_HEADER:
@@ -608,11 +616,10 @@ static int jcc_driver_compiler(struct arena_allocator *arena,
       mode = COMPILE_PREPROC_MODE_NO_PREPROC;
       break;
     case COMPILE_LANGUAGE_OBJECT:
+    case COMPILE_LANGUAGE_SHAREDLIB:
       info("linking object file '%s", source_path);
       objects[i] = source_path;
       continue;
-    default:
-      unreachable();
     }
 
     PROFILE_BEGIN(compile);
