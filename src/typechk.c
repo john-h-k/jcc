@@ -2081,6 +2081,7 @@ type_specifiers(struct typechk *tchk,
   int unsigned_count = 0;
   int type_specifier_count = 0;
 
+  bool has_spec = false;
   struct ast_type_specifier last_specifier;
 
   for (size_t i = 0; i < list->num_decl_specifiers; i++) {
@@ -2317,9 +2318,11 @@ type_specifiers(struct typechk *tchk,
           }
         } else {
           last_specifier = specifier.type_specifier;
+          has_spec = true;
         }
       } else {
         last_specifier = specifier.type_specifier;
+        has_spec = true;
       }
     }
     }
@@ -2362,16 +2365,16 @@ type_specifiers(struct typechk *tchk,
                             : WELL_KNOWN_TY_SIGNED_LONG_LONG;
         break;
       }
-    } else if (last_specifier.ty == AST_TYPE_SPECIFIER_TY_KW &&
+    } else if (has_spec && last_specifier.ty == AST_TYPE_SPECIFIER_TY_KW &&
                last_specifier.type_specifier_kw ==
                    AST_TYPE_SPECIFIER_KW_DOUBLE) {
       wk = WELL_KNOWN_TY_LONG_DOUBLE;
-    } else if (last_specifier.ty == AST_TYPE_SPECIFIER_TY_KW &&
+    } else if (has_spec && last_specifier.ty == AST_TYPE_SPECIFIER_TY_KW &&
                last_specifier.type_specifier_kw == AST_TYPE_SPECIFIER_KW_CHAR) {
       wk = unsigned_count ? WELL_KNOWN_TY_UNSIGNED_CHAR
            : signed_count ? WELL_KNOWN_TY_SIGNED_CHAR
                           : WELL_KNOWN_TY_CHAR;
-    } else if (last_specifier.ty == AST_TYPE_SPECIFIER_TY_KW &&
+    } else if (has_spec && last_specifier.ty == AST_TYPE_SPECIFIER_TY_KW &&
                last_specifier.type_specifier_kw ==
                    AST_TYPE_SPECIFIER_KW_SHORT) {
       wk = unsigned_count ? WELL_KNOWN_TY_UNSIGNED_SHORT
