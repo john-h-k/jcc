@@ -574,6 +574,10 @@ d() {
     debug "$@"
 }
 
+t() {
+    test "$@"
+}
+
 _invoke-subcommand() {
     local base name func
 
