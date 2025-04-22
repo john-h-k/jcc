@@ -143,6 +143,11 @@ For the test script, run `jcc.sh test help`.
     * This stage converts the AST into an SSA IR form
     * It assumes the AST is entirely valid and well-typed
     * Code is [`ir/build.h`](src/ir/build.h) and [`ir/build.c`](src/ir/build.c)
+  * ABI Lowering
+    * Lowers arguments and return values into platform specifics (e.g large structs to pointers)
+    * Doing this earlier helps optimisation stage
+  * Optimisation passes
+    * These include inlining, constant folding, dead-branch elimination, and local promotion (a la LLVM's `mem2reg`)
   * Lowering
     * Firstly, global lowering is performed. This lowers certain operations that are lowered on all platforms
       * E.g `br.switch`s are converted into a series of if-elses, and `load.glb/store.glb` operations are transformed to `addr GLB + load.addr/store.addr`
@@ -157,7 +162,7 @@ For the test script, run `jcc.sh test help`.
 * Code Generation
   * Converts the IR into a list of 1:1 machine code instructions
   * These are all target specific
-  * Currently codegen does too much - in the future I would like to move lots of its responsibilities (src/e.g prologue/epilogue) into IR passes
+  * Currently codegen does too much - in the future I would like to move lots of its responsibilities (e.g prologue/epilogue) into IR passes
 * Emitting
   * Actually emits the instructions from code generation into memory
 * Object file building

@@ -2436,9 +2436,17 @@ static struct ir_op *build_ir_for_expr(struct ir_func_builder *irb,
     BUG("builtin should have been handled by call");
     break;
   case TD_EXPR_TY_COMPOUND_STMT: {
-    size_t num_stmt = expr->compound_stmt.num_stmts > 1
-                          ? expr->compound_stmt.num_stmts - 1
-                          : 0;
+    struct td_stmt *last =
+        &expr->compound_stmt.stmts[expr->compound_stmt.num_stmts - 1];
+
+    size_t num_stmt;
+    if (last->ty == TD_STMT_TY_EXPR) {
+      num_stmt = expr->compound_stmt.num_stmts > 1
+                     ? expr->compound_stmt.num_stmts - 1
+                     : 0;
+    } else {
+      num_stmt = expr->compound_stmt.num_stmts;
+    }
 
     struct ir_basicblock *basicblock = (*stmt)->basicblock;
     for (size_t i = 0; i < num_stmt; i++) {
@@ -2448,8 +2456,6 @@ static struct ir_op *build_ir_for_expr(struct ir_func_builder *irb,
 
     *stmt = ir_alloc_stmt(irb->func, basicblock);
 
-    struct td_stmt *last =
-        &expr->compound_stmt.stmts[expr->compound_stmt.num_stmts - 1];
     if (last->ty == TD_STMT_TY_EXPR) {
       op = build_ir_for_expr(
           irb, stmt,

@@ -53,6 +53,9 @@ See the [Typechk](./typechk.html) article for a detailed breakdown of the typech
     * This stage converts the AST into an SSA IR form
     * It assumes the AST is entirely valid and well-typed
     * Code is [`ir/build.h`](https://github.com/john-h-k/jcc/tree/main/src/ir/build.h) and [`ir/build.c`](https://github.com/john-h-k/jcc/tree/main/src/ir/build.c)
+  * ABI Lowering
+    * Lowers arguments and return values into platform specifics (e.g large structs to pointers)
+    * Doing this earlier helps optimisation stage
   * Optimisation passes
     * These include inlining, constant folding, dead-branch elimination, and local promotion (a la LLVM's `mem2reg`)
   * Lowering
