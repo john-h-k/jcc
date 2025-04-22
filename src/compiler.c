@@ -3,7 +3,7 @@
 #include "alloc.h"
 #include "codegen.h"
 #include "diagnostics.h"
-#include "fcache.h"
+#include "fs.h"
 #include "graphcol.h"
 #include "hashtbl.h"
 #include "ir/build.h"
@@ -31,7 +31,7 @@
 
 struct compiler {
   struct arena_allocator *arena;
-  struct fcache *fcache;
+  struct fs *fs;
 
   struct preproc *preproc;
   struct program program;
@@ -54,7 +54,7 @@ compiler_create(const struct compiler_create_args *args,
   *compiler = nonnull_malloc(sizeof(**compiler));
 
   (*compiler)->program = args->program;
-  (*compiler)->fcache = args->fcache;
+  (*compiler)->fs = args->fs;
   (*compiler)->args = args->args;
   (*compiler)->target = args->target;
   (*compiler)->output = args->output;
@@ -80,7 +80,7 @@ compiler_create(const struct compiler_create_args *args,
       .fixed_timestamp = args->args.fixed_timestamp,
   };
 
-  if (preproc_create(args->program, args->fcache, preproc_args,
+  if (preproc_create(args->program, args->fs, preproc_args,
                      (*compiler)->diagnostics,
                      &(*compiler)->preproc) != PREPROC_CREATE_RESULT_SUCCESS) {
     err("failed to create preproc");
@@ -147,12 +147,12 @@ static void compiler_print_diagnostics_context(struct compiler *compiler,
   struct text_pos start = span.start;
   struct text_pos end = span.end;
 
-  struct fcache_file file;
+  struct fs_file file;
 
   // TODO: handle span that crosses file
 
   if (!span.start.file ||
-      !fcache_read_path(compiler->fcache, MK_USTR(span.start.file), &file)) {
+      !fs_read_path(compiler->fs, MK_USTR(span.start.file), &file)) {
     fprintf(sink, "(could not read function file %s)", span.start.file);
     return;
   }

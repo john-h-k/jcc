@@ -2,7 +2,7 @@
 #define COMPILER_H
 
 #include "diagnostics.h"
-#include "fcache.h"
+#include "fs.h"
 #include "program.h"
 
 #include <stdio.h>
@@ -202,7 +202,7 @@ struct target;
 
 struct compiler_create_args {
   struct program program;
-  struct fcache *fcache;
+  struct fs *fs;
   const struct target *target;
   struct compile_file output;
   const char *working_dir;

@@ -4,9 +4,9 @@
 #include "../alloc.h"
 #include "../args.h"
 #include "../compiler.h"
-#include "../fcache.h"
+#include "../fs.h"
 
-int lsp_run(struct arena_allocator *arena, struct fcache *fcache,
+int lsp_run(struct arena_allocator *arena, struct fs *fs,
             struct parsed_args args, struct compile_args compile_args,
             const struct target *target);
 

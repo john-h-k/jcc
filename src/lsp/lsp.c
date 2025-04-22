@@ -21,9 +21,9 @@ struct lsp_ctx {
   struct vector *read_buf;
   struct json_writer *writer;
 
-  // hmm, ideally we would use fcache for all the file caching stuff but it
+  // hmm, ideally we would use fs for all the file caching stuff but it
   // doesn't currently have the capabilities for modifying docs
-  struct fcache *fcache;
+  struct fs *fs;
   // sized_str (uri) : lsp_doc
   struct hashtbl *docs;
 
@@ -119,7 +119,7 @@ static void lsp_parse_doc(struct lsp_ctx *ctx, struct lsp_doc *doc) {
 
   struct compiler_create_args comp_args = {
       .program = program,
-      .fcache = ctx->fcache,
+      .fs = ctx->fs,
       .target = ctx->target,
       .args = ctx->compile_args,
       // TODO: working dir
@@ -604,7 +604,7 @@ static void lsp_handle_msg(struct lsp_ctx *ctx, const struct req_msg *msg) {
     break;
   }
 }
-int lsp_run(struct arena_allocator *arena, struct fcache *fcache,
+int lsp_run(struct arena_allocator *arena, struct fs *fs,
             struct parsed_args args, struct compile_args compile_args,
             const struct target *target) {
   fprintf(stderr, "JCC LSP mode\n");
@@ -617,7 +617,7 @@ int lsp_run(struct arena_allocator *arena, struct fcache *fcache,
                         .writer = json_writer_create(),
                         .compile_args = compile_args,
                         .args = args,
-                        .fcache = fcache,
+                        .fs = fs,
                         .target = target,
                         .shutdown_recv = false,
                         .in = stdin,

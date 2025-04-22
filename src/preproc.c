@@ -3,7 +3,7 @@
 #include "alloc.h"
 #include "compiler.h"
 #include "diagnostics.h"
-#include "fcache.h"
+#include "fs.h"
 #include "hashtbl.h"
 #include "io.h"
 #include "log.h"
@@ -42,7 +42,7 @@ struct preproc_text {
 };
 
 struct preproc {
-  struct fcache *fcache;
+  struct fs *fs;
   struct arena_allocator *arena;
 
   // struct preproc_text
@@ -445,7 +445,7 @@ static void build_special_macros(void) {
 }
 
 enum preproc_create_result
-preproc_create(struct program program, struct fcache *fcache,
+preproc_create(struct program program, struct fs *fs,
                struct preproc_create_args args,
                struct compiler_diagnostics *diagnostics,
                struct preproc **preproc) {
@@ -463,7 +463,7 @@ preproc_create(struct program program, struct fcache *fcache,
 
   struct preproc *p = nonnull_malloc(sizeof(*p));
   p->arena = arena;
-  p->fcache = fcache;
+  p->fs = fs;
   p->args = args;
   p->diagnostics = diagnostics;
 
@@ -2158,14 +2158,14 @@ static bool try_include_path(struct preproc *preproc, const char *path,
 
   switch (mode) {
   case TRY_FIND_INCLUDE_MODE_READ: {
-    struct fcache_file file;
-    found = fcache_read_path(preproc->fcache, MK_USTR(path), &file);
+    struct fs_file file;
+    found = fs_read_path(preproc->fs, MK_USTR(path), &file);
     // FIXME: does not respect `len`
     *content = file.data;
     break;
   }
   case TRY_FIND_INCLUDE_MODE_TEST:
-    found = fcache_test_path(preproc->fcache, MK_USTR(path));
+    found = fs_test_path(preproc->fs, MK_USTR(path));
     break;
   }
 

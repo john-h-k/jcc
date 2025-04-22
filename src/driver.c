@@ -4,7 +4,7 @@
 #include "alloc.h"
 #include "args.h"
 #include "compiler.h"
-#include "fcache.h"
+#include "fs.h"
 #include "hashtbl.h"
 #include "io.h"
 #include "log.h"
@@ -148,7 +148,7 @@ static bool get_target_for_args(enum compile_arch arch,
   }
 }
 
-static const char *get_default_isysroot(struct fcache *fcache,
+static const char *get_default_isysroot(struct fs *fs,
                                         struct arena_allocator *arena,
                                         enum compile_target target) {
   // requires target to have been resolved
@@ -161,8 +161,8 @@ static const char *get_default_isysroot(struct fcache *fcache,
     }
 
 #if OS_APPLE
-    struct fcache_file sdk_path;
-    if (!fcache_read_proc(fcache, MK_USTR("xcrun --sdk macosx --show-sdk-path"),
+    struct fs_file sdk_path;
+    if (!fs_read_proc(fs, MK_USTR("xcrun --sdk macosx --show-sdk-path"),
                           &sdk_path)) {
       BUG("xcrun call failed!");
     }
@@ -258,7 +258,7 @@ static void print_ver(FILE *file, const char *location) {
 
 static enum parse_args_result
 try_get_compile_args(int argc, char **argv, struct parsed_args *args,
-                     struct arena_allocator *arena, struct fcache **fcache,
+                     struct arena_allocator *arena, struct fs **fs,
                      struct compile_args *compile_args, size_t *num_sources,
                      const char ***sources) {
   enum parse_args_result result = parse_args(argc, argv, args);
@@ -278,16 +278,16 @@ try_get_compile_args(int argc, char **argv, struct parsed_args *args,
     }
   }
 
-  enum fcache_flags fcache_flags = FCACHE_FLAG_NONE;
+  enum fs_flags fs_flags = FCACHE_FLAG_NONE;
   switch (args->driver) {
   case JCC_DRIVER_COMPILER:
-    fcache_flags |= FCACHE_FLAG_ASSUME_CONSTANT;
+    fs_flags |= FCACHE_FLAG_ASSUME_CONSTANT;
     break;
   case JCC_DRIVER_LSP:
     break;
   }
 
-  fcache_create(arena, fcache_flags, fcache);
+  fs_create(arena, fs_flags, fs);
 
   struct hashtbl *log_symbols = NULL;
 
@@ -332,7 +332,7 @@ try_get_compile_args(int argc, char **argv, struct parsed_args *args,
       arena_alloc(arena, sizeof(*sys_include_paths) * num_sys_include_paths);
 
   if (!args->isys_root) {
-    args->isys_root = get_default_isysroot(*fcache, arena, args->target);
+    args->isys_root = get_default_isysroot(*fs, arena, args->target);
   }
 
   const char *target = string_target(args->target);
@@ -502,13 +502,13 @@ static bool try_get_language_for_file(struct path_components components,
   return false;
 }
 
-static int jcc_driver_lsp(struct arena_allocator *arena, struct fcache *fcache,
+static int jcc_driver_lsp(struct arena_allocator *arena, struct fs *fs,
                           struct parsed_args args,
                           struct compile_args compile_args,
                           const struct target *target);
 
 static int jcc_driver_compiler(struct arena_allocator *arena,
-                               struct fcache *fcache, struct parsed_args args,
+                               struct fs *fs, struct parsed_args args,
                                struct compile_args compile_args,
                                const struct target *target, size_t num_sources,
                                const char **sources);
@@ -521,13 +521,13 @@ int jcc_main(int argc, char **argv) {
   struct arena_allocator *arena = NULL;
   arena_allocator_create("main", &arena);
 
-  struct fcache *fcache;
+  struct fs *fs;
   struct parsed_args args;
   struct compile_args compile_args;
   size_t num_sources;
   const char **sources;
   enum parse_args_result parse_result = try_get_compile_args(
-      argc, argv, &args, arena, &fcache, &compile_args, &num_sources, &sources);
+      argc, argv, &args, arena, &fs, &compile_args, &num_sources, &sources);
 
   switch (parse_result) {
   case PARSE_ARGS_RESULT_SUCCESS:
@@ -548,11 +548,11 @@ int jcc_main(int argc, char **argv) {
 
   switch (args.driver) {
   case JCC_DRIVER_COMPILER:
-    exc = jcc_driver_compiler(arena, fcache, args, compile_args, target,
+    exc = jcc_driver_compiler(arena, fs, args, compile_args, target,
                               num_sources, sources);
     break;
   case JCC_DRIVER_LSP:
-    exc = jcc_driver_lsp(arena, fcache, args, compile_args, target);
+    exc = jcc_driver_lsp(arena, fs, args, compile_args, target);
     break;
   }
 
@@ -562,15 +562,15 @@ exit:
   return exc;
 }
 
-static int jcc_driver_lsp(struct arena_allocator *arena, struct fcache *fcache,
+static int jcc_driver_lsp(struct arena_allocator *arena, struct fs *fs,
                           struct parsed_args args,
                           struct compile_args compile_args,
                           const struct target *target) {
-  return lsp_run(arena, fcache, args, compile_args, target);
+  return lsp_run(arena, fs, args, compile_args, target);
 }
 
 static int jcc_driver_compiler(struct arena_allocator *arena,
-                               struct fcache *fcache, struct parsed_args args,
+                               struct fs *fs, struct parsed_args args,
                                struct compile_args compile_args,
                                const struct target *target, size_t num_sources,
                                const char **sources) {
@@ -626,12 +626,12 @@ static int jcc_driver_compiler(struct arena_allocator *arena,
 
     PROFILE_BEGIN(source_read);
 
-    struct fcache_file source;
+    struct fs_file source;
     bool success;
     if (!strcmp(source_path, "-")) {
-      success = fcache_read_stdin(fcache, &source);
+      success = fs_read_stdin(fs, &source);
     } else {
-      success = fcache_read_path(fcache, MK_USTR(source_path), &source);
+      success = fs_read_path(fs, MK_USTR(source_path), &source);
     }
 
     PROFILE_END(source_read);
@@ -698,7 +698,7 @@ static int jcc_driver_compiler(struct arena_allocator *arena,
     PROFILE_BEGIN(create_compiler);
 
     struct compiler_create_args comp_args = {.program = program,
-                                             .fcache = fcache,
+                                             .fs = fs,
                                              .target = target,
                                              .args = compile_args,
                                              .working_dir = source_path,
@@ -744,7 +744,7 @@ static int jcc_driver_compiler(struct arena_allocator *arena,
       BUG("linking to stdout/stderr not supported");
     }
 
-    struct link_args link_args = {.fcache = fcache,
+    struct link_args link_args = {.fs = fs,
                                   .args = &compile_args,
                                   .linker_args = args.linker_args.values,
                                   .num_linker_args =

@@ -1,45 +1,45 @@
-#include "fcache.h"
+#include "fs.h"
 
 #include "alloc.h"
 #include "hashtbl.h"
 #include "profile.h"
 #include "util.h"
 
-struct fcache_key {
+struct fs_key {
   enum f_ty { F_TY_PATH, F_TY_PROC, F_TY_STDIN } ty;
   ustr_t key;
 };
 
-struct fcache {
+struct fs {
   struct arena_allocator *arena;
-  enum fcache_flags flags;
+  enum fs_flags flags;
   struct hashtbl *cache;
 };
 
-static void hash_fcache_key(struct hasher *hasher, const void *obj) {
-  const struct fcache_key *value = obj;
+static void hash_fs_key(struct hasher *hasher, const void *obj) {
+  const struct fs_key *value = obj;
 
   hasher_hash_integer(hasher, value->ty, sizeof(value->ty));
   hashtbl_hash_ustr(hasher, &value->key);
 }
 
-static bool eq_fcache_key(const void *l, const void *r) {
-  const struct fcache_key *lc = l;
-  const struct fcache_key *rc = r;
+static bool eq_fs_key(const void *l, const void *r) {
+  const struct fs_key *lc = l;
+  const struct fs_key *rc = r;
 
   return lc->ty == rc->ty && ustr_eq(lc->key, rc->key);
 }
 
-void fcache_create(struct arena_allocator *arena, enum fcache_flags flags,
-                   struct fcache **fcache) {
-  *fcache = arena_alloc(arena, sizeof(**fcache));
+void fs_create(struct arena_allocator *arena, enum fs_flags flags,
+                   struct fs **fs) {
+  *fs = arena_alloc(arena, sizeof(**fs));
 
-  **fcache = (struct fcache){
+  **fs = (struct fs){
       .arena = arena,
       .flags = flags,
-      .cache = hashtbl_create_in_arena(arena, sizeof(struct fcache_key),
-                                       sizeof(struct fcache_file),
-                                       hash_fcache_key, eq_fcache_key)};
+      .cache = hashtbl_create_in_arena(arena, sizeof(struct fs_key),
+                                       sizeof(struct fs_file),
+                                       hash_fs_key, eq_fs_key)};
 }
 
 enum fc_mode {
@@ -47,43 +47,43 @@ enum fc_mode {
   FC_MODE_TEST,
 };
 
-static bool fcache_read(struct fcache *fcache, struct fcache_key key,
-                        struct fcache_file *file, enum fc_mode mode);
+static bool fs_read(struct fs *fs, struct fs_key key,
+                        struct fs_file *file, enum fc_mode mode);
 
-bool fcache_test_path(struct fcache *fcache, ustr_t path) {
-  struct fcache_key key = {F_TY_PATH, .key = path};
+bool fs_test_path(struct fs *fs, ustr_t path) {
+  struct fs_key key = {F_TY_PATH, .key = path};
 
-  return fcache_read(fcache, key, NULL, FC_MODE_TEST);
+  return fs_read(fs, key, NULL, FC_MODE_TEST);
 }
 
-bool fcache_read_stdin(struct fcache *fcache, struct fcache_file *file) {
-  struct fcache_key key = {.ty = F_TY_STDIN, .key = MK_NULL_USTR()};
+bool fs_read_stdin(struct fs *fs, struct fs_file *file) {
+  struct fs_key key = {.ty = F_TY_STDIN, .key = MK_NULL_USTR()};
 
-  return fcache_read(fcache, key, file, FC_MODE_READ);
+  return fs_read(fs, key, file, FC_MODE_READ);
 }
 
-bool fcache_read_path(struct fcache *fcache, ustr_t path,
-                      struct fcache_file *file) {
-  struct fcache_key key = {F_TY_PATH, .key = path};
+bool fs_read_path(struct fs *fs, ustr_t path,
+                      struct fs_file *file) {
+  struct fs_key key = {F_TY_PATH, .key = path};
 
-  return fcache_read(fcache, key, file, FC_MODE_READ);
+  return fs_read(fs, key, file, FC_MODE_READ);
 }
 
-bool fcache_read_proc(struct fcache *fcache, ustr_t proc,
-                      struct fcache_file *file) {
-  struct fcache_key key = {F_TY_PROC, .key = proc};
+bool fs_read_proc(struct fs *fs, ustr_t proc,
+                      struct fs_file *file) {
+  struct fs_key key = {F_TY_PROC, .key = proc};
 
-  return fcache_read(fcache, key, file, FC_MODE_READ);
+  return fs_read(fs, key, file, FC_MODE_READ);
 }
 
-static void read_file_content(struct fcache *fcache, FILE *file, char **buf,
+static void read_file_content(struct fs *fs, FILE *file, char **buf,
                               size_t *buf_len);
 
-static bool fcache_read(struct fcache *fcache, struct fcache_key key,
-                        struct fcache_file *file, enum fc_mode mode) {
+static bool fs_read(struct fs *fs, struct fs_key key,
+                        struct fs_file *file, enum fc_mode mode) {
   // TODO: caching (via mtime) even when flag not present
-  if (fcache->flags & FCACHE_FLAG_ASSUME_CONSTANT) {
-    struct fcache_file *cache = hashtbl_lookup(fcache->cache, &key);
+  if (fs->flags & FCACHE_FLAG_ASSUME_CONSTANT) {
+    struct fs_file *cache = hashtbl_lookup(fs->cache, &key);
     if (cache) {
       if (file) {
         *file = *cache;
@@ -93,10 +93,10 @@ static bool fcache_read(struct fcache *fcache, struct fcache_key key,
   }
 
   // FIXME: assert the sized_str has no null chars in it
-  DEBUG_ASSERT(ustr_nullsafe(key.key), "fcache doesn't support null chars");
+  DEBUG_ASSERT(ustr_nullsafe(key.key), "fs doesn't support null chars");
 
-  PROFILE_CREATE_MULTI(fcache_read);
-  PROFILE_BEGIN_MULTI(fcache_read);
+  PROFILE_CREATE_MULTI(fs_read);
+  PROFILE_BEGIN_MULTI(fs_read);
 
   FILE *f;
   switch (key.ty) {
@@ -113,12 +113,12 @@ static bool fcache_read(struct fcache *fcache, struct fcache_key key,
   }
 
   if (!f) {
-    PROFILE_END_MULTI(fcache_read);
+    PROFILE_END_MULTI(fs_read);
     return false;
   }
 
   if (file) {
-    *file = (struct fcache_file){
+    *file = (struct fs_file){
         .name = key.key,
     };
   }
@@ -127,15 +127,15 @@ static bool fcache_read(struct fcache *fcache, struct fcache_key key,
     DEBUG_ASSERT(file, "file null");
 
     char *data;
-    read_file_content(fcache, f, &data, &file->len);
+    read_file_content(fs, f, &data, &file->len);
 
     file->data = data;
 
-    // clone becaue fcache may outlive callers
-    key.key = arena_alloc_ustrdup(fcache->arena, key.key);
-    file->name = arena_alloc_ustrdup(fcache->arena, file->name);
+    // clone becaue fs may outlive callers
+    key.key = arena_alloc_ustrdup(fs->arena, key.key);
+    file->name = arena_alloc_ustrdup(fs->arena, file->name);
 
-    hashtbl_insert(fcache->cache, &key, file);
+    hashtbl_insert(fs->cache, &key, file);
   }
 
   // TODO: check return values
@@ -150,11 +150,11 @@ static bool fcache_read(struct fcache *fcache, struct fcache_key key,
     break;
   }
 
-  PROFILE_END_MULTI(fcache_read);
+  PROFILE_END_MULTI(fs_read);
   return true;
 }
 
-static void read_file_content(struct fcache *fcache, FILE *file, char **buf,
+static void read_file_content(struct fs *fs, FILE *file, char **buf,
                               size_t *buf_len) {
   fseek(file, 0, SEEK_END);
   long fsize = ftell(file);
@@ -170,7 +170,7 @@ static void read_file_content(struct fcache *fcache, FILE *file, char **buf,
     char *head;
 
     do {
-      content = arena_realloc(fcache->arena, content, len + READ_BUF_SZ);
+      content = arena_realloc(fs->arena, content, len + READ_BUF_SZ);
       head = &content[len];
 
       len += read;
@@ -187,7 +187,7 @@ static void read_file_content(struct fcache *fcache, FILE *file, char **buf,
   fseek(file, 0, SEEK_END);
   fseek(file, 0, SEEK_SET);
 
-  char *content = arena_alloc(fcache->arena, (unsigned long)fsize + 1);
+  char *content = arena_alloc(fs->arena, (unsigned long)fsize + 1);
   size_t read = fread(content, 1, (unsigned long)fsize, file);
 
   if (read != (size_t)fsize) {
