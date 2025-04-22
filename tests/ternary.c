@@ -1,4 +1,4 @@
-// expected value: 7
+// expected value: 50
 
 struct baz {
   int val;
@@ -57,5 +57,16 @@ int main() {
     return 5;
   }
 
-  return a ? a ? a ? 7 : 8 : 9 : 10;
+  // gnu extension ternary
+  int z1 = 0 ?: 1;
+  if (z1 != 1) {
+    return 6;
+  }
+
+  z1 = 2 ?: 1;
+  if (z1 != 2) {
+    return 8;
+  }
+
+  return a ? a ? a ? 50 : 51 : 52 : 53;
 }

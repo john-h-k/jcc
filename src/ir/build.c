@@ -1314,13 +1314,99 @@ build_ir_for_compoundexpr(struct ir_func_builder *irb, struct ir_stmt **stmt,
   return op;
 }
 
+// a ?: b
+static struct ir_op *build_ir_for_two_ternary(struct ir_func_builder *irb,
+                                              struct ir_stmt **stmt,
+                                              struct ir_var_ty var_ty,
+                                              struct td_ternary *ternary) {
+  // this was quickly written and not thoroughly tested
+
+  struct ir_op *cond = build_ir_for_expr(irb, stmt, ternary->cond);
+  struct ir_stmt *br_cond_stmt = ir_alloc_stmt(irb->func, (*stmt)->basicblock);
+  struct ir_op *br_cond = ir_alloc_op(irb->func, br_cond_stmt);
+  br_cond->ty = IR_OP_TY_BR_COND;
+  br_cond->var_ty = IR_VAR_TY_NONE;
+  br_cond->br_cond = (struct ir_op_br_cond){.cond = cond};
+
+  struct ir_basicblock *pre_cond_bb = (*stmt)->basicblock;
+  struct ir_basicblock *false_bb = ir_alloc_basicblock(irb->func);
+  struct ir_basicblock *end_bb = ir_alloc_basicblock(irb->func);
+
+  ir_make_basicblock_split(irb->func, pre_cond_bb, end_bb, false_bb);
+
+  struct ir_stmt *false_stmt = ir_alloc_stmt(irb->func, false_bb);
+  struct ir_op *false_op =
+      build_ir_for_expr(irb, &false_stmt, ternary->false_expr);
+
+  struct ir_stmt *false_br_stmt =
+      ir_alloc_stmt(irb->func, false_stmt->basicblock);
+  ir_make_basicblock_merge(irb->func, false_stmt->basicblock, end_bb);
+  struct ir_op *false_br = ir_alloc_op(irb->func, false_br_stmt);
+  false_br->ty = IR_OP_TY_BR;
+  false_br->var_ty = IR_VAR_TY_NONE;
+
+  // need to handle the case of `foo ? aggregate : aggregate`
+  // in which case we want to do a phi of the _addresses_ not the loads
+  // themselves
+
+  bool gen_load = false;
+  struct ir_var_ty load_ty;
+  if (false_op && ir_var_ty_is_aggregate(&false_op->var_ty)) {
+    gen_load = true;
+    load_ty = false_op->var_ty;
+
+    if (false_op->ty == IR_OP_TY_CALL) {
+      // need to spill
+      false_op = ir_spill_op(irb->func, false_op);
+    }
+
+    if (cond->ty == IR_OP_TY_CALL) {
+      // need to spill
+      cond = ir_spill_op(irb->func, cond);
+    }
+
+    struct ir_op *false_addr = ir_build_addr(irb->func, false_op);
+    struct ir_op *true_addr = ir_build_addr(irb->func, cond);
+
+    false_op = false_addr;
+    cond = true_addr;
+  }
+
+  struct ir_op *phi = ir_insert_phi(irb->func, end_bb, var_ty);
+  phi->phi = (struct ir_op_phi){
+      .num_values = 2,
+      .values = arena_alloc(irb->arena, sizeof(struct ir_op_phi) * 2),
+  };
+
+  phi->phi.values[0] = (struct ir_phi_entry){
+      .basicblock = false_op->stmt->basicblock, .value = false_op};
+  phi->phi.values[1] = (struct ir_phi_entry){
+      .basicblock = cond->stmt->basicblock, .value = cond};
+
+  struct ir_stmt *end_stmt = ir_alloc_stmt(irb->func, end_bb);
+  *stmt = end_stmt;
+
+  if (gen_load) {
+    phi->var_ty = IR_VAR_TY_POINTER;
+
+    struct ir_op *load =
+        ir_append_op(irb->func, end_stmt, IR_OP_TY_LOAD, load_ty);
+    load->load = (struct ir_op_load){.ty = IR_OP_LOAD_TY_ADDR, .addr = phi};
+
+    return load;
+  }
+
+  return phi;
+}
+
 static struct ir_op *build_ir_for_ternary(struct ir_func_builder *irb,
                                           struct ir_stmt **stmt,
                                           struct ir_var_ty var_ty,
                                           struct td_ternary *ternary) {
   // lhs/rhs can be UNKNOWN if the ternary is mistyped but compile-time constant
   // (we allow this)
-  if (ternary->true_expr->var_ty.ty == TD_VAR_TY_TY_UNKNOWN) {
+  if (ternary->true_expr &&
+      ternary->true_expr->var_ty.ty == TD_VAR_TY_TY_UNKNOWN) {
     DEBUG_ASSERT(ternary->false_expr->var_ty.ty != TD_VAR_TY_TY_UNKNOWN,
                  "both ternary sides unknown!");
 
@@ -1330,6 +1416,10 @@ static struct ir_op *build_ir_for_ternary(struct ir_func_builder *irb,
                  "both ternary sides unknown!");
 
     return build_ir_for_expr(irb, stmt, ternary->true_expr);
+  }
+
+  if (!ternary->true_expr) {
+    return build_ir_for_two_ternary(irb, stmt, var_ty, ternary);
   }
 
   struct ir_op *cond = build_ir_for_expr(irb, stmt, ternary->cond);

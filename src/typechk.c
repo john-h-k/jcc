@@ -2503,20 +2503,30 @@ static struct td_expr type_ternary(struct typechk *tchk,
   };
 
   *td_ternary.cond = type_expr(tchk, TYPE_EXPR_FLAGS_NONE, ternary->cond);
-  *td_ternary.true_expr = perform_integer_promotion(
-      tchk, type_expr(tchk, TYPE_EXPR_FLAGS_NONE, ternary->true_expr));
+
   *td_ternary.false_expr = perform_integer_promotion(
       tchk, type_expr(tchk, TYPE_EXPR_FLAGS_NONE, ternary->false_expr));
 
-  struct text_span context = ternary->span;
-  struct td_var_ty result_ty = resolve_usual_arithmetic_conversions(
-      tchk, &td_ternary.true_expr->var_ty, &td_ternary.false_expr->var_ty,
-      context);
+  struct td_var_ty result_ty;
+
+  if (ternary->true_expr) {
+    *td_ternary.true_expr = perform_integer_promotion(
+        tchk, type_expr(tchk, TYPE_EXPR_FLAGS_NONE, ternary->true_expr));
+
+    struct text_span context = ternary->span;
+    result_ty = resolve_usual_arithmetic_conversions(
+        tchk, &td_ternary.true_expr->var_ty, &td_ternary.false_expr->var_ty,
+        context);
+  } else {
+    td_ternary.true_expr = NULL;
+    result_ty = td_ternary.false_expr->var_ty;
+  }
 
   // TODO: this could be expensive, so we only want to do it if we would
   // otherwise get a type error (rather than always)
 
-  if (td_ternary.true_expr->var_ty.ty == TD_VAR_TY_TY_VOID ||
+  if ((td_ternary.true_expr &&
+       td_ternary.true_expr->var_ty.ty == TD_VAR_TY_TY_VOID) ||
       td_ternary.false_expr->var_ty.ty == TD_VAR_TY_TY_VOID) {
     struct td_val cond_val;
 
@@ -2539,8 +2549,11 @@ static struct td_expr type_ternary(struct typechk *tchk,
     }
   }
 
-  *td_ternary.true_expr =
-      add_cast_if_needed(tchk, ternary->span, *td_ternary.true_expr, result_ty);
+  if (td_ternary.true_expr) {
+    *td_ternary.true_expr = add_cast_if_needed(
+        tchk, ternary->span, *td_ternary.true_expr, result_ty);
+  }
+
   *td_ternary.false_expr = add_cast_if_needed(
       tchk, ternary->span, *td_ternary.false_expr, result_ty);
 
@@ -7660,7 +7673,11 @@ DEBUG_FUNC(ternary, ternary) {
 
   INDENT();
   TD_PRINTZ("TRUE");
-  DEBUG_CALL(expr, ternary->true_expr);
+  if (ternary->true_expr) {
+    DEBUG_CALL(expr, ternary->true_expr);
+  } else {
+    TD_PRINTZ("NULL (GNU 2 expr ternary)");
+  }
   UNINDENT();
 
   INDENT();

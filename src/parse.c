@@ -2712,6 +2712,7 @@ static bool parse_ternary(struct parser *parser, const struct ast_expr *cond,
                           struct ast_expr *expr) {
   struct lex_pos pos = lex_get_position(parser->lexer);
 
+  bool has_true;
   struct ast_expr true_expr;
   struct ast_expr false_expr;
   if (!parse_token(parser, LEX_TOKEN_TY_QMARK, NULL)) {
@@ -2719,13 +2720,18 @@ static bool parse_ternary(struct parser *parser, const struct ast_expr *cond,
     return false;
   }
 
-  // in `cond ? true : false`, `true` is parsed as if it were parenthesised
-  if (!parse_compoundexpr_as_expr(parser, &true_expr)) {
+  if (parse_token(parser, LEX_TOKEN_TY_COLON, NULL)) {
+    has_true = false;
+  } else if (parse_compoundexpr_as_expr(parser, &true_expr)) {
+    // in `cond ? true : false`, `true` is parsed as if it were parenthesised
+    has_true = true;
+
+    parse_expected_token(parser, LEX_TOKEN_TY_COLON, true_expr.span.start,
+                         "expected ':' after ternary true expression", NULL);
+  } else {
     return false;
   }
 
-  parse_expected_token(parser, LEX_TOKEN_TY_COLON, true_expr.span.start,
-                       "expected ':' after ternary true expression", NULL);
   parse_expected_expr(parser, &false_expr, "expected expr after ':'");
 
   expr->ty = AST_EXPR_TY_TERNARY;
@@ -2737,7 +2743,12 @@ static bool parse_ternary(struct parser *parser, const struct ast_expr *cond,
   };
 
   *expr->ternary.cond = *cond;
-  *expr->ternary.true_expr = true_expr;
+
+  if (has_true) {
+    *expr->ternary.true_expr = true_expr;
+  } else {
+    expr->ternary.true_expr = NULL;
+  }
   *expr->ternary.false_expr = false_expr;
   expr->ternary.span = MK_TEXT_SPAN(cond->span.start, false_expr.span.end);
   expr->span = expr->ternary.span;
@@ -4711,7 +4722,11 @@ DEBUG_FUNC(ternary, ternary) {
 
   INDENT();
   AST_PRINTZ("TRUE");
-  DEBUG_CALL(expr, ternary->true_expr);
+  if (ternary->true_expr) {
+    DEBUG_CALL(expr, ternary->true_expr);
+  } else {
+    AST_PRINTZ("NULL (GNU 2 expr ternary)");
+  }
   UNINDENT();
 
   INDENT();
