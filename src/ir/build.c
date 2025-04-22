@@ -2435,7 +2435,7 @@ static struct ir_op *build_ir_for_expr(struct ir_func_builder *irb,
   case TD_EXPR_TY_BUILTIN:
     BUG("builtin should have been handled by call");
     break;
-  case TD_EXPR_TY_COMPOUND_STMT:
+  case TD_EXPR_TY_COMPOUND_STMT: {
     size_t num_stmt = expr->compound_stmt.num_stmts > 1
                           ? expr->compound_stmt.num_stmts - 1
                           : 0;
@@ -2458,6 +2458,7 @@ static struct ir_op *build_ir_for_expr(struct ir_func_builder *irb,
       op = NULL;
     }
     break;
+  }
   case TD_EXPR_TY_VA_ARG:
     op = build_ir_for_va_arg(irb, stmt, &expr->va_arg);
     break;
