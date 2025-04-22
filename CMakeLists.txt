@@ -27,7 +27,7 @@ set(
   src/deque.c
   src/hash.c
   src/bitset.c
-  src/fcache.c
+  src/fs.c
   src/json.c
   src/syscmd.c
 

@@ -278,10 +278,10 @@ try_get_compile_args(int argc, char **argv, struct parsed_args *args,
     }
   }
 
-  enum fs_flags fs_flags = FCACHE_FLAG_NONE;
+  enum fs_flags fs_flags = FS_FLAG_NONE;
   switch (args->driver) {
   case JCC_DRIVER_COMPILER:
-    fs_flags |= FCACHE_FLAG_ASSUME_CONSTANT;
+    fs_flags |= FS_FLAG_ASSUME_CONSTANT;
     break;
   case JCC_DRIVER_LSP:
     break;
