@@ -1234,11 +1234,11 @@ td_var_ty_for_enum(struct typechk *tchk,
                            .enumerator = value,
                            .span = enumerator->span};
 
-
       // enums have same behaviour as types, but are in the var table
       // so if type table is at global level, insert enum there too
-      struct var_table_entry *entry = vt_create_entry_at_scope(&tchk->var_table, VAR_TABLE_NS_NONE,
-                                          enum_name, vt_cur_scope(&tchk->ty_table));
+      struct var_table_entry *entry =
+          vt_create_entry_at_scope(&tchk->var_table, VAR_TABLE_NS_NONE,
+                                   enum_name, vt_cur_scope(&tchk->ty_table));
       entry->var = arena_alloc(tchk->arena, sizeof(*entry->var));
       *entry->var = var;
       entry->var_ty = arena_alloc(tchk->arena, sizeof(*entry->var_ty));
@@ -2478,6 +2478,22 @@ static struct td_expr type_expr(struct typechk *tchk,
                                 enum type_expr_flags flags,
                                 const struct ast_expr *expr);
 
+enum FLAG_ENUM eval_constant_integral_expr_flags {
+  EVAL_CONSTANT_INTEGRAL_EXPR_FLAG_NONE = 0,
+  EVAL_CONSTANT_INTEGRAL_EXPR_FLAG_EMIT_DIAGNOSTICS = 1 << 0,
+};
+
+// temporary type while td_cnst does not use ap_val
+struct td_val {
+  struct td_var_ty var_ty;
+  struct ap_val val;
+};
+
+static bool
+eval_constant_integral_expr(struct typechk *tchk, const struct td_expr *expr,
+                            enum eval_constant_integral_expr_flags flags,
+                            struct td_val *value);
+
 static struct td_expr type_ternary(struct typechk *tchk,
                                    const struct ast_ternary *ternary) {
   struct td_ternary td_ternary = {
@@ -2496,6 +2512,32 @@ static struct td_expr type_ternary(struct typechk *tchk,
   struct td_var_ty result_ty = resolve_usual_arithmetic_conversions(
       tchk, &td_ternary.true_expr->var_ty, &td_ternary.false_expr->var_ty,
       context);
+
+  // TODO: this could be expensive, so we only want to do it if we would
+  // otherwise get a type error (rather than always)
+
+  if (td_ternary.true_expr->var_ty.ty == TD_VAR_TY_TY_VOID ||
+      td_ternary.false_expr->var_ty.ty == TD_VAR_TY_TY_VOID) {
+    struct td_val cond_val;
+
+    eval_constant_integral_expr(tchk, td_ternary.cond,
+                                EVAL_CONSTANT_INTEGRAL_EXPR_FLAG_NONE,
+                                &cond_val);
+
+    if (cond_val.val.ty != AP_VAL_TY_INVALID) {
+      if (ap_val_iszero(cond_val.val) &&
+          td_ternary.true_expr->var_ty.ty == TD_VAR_TY_TY_VOID) {
+        // allow void typing of incorrect side
+
+        td_ternary.true_expr->var_ty = TD_VAR_TY_UNKNOWN;
+      } else if (ap_val_nonzero(cond_val.val) &&
+                 td_ternary.false_expr->var_ty.ty == TD_VAR_TY_TY_VOID) {
+        // allow void typing of incorrect side
+
+        td_ternary.false_expr->var_ty = TD_VAR_TY_UNKNOWN;
+      }
+    }
+  }
 
   *td_ternary.true_expr =
       add_cast_if_needed(tchk, ternary->span, *td_ternary.true_expr, result_ty);
@@ -3237,6 +3279,7 @@ static bool td_expr_is_lvalue(UNUSED struct typechk *tchk,
   case TD_EXPR_TY_BUILTIN:
     return true;
   case TD_EXPR_TY_CALL:
+  case TD_EXPR_TY_COMPOUND_STMT:
   case TD_EXPR_TY_VA_ARG:
   case TD_EXPR_TY_TERNARY:
   case TD_EXPR_TY_BINARY_OP:
@@ -4239,13 +4282,11 @@ static struct td_expr type_generic(struct typechk *tchk,
           char *msg = arena_alloc_snprintf(
               tchk->arena,
               "multiple associations in '_Generic' matched ("
-              "controlling type '%s' matched associations for '%s' (assocation %zu) and '%s' (association %zu))",
+              "controlling type '%s' matched associations for '%s' (assocation "
+              "%zu) and '%s' (association %zu))",
               tchk_type_name(tchk, &ctrl_var_ty),
-              tchk_type_name(tchk, &selected_var_ty),
-              selected_idx,
-              tchk_type_name(tchk, &assoc_var_ty),
-              i
-            );
+              tchk_type_name(tchk, &selected_var_ty), selected_idx,
+              tchk_type_name(tchk, &assoc_var_ty), i);
 
           tchk->result_ty = TYPECHK_RESULT_TY_FAILURE;
           compiler_diagnostics_add(
@@ -4319,6 +4360,42 @@ static struct td_expr type_va_arg(struct typechk *tchk,
                  .var_ty = type}};
 }
 
+static struct td_compoundstmt
+type_compoundstmt(struct typechk *tchk,
+                  const struct ast_compoundstmt *compound_stmt);
+
+static struct td_expr
+type_compoundstmt_expr(struct typechk *tchk,
+                       const struct ast_compoundstmt *compound_stmt) {
+  struct td_compoundstmt td_cmpd = type_compoundstmt(tchk, compound_stmt);
+
+  if (!td_cmpd.num_stmts) {
+    BUG("diag for empty compound stmt expr");
+  }
+
+  struct td_var_ty var_ty;
+  struct td_stmt *last = &td_cmpd.stmts[td_cmpd.num_stmts - 1];
+  switch (last->ty) {
+  case TD_STMT_TY_NULL:
+  case TD_STMT_TY_DECLARATION:
+  case TD_STMT_TY_LABELED:
+  case TD_STMT_TY_COMPOUND:
+  case TD_STMT_TY_JUMP:
+  case TD_STMT_TY_ITER:
+  case TD_STMT_TY_SELECT:
+  case TD_STMT_TY_DEFER:
+    var_ty = TD_VAR_TY_VOID;
+    break;
+  case TD_STMT_TY_EXPR:
+    var_ty = last->expr.var_ty;
+    break;
+  }
+
+  return (struct td_expr){.ty = TD_EXPR_TY_COMPOUND_STMT,
+                          .var_ty = var_ty,
+                          .compound_stmt = td_cmpd};
+}
+
 static struct td_expr type_expr(struct typechk *tchk,
                                 enum type_expr_flags flags,
                                 const struct ast_expr *expr) {
@@ -4329,6 +4406,9 @@ static struct td_expr type_expr(struct typechk *tchk,
     BUG("INVALID expr type should not reach typechk (should trigger "
         "diagnostic "
         "-> trigger parse fail)");
+    break;
+  case TD_EXPR_TY_COMPOUND_STMT:
+    td_expr = type_compoundstmt_expr(tchk, &expr->compound_stmt);
     break;
   case AST_EXPR_TY_VA_ARG:
     td_expr = type_va_arg(tchk, &expr->va_arg);
@@ -4524,17 +4604,6 @@ static struct td_var_ty_info td_var_ty_info(struct typechk *tchk,
   }
   }
 }
-
-enum FLAG_ENUM eval_constant_integral_expr_flags {
-  EVAL_CONSTANT_INTEGRAL_EXPR_FLAG_NONE = 0,
-  EVAL_CONSTANT_INTEGRAL_EXPR_FLAG_EMIT_DIAGNOSTICS = 1 << 0,
-};
-
-// temporary type while td_cnst does not use ap_val
-struct td_val {
-  struct td_var_ty var_ty;
-  struct ap_val val;
-};
 
 static bool try_get_member_offset(struct typechk *tchk,
                                   const struct td_var_ty *aggregate,
@@ -5717,10 +5786,6 @@ type_selectstmt(struct typechk *tchk, const struct ast_selectstmt *selectstmt) {
   return td_select;
 }
 
-static struct td_compoundstmt
-type_compoundstmt(struct typechk *tchk,
-                  const struct ast_compoundstmt *compound_stmt);
-
 static void type_staticassert(struct typechk *tchk,
                               const struct ast_staticassert *staticassert);
 
@@ -6769,6 +6834,11 @@ static void td_walk_node(struct typechk *tchk, const struct td_node *node,
     case TD_EXPR_TY_VA_ARG:
       CB_EXPR(expr->va_arg.list);
       break;
+    case TD_EXPR_TY_COMPOUND_STMT:
+      for (size_t i = 0; i < expr->compound_stmt.num_stmts; i++) {
+        CB_STMT(&expr->compound_stmt.stmts[i]);
+      }
+      break;
     case TD_EXPR_TY_TERNARY:
       CB_EXPR(expr->ternary.cond);
       CB_EXPR(expr->ternary.true_expr);
@@ -7631,6 +7701,9 @@ DEBUG_FUNC(expr, expr) {
   switch (expr->ty) {
   case TD_EXPR_TY_INVALID:
     TD_PRINTZ("INVALID");
+    break;
+  case TD_EXPR_TY_COMPOUND_STMT:
+    DEBUG_CALL(compoundstmt, &expr->compound_stmt);
     break;
   case TD_EXPR_TY_BUILTIN:
     DEBUG_CALL(builtin, &expr->builtin);

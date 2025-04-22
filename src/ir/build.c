@@ -1318,6 +1318,20 @@ static struct ir_op *build_ir_for_ternary(struct ir_func_builder *irb,
                                           struct ir_stmt **stmt,
                                           struct ir_var_ty var_ty,
                                           struct td_ternary *ternary) {
+  // lhs/rhs can be UNKNOWN if the ternary is mistyped but compile-time constant
+  // (we allow this)
+  if (ternary->true_expr->var_ty.ty == TD_VAR_TY_TY_UNKNOWN) {
+    DEBUG_ASSERT(ternary->false_expr->var_ty.ty != TD_VAR_TY_TY_UNKNOWN,
+                 "both ternary sides unknown!");
+
+    return build_ir_for_expr(irb, stmt, ternary->false_expr);
+  } else if (ternary->false_expr->var_ty.ty == TD_VAR_TY_TY_UNKNOWN) {
+    DEBUG_ASSERT(ternary->true_expr->var_ty.ty != TD_VAR_TY_TY_UNKNOWN,
+                 "both ternary sides unknown!");
+
+    return build_ir_for_expr(irb, stmt, ternary->true_expr);
+  }
+
   struct ir_op *cond = build_ir_for_expr(irb, stmt, ternary->cond);
   struct ir_stmt *br_cond_stmt = ir_alloc_stmt(irb->func, (*stmt)->basicblock);
   struct ir_op *br_cond = ir_alloc_op(irb->func, br_cond_stmt);
@@ -1360,7 +1374,7 @@ static struct ir_op *build_ir_for_ternary(struct ir_func_builder *irb,
 
   bool gen_load = false;
   struct ir_var_ty load_ty;
-  if ((ir_var_ty_is_aggregate(&false_op->var_ty) &&
+  if ((false_op && ir_var_ty_is_aggregate(&false_op->var_ty) && true_op &&
        ir_var_ty_is_aggregate(&true_op->var_ty))) {
     DEBUG_ASSERT(ir_var_ty_eq(irb->unit, &false_op->var_ty, &true_op->var_ty),
                  "expected branches to have same ty");
@@ -2314,6 +2328,10 @@ static struct ir_op *build_ir_for_va_arg(struct ir_func_builder *irb,
   return op;
 }
 
+static struct ir_basicblock *build_ir_for_stmt(struct ir_func_builder *irb,
+                                               struct ir_basicblock *basicblock,
+                                               struct td_stmt *stmt);
+
 static struct ir_op *build_ir_for_expr(struct ir_func_builder *irb,
                                        struct ir_stmt **stmt,
                                        struct td_expr *expr) {
@@ -2326,6 +2344,29 @@ static struct ir_op *build_ir_for_expr(struct ir_func_builder *irb,
     BUG("invalid expr should not reach ir gen");
   case TD_EXPR_TY_BUILTIN:
     BUG("builtin should have been handled by call");
+    break;
+  case TD_EXPR_TY_COMPOUND_STMT:
+    size_t num_stmt = expr->compound_stmt.num_stmts > 1
+                          ? expr->compound_stmt.num_stmts - 1
+                          : 0;
+
+    struct ir_basicblock *basicblock = (*stmt)->basicblock;
+    for (size_t i = 0; i < num_stmt; i++) {
+      basicblock =
+          build_ir_for_stmt(irb, basicblock, &expr->compound_stmt.stmts[i]);
+    }
+
+    *stmt = ir_alloc_stmt(irb->func, basicblock);
+
+    struct td_stmt *last =
+        &expr->compound_stmt.stmts[expr->compound_stmt.num_stmts - 1];
+    if (last->ty == TD_STMT_TY_EXPR) {
+      op = build_ir_for_expr(
+          irb, stmt,
+          &expr->compound_stmt.stmts[expr->compound_stmt.num_stmts - 1].expr);
+    } else {
+      op = NULL;
+    }
     break;
   case TD_EXPR_TY_VA_ARG:
     op = build_ir_for_va_arg(irb, stmt, &expr->va_arg);
@@ -2380,13 +2421,8 @@ static struct ir_op *build_ir_for_expr(struct ir_func_builder *irb,
   return op;
 }
 
-static struct ir_basicblock *build_ir_for_stmt(struct ir_func_builder *irb,
-                                               struct ir_basicblock *basicblock,
-                                               struct td_stmt *stmt);
-
-static void
-build_ensure_deferred(struct ir_func_builder *irb,
-                      struct ir_stmt **stmt) {
+static void build_ensure_deferred(struct ir_func_builder *irb,
+                                  struct ir_stmt **stmt) {
   *stmt = ir_alloc_stmt(irb->func, (*stmt)->basicblock);
 
   size_t i = vector_length(irb->defers);
@@ -2398,7 +2434,8 @@ build_ensure_deferred(struct ir_func_builder *irb,
       break;
     }
 
-    struct ir_basicblock *basicblock = build_ir_for_stmt(irb, (*stmt)->basicblock, defer->deferstmt->stmt);
+    struct ir_basicblock *basicblock =
+        build_ir_for_stmt(irb, (*stmt)->basicblock, defer->deferstmt->stmt);
     *stmt = basicblock->last;
   }
 }
@@ -3931,10 +3968,12 @@ static struct ir_func *build_ir_for_function(struct ir_unit *unit,
 //   }
 // }
 
-static size_t
-get_member_index_offset(struct ir_unit *iru, struct typechk *tchk, const struct td_var_ty *var_ty,
-                        size_t member_index, struct td_var_ty *member_ty,
-                        bool *is_bitfield, struct ir_bitfield *bitfield) {
+static size_t get_member_index_offset(struct ir_unit *iru, struct typechk *tchk,
+                                      const struct td_var_ty *var_ty,
+                                      size_t member_index,
+                                      struct td_var_ty *member_ty,
+                                      bool *is_bitfield,
+                                      struct ir_bitfield *bitfield) {
   *is_bitfield = false;
 
   if (var_ty->ty == TD_VAR_TY_TY_ARRAY) {
@@ -4019,15 +4058,14 @@ static size_t get_designator_offset(struct ir_unit *iru,
   return offset;
 }
 
-
-
 enum init_list_layout_ty {
   INIT_LIST_LAYOUT_TY_STRUCT,
   INIT_LIST_LAYOUT_TY_UNION,
   INIT_LIST_LAYOUT_TY_ARRAY,
 };
 
-static void build_init_list_layout_entry(struct ir_unit *iru, struct typechk *tchk,
+static void build_init_list_layout_entry(struct ir_unit *iru,
+                                         struct typechk *tchk,
                                          const struct td_init_list *init_list,
                                          const struct td_var_ty *var_ty,
                                          size_t offset, struct vector *inits) {
@@ -4102,8 +4140,8 @@ static void build_init_list_layout_entry(struct ir_unit *iru, struct typechk *tc
       break;
     }
     case TD_INIT_TY_INIT_LIST:
-      build_init_list_layout_entry(iru, tchk, &init->init->init_list, &member_ty,
-                                   init_offset, inits);
+      build_init_list_layout_entry(iru, tchk, &init->init->init_list,
+                                   &member_ty, init_offset, inits);
       break;
     }
   }
@@ -4114,7 +4152,8 @@ build_init_list_layout(struct ir_unit *iru, struct typechk *tchk,
                        const struct td_init_list *init_list) {
   struct vector *inits = vector_create(sizeof(struct ir_build_init));
 
-  build_init_list_layout_entry(iru, tchk, init_list, &init_list->var_ty, 0, inits);
+  build_init_list_layout_entry(iru, tchk, init_list, &init_list->var_ty, 0,
+                               inits);
 
   struct ir_build_init_list_layout layout = {
       .num_inits = vector_length(inits),
@@ -4495,8 +4534,6 @@ build_ir_for_var_value_unary_op(struct ir_var_builder *irb,
     TODO("other unary ops in globals");
   }
 }
-
-
 
 static struct ir_var_value
 build_ir_for_var_value_var(struct ir_var_builder *irb,

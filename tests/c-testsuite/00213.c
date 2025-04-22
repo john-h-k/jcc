@@ -1,5 +1,3 @@
-// skip: not yet implemented - GNU expression statements
-
 /* This checks various ways of dead code inside if statements
    where there are non-obvious ways of how the code is actually
    not dead due to reachable by labels.  */

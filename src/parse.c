@@ -1960,7 +1960,6 @@ static bool parse_cnst(struct parser *parser, struct ast_cnst *cnst) {
   }
 }
 
-
 static bool parse_atom_0(struct parser *parser, struct ast_expr *expr);
 static bool parse_atom_1(struct parser *parser, struct ast_expr *expr);
 static bool parse_atom_2(struct parser *parser, struct ast_expr *expr);
@@ -2155,6 +2154,9 @@ static bool parse_generic(struct parser *parser, struct ast_generic *generic) {
   return true;
 }
 
+static bool parse_compoundstmt(struct parser *parser,
+                               struct ast_compoundstmt *compound_stmt);
+
 // parses highest precedence (literals, vars, constants)
 static bool parse_atom_0(struct parser *parser, struct ast_expr *expr) {
   struct lex_pos pos = lex_get_position(parser->lexer);
@@ -2171,10 +2173,21 @@ static bool parse_atom_0(struct parser *parser, struct ast_expr *expr) {
   }
 
   // parenthesised expression
-  if (parse_token(parser, LEX_TOKEN_TY_OPEN_BRACKET, NULL) &&
-      parse_compoundexpr_as_expr(parser, expr) &&
-      parse_token(parser, LEX_TOKEN_TY_CLOSE_BRACKET, NULL)) {
-    return true;
+  if (parse_token(parser, LEX_TOKEN_TY_OPEN_BRACKET, NULL)) {
+    struct ast_compoundstmt stmt;
+    if (parse_compoundstmt(parser, &stmt) &&
+        parse_token(parser, LEX_TOKEN_TY_CLOSE_BRACKET, NULL)) {
+
+      expr->ty = AST_EXPR_TY_COMPOUND_STMT;
+      expr->compound_stmt = stmt;
+      expr->span = stmt.span;
+      return true;
+    }
+
+    if (parse_compoundexpr_as_expr(parser, expr) &&
+        parse_token(parser, LEX_TOKEN_TY_CLOSE_BRACKET, NULL)) {
+      return true;
+    }
   }
 
   lex_backtrack(parser->lexer, pos);
@@ -3146,8 +3159,8 @@ static bool parse_switchstmt(struct parser *parser,
                              struct ast_switchstmt *switch_stmt) {
   struct lex_pos pos = lex_get_position(parser->lexer);
 
-  // TODO: some places here can use `parse_expected_token` instead to get better
-  // errors
+  // TODO: some places here can use `parse_expected_token` instead to get
+  // better errors
 
   struct ast_expr ctrl_expr;
   if (!parse_token(parser, LEX_TOKEN_TY_KW_SWITCH, NULL) ||
@@ -3413,9 +3426,10 @@ static bool parse_deferstmt(struct parser *parser,
     BUG("diagnostic on no stmt after 'defer'");
   }
 
-  deferstmt->stmt = arena_alloc_init(parser->arena, sizeof(*deferstmt->stmt), &stmt);
+  deferstmt->stmt =
+      arena_alloc_init(parser->arena, sizeof(*deferstmt->stmt), &stmt);
   deferstmt->span = MK_TEXT_SPAN(start.start, stmt.span.end);
-  
+
   return true;
 }
 
@@ -3451,9 +3465,6 @@ static bool parse_staticassert(struct parser *parser,
 
   return true;
 }
-
-static bool parse_compoundstmt(struct parser *parser,
-                               struct ast_compoundstmt *compound_stmt);
 
 static bool parse_stmt(struct parser *parser, enum parse_stmt_mode mode,
                        struct ast_stmt *stmt) {
@@ -3830,12 +3841,14 @@ struct ast_printstate {
 #define DEBUG_FUNC_ENUM(ty, name)                                              \
   START_NO_UNUSED_ARGS                                                         \
   static void parse_debug_print_##ty(struct ast_printstate *state,             \
-                                     const enum ast_##ty *name) END_NO_UNUSED_ARGS
+                                     const enum ast_##ty *name)                \
+      END_NO_UNUSED_ARGS
 
 #define DEBUG_FUNC(ty, name)                                                   \
   START_NO_UNUSED_ARGS                                                         \
   static void parse_debug_print_##ty(struct ast_printstate *state,             \
-                                     const struct ast_##ty *name) END_NO_UNUSED_ARGS
+                                     const struct ast_##ty *name)              \
+      END_NO_UNUSED_ARGS
 
 #define DEBUG_CALL(ty, val) parse_debug_print_##ty(state, val)
 
@@ -4764,6 +4777,8 @@ DEBUG_FUNC(va_arg, va_arg) {
   UNINDENT();
 }
 
+DEBUG_FUNC(compoundstmt, compound_stmt);
+
 DEBUG_FUNC(expr, expr) {
   AST_PRINTZ("EXPRESSION");
 
@@ -4774,6 +4789,9 @@ DEBUG_FUNC(expr, expr) {
     break;
   case AST_EXPR_TY_VA_ARG:
     DEBUG_CALL(va_arg, &expr->va_arg);
+    break;
+  case AST_EXPR_TY_COMPOUND_STMT:
+    DEBUG_CALL(compoundstmt, &expr->compound_stmt);
     break;
   case AST_EXPR_TY_GENERIC:
     DEBUG_CALL(generic, &expr->generic);

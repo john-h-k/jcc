@@ -509,8 +509,15 @@ struct td_builtin {
   ustr_t identifier;
 };
 
+struct td_stmt;
+struct td_compoundstmt {
+  struct td_stmt *stmts;
+  size_t num_stmts;
+};
+
 enum td_expr_ty {
   TD_EXPR_TY_INVALID,
+  TD_EXPR_TY_COMPOUND_STMT,
   TD_EXPR_TY_TERNARY,
   TD_EXPR_TY_CALL,
   TD_EXPR_TY_BUILTIN,
@@ -537,6 +544,7 @@ struct td_expr {
     struct td_ternary ternary;
     struct td_sizeof size_of;
     struct td_alignof align_of;
+    struct td_compoundstmt compound_stmt;
     struct td_var var;
     struct td_cnst cnst;
     struct td_compoundexpr compound_expr;
@@ -674,12 +682,6 @@ struct td_selectstmt {
     struct td_ifelsestmt if_else_stmt;
     struct td_switchstmt switch_stmt;
   };
-};
-
-struct td_stmt;
-struct td_compoundstmt {
-  struct td_stmt *stmts;
-  size_t num_stmts;
 };
 
 struct td_whilestmt {

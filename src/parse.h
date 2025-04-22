@@ -675,9 +675,18 @@ struct ast_va_arg {
   struct text_span span;
 };
 
+struct ast_stmt;
+struct ast_compoundstmt {
+  struct ast_stmt *stmts;
+  size_t num_stmts;
+
+  struct text_span span;
+};
+
 enum ast_expr_ty {
   AST_EXPR_TY_INVALID,
 
+  AST_EXPR_TY_COMPOUND_STMT,
   AST_EXPR_TY_GENERIC,
   AST_EXPR_TY_TERNARY,
   AST_EXPR_TY_CALL,
@@ -704,6 +713,7 @@ struct ast_expr {
     struct ast_ternary ternary;
     struct ast_sizeof size_of;
     struct ast_alignof align_of;
+    struct ast_compoundstmt compound_stmt;
     struct ast_var var;
     struct ast_cnst cnst;
     struct ast_compoundexpr compound_expr;
@@ -870,14 +880,6 @@ struct ast_selectstmt {
     struct ast_ifelsestmt if_else_stmt;
     struct ast_switchstmt switch_stmt;
   };
-
-  struct text_span span;
-};
-
-struct ast_stmt;
-struct ast_compoundstmt {
-  struct ast_stmt *stmts;
-  size_t num_stmts;
 
   struct text_span span;
 };
