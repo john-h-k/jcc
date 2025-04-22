@@ -39,6 +39,8 @@ enum link_result linux_link_objects(const struct link_args *args) {
     syscmd_add_arg_val(cmd, "--no-as-needed",
                        "/usr/lib/x86_64-linux-gnu/crt1.o");
     syscmd_add_arg_val(cmd, "--no-as-needed",
+                       "/usr/lib/x86_64-linux-gnu/crti.o");
+    syscmd_add_arg_val(cmd, "--no-as-needed",
                        "/usr/lib/x86_64-linux-gnu/crtn.o");
     break;
   case COMPILE_TARGET_LINUX_RV32I:

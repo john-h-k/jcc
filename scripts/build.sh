@@ -172,6 +172,8 @@ configure() {
       esac
     done
 
+    cc="${cc:-$CC}"
+
     if [[ "$mode" == "Debug" ]]; then
         san="${san:-address}"
     else
@@ -248,7 +250,7 @@ build() {
 
     num_procs=$(nproc 2> /dev/null || sysctl -n hw.physicalcpu 2> /dev/null || { echo -e "${BOLDYELLOW}Could not find core count; defaulting to 4${RESET}" >&2; echo 4; }; )
 
-    if ! cmake --build . --parallel "$num_proc"; then
+    if ! cmake --build . --parallel "$num_procs"; then
         echo -e "${BOLDRED}Build failed!${RESET}"
         return -1
     fi

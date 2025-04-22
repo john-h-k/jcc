@@ -295,8 +295,8 @@ set_target_properties(libjcc PROPERTIES OUTPUT_NAME jcc)
 
 # jcc
 add_executable(jcc src/main.c)
-target_link_libraries(jcc PRIVATE libjcc m)
+target_link_libraries(jcc PRIVATE libjcc m pthread)
 
 # test
 add_executable(test src/test.c)
-target_link_libraries(test PRIVATE libjcc m)
+target_link_libraries(test PRIVATE libjcc m pthread)
