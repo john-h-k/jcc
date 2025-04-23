@@ -57,6 +57,7 @@ static void fs_tmp_del(void) {
   });
 }
 
+#include <Availability.h>
 // at_quick_exit doesn't seem to exist?
 #if defined(__APPLE__) && defined(__MAC_OS_X_VERSION_MAX_ALLOWED)
   #if __MAC_OS_X_VERSION_MAX_ALLOWED < 130000
@@ -91,8 +92,6 @@ static void fs_tmp_init(void) {
     at_quick_exit(fs_tmp_del);
   });
 }
-
-#include <Availability.h>
 
 static void fs_init(void) {
   call_once(&TMP_INFO_FLAG, fs_tmp_init);
