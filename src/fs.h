@@ -26,7 +26,7 @@ struct fs_file {
 void fs_create(struct arena_allocator *arena, enum fs_flags flags,
                    struct fs **fs);
 
-FILE *fs_tmpfile(struct fs *fs, const char **path);
+FILE *fs_tmpfile(const char **path);
 
 bool fs_read_stdin(struct fs *fs, struct fs_file *file);
 

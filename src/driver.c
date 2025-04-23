@@ -664,7 +664,7 @@ static int jcc_driver_compiler(struct arena_allocator *arena,
     } else if (target_needs_linking(&compile_args, target) ||
                compile_args.output.ty == COMPILE_FILE_TY_NONE) {
       const char *path;
-      FILE *tmp = fs_tmpfile(fs, &path);
+      FILE *tmp = fs_tmpfile(&path);
 
       file = (struct compile_file){.ty = COMPILE_FILE_TY_FILE, .file = tmp, .path = path};
     } else {

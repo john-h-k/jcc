@@ -1,5 +1,6 @@
 #include "alloc.h"
 #include "driver.h"
+#include "fs.h"
 #include "profile.h"
 #include "syscmd.h"
 #include "thrd.h"
@@ -258,7 +259,7 @@ struct jcc_comp_info {
 };
 
 static struct jcc_comp_info run_compilation(const struct jcc_worker_args *args,
-                                            const struct jcc_test *test,
+                                            UNUSED const struct jcc_test *test,
                                             struct vector *comp_args) {
   if (args->opts.use_process) {
     struct syscmd *cmd = syscmd_create(args->arena, args->opts.jcc);
@@ -278,8 +279,11 @@ static struct jcc_comp_info run_compilation(const struct jcc_worker_args *args,
   } else {
     const char *sink_flag = "-fdiagnostics-sink";
     vector_push_back(comp_args, &sink_flag);
+    
+    const char *sink;
+    FILE *f = fs_tmpfile(&sink);
+    fclose(f);
 
-    char *sink = arena_alloc_snprintf(args->arena, "%zu-sink.txt", test->id);
     vector_push_back(comp_args, &sink);
 
     size_t argc = vector_length(comp_args);
@@ -485,8 +489,9 @@ static void run_test(struct jcc_worker_args *args, const struct jcc_test *test,
 
   setenv("MallocNanoZone", "0", 1);
 
-  char output_file[128];
-  snprintf(output_file, sizeof(output_file), "%zu-out", test->id);
+  const char *output_file;
+  FILE *f = fs_tmpfile(&output_file);
+  fclose(f);
 
   char name[128];
   snprintf(name, sizeof(name), "test-thread-%zu", test->id);
@@ -567,7 +572,7 @@ static void run_test(struct jcc_worker_args *args, const struct jcc_test *test,
 
   /* Run produced executable */
   char run_cmd[256];
-  snprintf(run_cmd, sizeof(run_cmd), "./%s", output_file);
+  snprintf(run_cmd, sizeof(run_cmd), "%s", output_file);
   struct syscmd *cmd = syscmd_create(args->arena, run_cmd);
 
   if (info.stdin_val.str) {

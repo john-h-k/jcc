@@ -84,9 +84,13 @@ static void fs_tmp_init(void) {
   });
 }
 
+static void fs_init(void) {
+  call_once(&TMP_INFO_FLAG, fs_tmp_init);
+}
+
 void fs_create(struct arena_allocator *arena, enum fs_flags flags,
                    struct fs **fs) {
-  call_once(&TMP_INFO_FLAG, fs_tmp_init);
+  fs_init();
 
   *fs = arena_alloc(arena, sizeof(**fs));
 
@@ -98,7 +102,9 @@ void fs_create(struct arena_allocator *arena, enum fs_flags flags,
                                        hash_fs_key, eq_fs_key)};
 }
 
-FILE *fs_tmpfile(UNUSED struct fs *fs, const char **path) {
+FILE *fs_tmpfile(const char **path) {
+  fs_init();
+
   ustr_t dir;
   MTX_LOCK(&TMP_INFO_LOCK, {
     dir = TMP_INFO.tmp_dir;
