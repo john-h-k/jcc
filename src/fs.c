@@ -9,6 +9,10 @@
 #include <stdlib.h>
 #include <string.h>
 
+// TODO: non-libc
+#include <unistd.h>
+#include <errno.h>
+
 struct fs_key {
   enum f_ty { F_TY_PATH, F_TY_PROC, F_TY_STDIN } ty;
   ustr_t key;
@@ -34,9 +38,6 @@ static bool eq_fs_key(const void *l, const void *r) {
   return lc->ty == rc->ty && ustr_eq(lc->key, rc->key);
 }
 
-#include <unistd.h>
-#include <errno.h>
-
 static struct {
   struct vector *tmp_names;
   ustr_t tmp_dir;
@@ -55,6 +56,13 @@ static void fs_tmp_del(void) {
     }
   });
 }
+
+// at_quick_exit doesn't seem to exist?
+#if defined(__APPLE__) && defined(__MAC_OS_X_VERSION_MAX_ALLOWED)
+  #if __MAC_OS_X_VERSION_MAX_ALLOWED < 130000
+  static void at_quick_exit(UNUSED void (*fn)(void)) {}
+  #endif
+#endif
 
 static void fs_tmp_init(void) {
   mtx_init(&TMP_INFO_LOCK, mtx_plain);
@@ -80,9 +88,11 @@ static void fs_tmp_init(void) {
     TMP_INFO.tmp_dir = MK_USTR(tmp_dir);
 
     atexit(fs_tmp_del);
-    at_quick_exit(fs_tmp_del);
+    at_quick_exit2(fs_tmp_del);
   });
 }
+
+#include <Availability.h>
 
 static void fs_init(void) {
   call_once(&TMP_INFO_FLAG, fs_tmp_init);
