@@ -279,7 +279,7 @@ static struct jcc_comp_info run_compilation(const struct jcc_worker_args *args,
   } else {
     const char *sink_flag = "-fdiagnostics-sink";
     vector_push_back(comp_args, &sink_flag);
-    
+
     const char *sink;
     FILE *f = fs_tmpfile(&sink);
     fclose(f);

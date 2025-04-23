@@ -38,7 +38,7 @@ struct hashtbl *hashtbl_create_str_keyed_in_arena(struct arena_allocator *arena,
 
 struct hashtbl *
 hashtbl_create_ustr_keyed_in_arena(struct arena_allocator *arena,
-                                        size_t element_size);
+                                   size_t element_size);
 
 void hashtbl_free(struct hashtbl **hashtbl);
 
@@ -54,15 +54,18 @@ void hashtbl_remove(struct hashtbl *hashtbl, const void *key);
 
 void *hashtbl_lookup(struct hashtbl *hashtbl, const void *key);
 
-struct hashtbl_entry hashtbl_lookup_entry(struct hashtbl *hashtbl, const void *key);
-struct hashtbl_entry hashtbl_lookup_with_entry(struct hashtbl *hashtbl, const void *key, const struct hashtbl_entry *entry);
+struct hashtbl_entry hashtbl_lookup_entry(struct hashtbl *hashtbl,
+                                          const void *key);
+struct hashtbl_entry
+hashtbl_lookup_with_entry(struct hashtbl *hashtbl, const void *key,
+                          const struct hashtbl_entry *entry);
 
 void *hashtbl_lookup_or_insert(struct hashtbl *hashtbl, const void *key,
                                void *data);
 
-struct hashtbl_entry hashtbl_lookup_entry_or_insert(struct hashtbl *hashtbl, const void *key,
-                               void *data);
-
+struct hashtbl_entry hashtbl_lookup_entry_or_insert(struct hashtbl *hashtbl,
+                                                    const void *key,
+                                                    void *data);
 
 void hashtbl_invalidate_entries(struct hashtbl *hashtbl);
 

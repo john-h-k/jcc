@@ -82,12 +82,12 @@ int cnd_wait(cnd_t *cond, mtx_t *mutex) {
 int cnd_timedwait(cnd_t *restrict cond, mtx_t *restrict mutex,
                   const struct timespec *restrict time_point) {
   switch (pthread_cond_timedwait(cond, &mutex->handle, time_point)) {
-    case 0:
-      return thrd_success;
-    case ETIMEDOUT:
-      return thrd_timedout;
-    default:
-      return thrd_error;
+  case 0:
+    return thrd_success;
+  case ETIMEDOUT:
+    return thrd_timedout;
+  default:
+    return thrd_error;
   }
 }
 

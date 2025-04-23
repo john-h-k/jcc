@@ -163,7 +163,7 @@ static const char *get_default_isysroot(struct fs *fs,
 #if OS_APPLE
     struct fs_file sdk_path;
     if (!fs_read_proc(fs, MK_USTR("xcrun --sdk macosx --show-sdk-path"),
-                          &sdk_path)) {
+                      &sdk_path)) {
       BUG("xcrun call failed!");
     }
 
@@ -507,8 +507,8 @@ static int jcc_driver_lsp(struct arena_allocator *arena, struct fs *fs,
                           struct compile_args compile_args,
                           const struct target *target);
 
-static int jcc_driver_compiler(struct arena_allocator *arena,
-                               struct fs *fs, struct parsed_args args,
+static int jcc_driver_compiler(struct arena_allocator *arena, struct fs *fs,
+                               struct parsed_args args,
                                struct compile_args compile_args,
                                const struct target *target, size_t num_sources,
                                const char **sources);
@@ -569,8 +569,8 @@ static int jcc_driver_lsp(struct arena_allocator *arena, struct fs *fs,
   return lsp_run(arena, fs, args, compile_args, target);
 }
 
-static int jcc_driver_compiler(struct arena_allocator *arena,
-                               struct fs *fs, struct parsed_args args,
+static int jcc_driver_compiler(struct arena_allocator *arena, struct fs *fs,
+                               struct parsed_args args,
                                struct compile_args compile_args,
                                const struct target *target, size_t num_sources,
                                const char **sources) {
@@ -666,7 +666,8 @@ static int jcc_driver_compiler(struct arena_allocator *arena,
       const char *path;
       FILE *tmp = fs_tmpfile(&path);
 
-      file = (struct compile_file){.ty = COMPILE_FILE_TY_FILE, .file = tmp, .path = path};
+      file = (struct compile_file){
+          .ty = COMPILE_FILE_TY_FILE, .file = tmp, .path = path};
     } else {
       file = compile_args.output;
       info("compiling source file '%s' into object file '%s'", source_path,

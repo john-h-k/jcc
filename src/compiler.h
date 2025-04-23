@@ -226,7 +226,8 @@ void free_compiler(struct compiler **compiler);
 
 struct typechk;
 struct typechk_result;
-void compiler_get_tchk(struct compiler *compiler, struct typechk **tchk, struct typechk_result *result);
+void compiler_get_tchk(struct compiler *compiler, struct typechk **tchk,
+                       struct typechk_result *result);
 
 struct compiler_diagnostics *
 compiler_get_diagnostics(struct compiler *compiler);

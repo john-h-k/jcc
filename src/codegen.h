@@ -108,7 +108,7 @@ struct cg_instr *cg_get_next_instr(struct cg_basicblock *target);
 struct cg_basicblock *cg_alloc_basicblock(struct cg_func *func,
                                           struct ir_basicblock *ir_basicblock);
 struct cg_instr *cg_alloc_instr(struct cg_func *func,
-                             struct cg_basicblock *basicblock);
+                                struct cg_basicblock *basicblock);
 
 void cg_detach_basicblock(struct cg_func *func,
                           struct cg_basicblock *basicblock);

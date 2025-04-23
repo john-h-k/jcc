@@ -866,8 +866,9 @@ struct td_node {
   struct text_span span;
 };
 
-typedef void (td_walk_callback)(const struct td_node *node, void *metadata);
-void td_walk(struct typechk *tchk, const struct td_translationunit *unit, td_walk_callback cb, void *metadata);
+typedef void(td_walk_callback)(const struct td_node *node, void *metadata);
+void td_walk(struct typechk *tchk, const struct td_translationunit *unit,
+             td_walk_callback cb, void *metadata);
 
 void debug_print_td(struct typechk *tchk, struct hashtbl *log_symbols,
                     struct td_translationunit *translation_unit);
@@ -875,7 +876,6 @@ void debug_print_td(struct typechk *tchk, struct hashtbl *log_symbols,
 void hash_td_var(struct hasher *hasher, const void *o);
 bool eq_td_var(const void *l, const void *r);
 
-char *tchk_type_name(struct typechk *tchk,
-                            const struct td_var_ty *var_ty);
+char *tchk_type_name(struct typechk *tchk, const struct td_var_ty *var_ty);
 
 #endif

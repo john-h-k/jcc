@@ -1,6 +1,6 @@
-#include "util.h"
-
 #include "deque.h"
+
+#include "util.h"
 
 #include <math.h>
 
@@ -70,8 +70,7 @@ void *deque_push_front(struct deque *d, const void *data) {
   }
 
   d->len++;
-  return memcpy(d->data + (d->head * d->element_size), data,
-                d->element_size);
+  return memcpy(d->data + (d->head * d->element_size), data, d->element_size);
 }
 
 void *deque_pop_back(struct deque *d) {
@@ -131,8 +130,7 @@ void deque_extend(struct deque *d, const void *data, size_t num_elems) {
     // there is at most one discontinuity in the copy, so we split it into two
 
     size_t head_cpy = MIN(num_elems, d->capacity - end);
-    memcpy(d->data + (end * d->element_size), data,
-           d->element_size * head_cpy);
+    memcpy(d->data + (end * d->element_size), data, d->element_size * head_cpy);
 
     if (head_cpy != num_elems) {
       size_t tail_cpy = num_elems - head_cpy;

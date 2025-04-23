@@ -24,15 +24,13 @@ struct fs_file {
 };
 
 void fs_create(struct arena_allocator *arena, enum fs_flags flags,
-                   struct fs **fs);
+               struct fs **fs);
 
 bool fs_read_stdin(struct fs *fs, struct fs_file *file);
 
 bool fs_test_path(struct fs *fs, ustr_t path);
 
-bool fs_read_path(struct fs *fs, ustr_t path,
-                      struct fs_file *file);
-bool fs_read_proc(struct fs *fs, ustr_t proc,
-                      struct fs_file *file);
+bool fs_read_path(struct fs *fs, ustr_t path, struct fs_file *file);
+bool fs_read_proc(struct fs *fs, ustr_t proc, struct fs_file *file);
 
 #endif

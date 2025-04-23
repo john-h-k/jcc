@@ -17,7 +17,7 @@ PRINTF_ARGS(0) NORETURN void unsupported(const char *msg, ...) {
 
 #ifndef NDEBUG
 void util_debug_assert(bool b, const char *cond, const char *func,
-                            const char *file, int line, const char *msg, ...) {
+                       const char *file, int line, const char *msg, ...) {
   if (b) {
     return;
   }

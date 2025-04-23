@@ -72,14 +72,14 @@ const struct target AARCH64_MACOS_TARGET = {
 //
 // typedef __builtin_va_list __va_list
 
-// NOTE: we use `strlen` as a constant through `MK_USTR` - this is not technically ANSI C?
-// maybe should remove
+// NOTE: we use `strlen` as a constant through `MK_USTR` - this is not
+// technically ANSI C? maybe should remove
 
 const static struct td_var_ty AARCH64_VA_LIST_TY =
     {.ty = TD_VAR_TY_TY_AGGREGATE,
      .aggregate = {
          .ty = TD_TY_AGGREGATE_TY_STRUCT,
-          .name = MK_NULL_USTR(),
+         .name = MK_NULL_USTR(),
          .num_fields = 5,
          .fields =
              (struct td_struct_field[5]){

@@ -44,7 +44,7 @@ static unsigned long long get_time(void) {
 #endif
 
 struct timestmp get_timestamp(void) {
-  return (struct timestmp){ .val = get_time() };
+  return (struct timestmp){.val = get_time()};
 }
 
 double timestamp_elapsed(struct timestmp start, struct timestmp end) {

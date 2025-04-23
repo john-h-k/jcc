@@ -33,9 +33,7 @@ struct hashtbl_iter {
   size_t elem_idx;
 };
 
-void hashtbl_invalidate_entries(struct hashtbl *hashtbl) {
-  hashtbl->ver++;
-}
+void hashtbl_invalidate_entries(struct hashtbl *hashtbl) { hashtbl->ver++; }
 
 struct hashtbl *hashtbl_create(size_t key_size, size_t element_size,
                                hash_fn hash_fn, eq_fn eq_fn) {
@@ -89,7 +87,7 @@ struct hashtbl *hashtbl_create_str_keyed_in_arena(struct arena_allocator *arena,
 
 struct hashtbl *
 hashtbl_create_ustr_keyed_in_arena(struct arena_allocator *arena,
-                                        size_t element_size) {
+                                   size_t element_size) {
   return hashtbl_create_in_arena(arena, sizeof(ustr_t), element_size,
                                  hashtbl_hash_ustr, hashtbl_eq_ustr);
 }
@@ -424,8 +422,7 @@ struct hashtbl_entry hashtbl_lookup_entry(struct hashtbl *hashtbl,
 }
 
 struct hashtbl_entry
-hashtbl_lookup_with_entry(struct hashtbl *hashtbl,
-                          const void *key,
+hashtbl_lookup_with_entry(struct hashtbl *hashtbl, const void *key,
                           const struct hashtbl_entry *entry) {
   DEBUG_ASSERT(hashtbl->ver >= entry->ver,
                "hashtbl version %zu less than entry version %zu", hashtbl->ver,

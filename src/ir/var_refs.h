@@ -1,8 +1,8 @@
 #ifndef IR_VAR_REFS_H
 #define IR_VAR_REFS_H
 
-#include "ir.h"
 #include "../util.h"
+#include "ir.h"
 
 // uniquely tracks vars by (name, scope)
 struct var_refs;

@@ -105,7 +105,6 @@ void syscmd_write_cmd(struct syscmd *cmd, FILE *file) {
   fflush(file);
 }
 
-
 void syscmd_set_stdin(struct syscmd *syscmd, ustr_t value) {
   syscmd->stdin_val = arena_alloc_ustrconv(syscmd->arena, value);
 }
@@ -125,8 +124,8 @@ static int syscmd_open_fd(const char *output) {
   return fd;
 }
 
-static char *syscmd_read_pipe(const struct syscmd *cmd, enum syscmd_buf_flags flags,
-                              int pipe[static 2]) {
+static char *syscmd_read_pipe(const struct syscmd *cmd,
+                              enum syscmd_buf_flags flags, int pipe[static 2]) {
   close(pipe[1]);
 
   struct vector *content = vector_create_in_arena(sizeof(char), cmd->arena);
@@ -152,17 +151,18 @@ static char *syscmd_read_pipe(const struct syscmd *cmd, enum syscmd_buf_flags fl
   return vector_head(content);
 }
 
-#if __has_include(<spawn.h>) && __has_include(<sys/types.h>) && __has_include(<sys/wait.h>)
+#if __has_include(                                                             \
+    <spawn.h>) && __has_include(<sys/types.h>) && __has_include(<sys/wait.h>)
 
+#include <errno.h>
 #include <spawn.h>
 #include <sys/types.h>
 #include <sys/wait.h>
-#include <errno.h>
 
 extern char **environ;
 
-int syscmd_exec(struct syscmd * restrict *syscmd) {
-  const struct syscmd * restrict s = *syscmd;
+int syscmd_exec(struct syscmd *restrict *syscmd) {
+  const struct syscmd *restrict s = *syscmd;
 
   vector_push_back(s->args, &(char *){NULL});
   char **args = vector_head(s->args);
@@ -207,7 +207,8 @@ int syscmd_exec(struct syscmd * restrict *syscmd) {
 
   pid_t pid;
   int ret;
-  if ((ret = posix_spawnp(&pid, s->process, &actions, NULL, args, environ)) != 0) {
+  if ((ret = posix_spawnp(&pid, s->process, &actions, NULL, args, environ)) !=
+      0) {
     BUG("spawnp failed %s", strerror(ret));
   }
 

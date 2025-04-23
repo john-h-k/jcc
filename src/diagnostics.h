@@ -31,8 +31,8 @@ enum compiler_diagnostic_class {
   DIAG_FN(ERROR, "error-directive", error_directive, ERROR_DIRECTIVE,          \
           const char *)                                                        \
   DIAG_FN(ERROR, "bad-token-in-cond", bad_token_in_cond, BAD_TOKEN_IN_COND,    \
-          const char *) \
-  DIAG_FN(ERROR, "bad-token-in-query", bad_token_in_query, BAD_TOKEN_IN_QUERY,    \
+          const char *)                                                        \
+  DIAG_FN(ERROR, "bad-token-in-query", bad_token_in_query, BAD_TOKEN_IN_QUERY, \
           const char *)
 
 #define COMPILER_PARSE_DIAGNOSTIC_LIST                                         \
@@ -54,16 +54,14 @@ enum compiler_diagnostic_class {
           const char *)
 
 #define COMPILER_SEMANTIC_DIAGNOSTIC_LIST                                      \
-  DIAG_FN(WARN, "mut-global", mut_global, MUT_GLOBAL,              \
-          const char *)                                                        \
+  DIAG_FN(WARN, "mut-global", mut_global, MUT_GLOBAL, const char *)            \
   DIAG_FN(WARN, "empty-init-c23", empty_init_c23, EMPTY_INIT_C23,              \
           const char *)                                                        \
   DIAG_FN(WARN, "unrecognised-attribute", unrecognised_attr,                   \
           UNRECOGNISED_ATTR, const char *)                                     \
   DIAG_FN(WARN, "too-many-inits", too_many_inits, TOO_MANY_INITS,              \
           const char *)                                                        \
-  DIAG_FN(WARN, "no-ident", no_ident,                \
-          NO_IDENT, const char *)                                 \
+  DIAG_FN(WARN, "no-ident", no_ident, NO_IDENT, const char *)                  \
   DIAG_FN(WARN, "pointer-type-mismatch", pointer_type_mismatch,                \
           POINTER_TYPE_MISMATCH, const char *)                                 \
   DIAG_FN(ERROR, "typecheck-sub-ptr-compatible", pointer_sub_types,            \

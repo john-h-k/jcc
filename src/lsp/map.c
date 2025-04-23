@@ -140,8 +140,8 @@ struct text_span lsp_map_lookup(const struct lsp_map *map,
     switch (event->ty) {
     case PREPROC_EVENT_TY_INCLUDE: {
       struct text_pos start = {
-        .file = event->include.path,
-        // start of file       
+          .file = event->include.path,
+          // start of file
       };
       return MK_TEXT_SPAN(start, start);
     }
@@ -155,7 +155,8 @@ struct text_span lsp_map_lookup(const struct lsp_map *map,
     if (node->node.ty == TD_NODE_TY_VAR_DECL) {
       // self
       return node->span;
-    } else if (node->node.ty == TD_NODE_TY_EXPR && node->node.expr->ty == TD_EXPR_TY_VAR) {
+    } else if (node->node.ty == TD_NODE_TY_EXPR &&
+               node->node.expr->ty == TD_EXPR_TY_VAR) {
       const struct td_var *var = &node->node.var_decl->var;
       def = hashtbl_lookup(map->defs, var);
     }

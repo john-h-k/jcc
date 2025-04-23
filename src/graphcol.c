@@ -129,7 +129,7 @@ static void build_interf_graph(struct graphcol_state *state,
 
         if (degree[i] == SIZE_MAX) {
           continue;
-}
+        }
 
         if (degree[i] < total_reg) {
           vector_push_back(trivial, &i);
@@ -177,7 +177,7 @@ static void build_interf_graph(struct graphcol_state *state,
 
     if (!nodes_rem) {
       break;
-}
+    }
   }
 
   size_t *assigned_registers = calloc(num_intervals, sizeof(size_t));

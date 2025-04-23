@@ -683,8 +683,6 @@ void debug_print_op(FILE *file, struct ir_func *irb, struct ir_op *op) {
   fprintf(file, "\n");
 }
 
-
-
 struct prettyprint_file_metadata {
   FILE *file;
   int ctr_pad;

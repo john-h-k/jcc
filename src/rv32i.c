@@ -18,11 +18,9 @@ const struct target RV32I_LINUX_TARGET = {.target_id = TARGET_ID_NOT_SUPPORTED};
 const struct target RV32I_LINUX_TARGET = {
     TARGET_ID_RV32I_LINUX,
     TARGET_LP_SZ_LP32,
-    {
-        // TODO:
-        .va_list_var_ty = &TD_VAR_TY_VOID_POINTER,
-        .flags = TARGET_VARIADIC_INFO_FLAG_NONE
-    },
+    {// TODO:
+     .va_list_var_ty = &TD_VAR_TY_VOID_POINTER,
+     .flags = TARGET_VARIADIC_INFO_FLAG_NONE},
     {
         .ssp = 9,
         .gp_registers = {.max_reg_size = 4,

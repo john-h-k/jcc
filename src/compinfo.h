@@ -47,7 +47,8 @@
 #define STDC_MIN_23 STDC_MIN(STDC23)
 
 #if __STDC_VERSION__ < STDC11
-#define EXPAND_INNER(x) "jcc only supports C11 or later (__STDC_VERSION__ is '" #x "')"
+#define EXPAND_INNER(x)                                                        \
+  "jcc only supports C11 or later (__STDC_VERSION__ is '" #x "')"
 #define EXPAND(x) EXPAND_INNER(x)
 #pragma message(EXPAND(__STDC_VERSION__))
 #error "C11 compiler requirement not met"
@@ -95,7 +96,7 @@
 #include <sanitizer/asan_interface.h>
 #endif
 
-#if HAS_FEATURE(leak_sanitizer) || defined(LEAK_SANITIZER) ||            \
+#if HAS_FEATURE(leak_sanitizer) || defined(LEAK_SANITIZER) ||                  \
     defined(__SANITIZE_LEAK__)
 #define LSAN 1
 #include <sanitizer/lsan_interface.h>

@@ -1,13 +1,13 @@
 #ifndef LSP_CTX_H
 #define LSP_CTX_H
 
+#include "../args.h"
+#include "../compiler.h"
+#include "../vector.h"
+#include "lsp_types.h"
+
 #include <stdbool.h>
 #include <stdio.h>
-#include "../compiler.h"
-#include "../args.h"
-#include "../vector.h"
-
-#include "lsp_types.h"
 
 struct lsp_ctx {
   struct arena_allocator *arena;

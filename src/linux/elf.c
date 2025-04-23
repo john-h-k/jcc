@@ -108,7 +108,7 @@ static struct reloc_info build_reloc_info(const struct build_object_args *args,
     case OBJECT_ENTRY_TY_DECL:
       BUG("reloc for cstring/decl makes no sense");
     }
-    
+
     size_t entry_offset = entry_offsets[i];
 
     for (size_t j = 0; j < entry->num_relocations; j++) {
@@ -136,7 +136,8 @@ static struct reloc_info build_reloc_info(const struct build_object_args *args,
 
 static void write_relocations_elf(FILE *file,
                                   const struct build_object_args *args,
-                                  const size_t *sym_id_to_idx, struct vector *relocs,
+                                  const size_t *sym_id_to_idx,
+                                  struct vector *relocs,
                                   enum compile_target target) {
   size_t n = vector_length(relocs);
   for (size_t i = 0; i < n; i++) {
@@ -441,7 +442,8 @@ static void write_elf_object(const struct build_object_args *args) {
   }
 
   total_text_size = ROUND_UP(total_text_size, const_align);
-  total_const_size = ROUND_UP(total_text_size + total_const_size, data_align) - total_text_size;
+  total_const_size = ROUND_UP(total_text_size + total_const_size, data_align) -
+                     total_text_size;
 
   struct reloc_info info = build_reloc_info(args, entry_offsets);
 

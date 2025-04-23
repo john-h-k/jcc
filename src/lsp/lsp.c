@@ -424,7 +424,6 @@ static void lsp_goto_def(struct lsp_ctx *ctx, lsp_integer id,
     LSP_WRITE_MESSAGE({
       JSON_WRITE_FIELD(ctx->writer, "id", id);
       JSON_OBJECT(ctx->writer, "result", {
-
         if (span.start.file) {
           char *uri =
               arena_alloc_snprintf(ctx->arena, "file://%s", span.start.file);

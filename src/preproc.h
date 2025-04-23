@@ -41,8 +41,7 @@ enum preproc_create_result
 preproc_create(struct program program, struct fs *fs,
                struct preproc_create_args args,
                struct compiler_diagnostics *diagnostics,
-               enum compile_preproc_mode mode,
-               struct preproc **preproc);
+               enum compile_preproc_mode mode, struct preproc **preproc);
 
 struct preprocessed_program {
   const char *text;

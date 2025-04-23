@@ -942,7 +942,8 @@ struct ast_iterstmt {
 };
 
 struct ast_deferstmt {
-  // FIXME: this should actually be unlabeled stmt, `defer foo: bar()` is not legal (maybe just check in typechk)
+  // FIXME: this should actually be unlabeled stmt, `defer foo: bar()` is not
+  // legal (maybe just check in typechk)
   struct ast_stmt *stmt;
 
   struct text_span span;
@@ -1034,7 +1035,7 @@ struct parse_result {
 
 enum parser_create_result
 parser_create(struct program program, struct preproc *preproc,
-                      enum compile_c_standard c_standard,
+              enum compile_c_standard c_standard,
               enum compile_preproc_mode mode,
               struct compiler_diagnostics *diagnostics, struct parser **parser);
 
@@ -1042,8 +1043,7 @@ struct parse_result parse(struct parser *parser);
 
 void parser_free(struct parser **parser);
 
-ustr_t identifier_str(struct parser *parser,
-                                const struct lex_token *token);
+ustr_t identifier_str(struct parser *parser, const struct lex_token *token);
 
 void debug_print_ast(struct parser *parser,
                      struct ast_translationunit *translation_unit);

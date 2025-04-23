@@ -4,9 +4,9 @@
 #include "compiler.h"
 #include "hashtbl.h"
 #include "log.h"
-#include "thrd.h"
 #include "preproc.h"
 #include "program.h"
+#include "thrd.h"
 #include "vector.h"
 
 #include <assert.h>

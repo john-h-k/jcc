@@ -1,6 +1,5 @@
-#include "fs.h"
-
 #include "alloc.h"
+#include "fs.h"
 #include "hashtbl.h"
 #include "profile.h"
 #include "util.h"
@@ -31,15 +30,14 @@ static bool eq_fs_key(const void *l, const void *r) {
 }
 
 void fs_create(struct arena_allocator *arena, enum fs_flags flags,
-                   struct fs **fs) {
+               struct fs **fs) {
   *fs = arena_alloc(arena, sizeof(**fs));
 
-  **fs = (struct fs){
-      .arena = arena,
-      .flags = flags,
-      .cache = hashtbl_create_in_arena(arena, sizeof(struct fs_key),
-                                       sizeof(struct fs_file),
-                                       hash_fs_key, eq_fs_key)};
+  **fs = (struct fs){.arena = arena,
+                     .flags = flags,
+                     .cache = hashtbl_create_in_arena(
+                         arena, sizeof(struct fs_key), sizeof(struct fs_file),
+                         hash_fs_key, eq_fs_key)};
 }
 
 enum fc_mode {
@@ -47,8 +45,8 @@ enum fc_mode {
   FC_MODE_TEST,
 };
 
-static bool fs_read(struct fs *fs, struct fs_key key,
-                        struct fs_file *file, enum fc_mode mode);
+static bool fs_read(struct fs *fs, struct fs_key key, struct fs_file *file,
+                    enum fc_mode mode);
 
 bool fs_test_path(struct fs *fs, ustr_t path) {
   struct fs_key key = {F_TY_PATH, .key = path};
@@ -62,15 +60,13 @@ bool fs_read_stdin(struct fs *fs, struct fs_file *file) {
   return fs_read(fs, key, file, FC_MODE_READ);
 }
 
-bool fs_read_path(struct fs *fs, ustr_t path,
-                      struct fs_file *file) {
+bool fs_read_path(struct fs *fs, ustr_t path, struct fs_file *file) {
   struct fs_key key = {F_TY_PATH, .key = path};
 
   return fs_read(fs, key, file, FC_MODE_READ);
 }
 
-bool fs_read_proc(struct fs *fs, ustr_t proc,
-                      struct fs_file *file) {
+bool fs_read_proc(struct fs *fs, ustr_t proc, struct fs_file *file) {
   struct fs_key key = {F_TY_PROC, .key = proc};
 
   return fs_read(fs, key, file, FC_MODE_READ);
@@ -79,8 +75,8 @@ bool fs_read_proc(struct fs *fs, ustr_t proc,
 static void read_file_content(struct fs *fs, FILE *file, char **buf,
                               size_t *buf_len);
 
-static bool fs_read(struct fs *fs, struct fs_key key,
-                        struct fs_file *file, enum fc_mode mode) {
+static bool fs_read(struct fs *fs, struct fs_key key, struct fs_file *file,
+                    enum fc_mode mode) {
   // TODO: caching (via mtime) even when flag not present
   if (fs->flags & FS_FLAG_ASSUME_CONSTANT) {
     struct fs_file *cache = hashtbl_lookup(fs->cache, &key);

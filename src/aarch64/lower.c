@@ -557,7 +557,7 @@ struct ir_func_info aarch64_lower_func_ty(struct ir_func *func,
     size_t hfa_member_size;
     struct ir_var_ty member_ty;
     bool is_hfa = try_get_hfa_info(func, var_ty, &member_ty, &num_hfa_members,
-                                  &hfa_member_size);
+                                   &hfa_member_size);
 
     if (info.size > 16 && !is_hfa) {
       // copy to mem

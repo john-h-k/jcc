@@ -52,8 +52,7 @@ struct var_table vt_create(struct arena_allocator *arena) {
 }
 
 static struct var_table_entry *add_entry(struct var_table_scope *scope,
-                                         enum var_table_ns ns,
-                                         ustr_t name) {
+                                         enum var_table_ns ns, ustr_t name) {
   struct var_key key = {.identifier = name, .ns = ns};
 
   struct var_table_entry *entry =
@@ -73,8 +72,7 @@ struct var_table_entry *vt_create_entry_at_scope(struct var_table *var_table,
 }
 
 struct var_table_entry *vt_create_entry(struct var_table *var_table,
-                                        enum var_table_ns ns,
-                                        ustr_t name) {
+                                        enum var_table_ns ns, ustr_t name) {
   struct var_table_scope *last = vector_tail(var_table->scopes);
 
   return add_entry(last, ns, name);
@@ -122,8 +120,7 @@ struct var_table_entry *vt_get_or_create_entry(struct var_table *var_table,
 }
 
 struct var_table_entry *vt_get_entry(struct var_table *var_table,
-                                     enum var_table_ns ns,
-                                     ustr_t name) {
+                                     enum var_table_ns ns, ustr_t name) {
   // super inefficient, TODO: make efficient
   // does linear scan for entry at current scope, if that fails, tries at
   // higher scope, until scope is global then creates new entry

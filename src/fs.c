@@ -3,15 +3,16 @@
 #include "alloc.h"
 #include "hashtbl.h"
 #include "profile.h"
-#include "util.h"
 #include "thrd.h"
+#include "util.h"
 #include "vector.h"
+
 #include <stdlib.h>
 #include <string.h>
 
 // TODO: non-libc
-#include <unistd.h>
 #include <errno.h>
+#include <unistd.h>
 
 struct fs_key {
   enum f_ty { F_TY_PATH, F_TY_PROC, F_TY_STDIN } ty;
@@ -59,9 +60,9 @@ static void fs_tmp_del(void) {
 
 // at_quick_exit doesn't seem to exist?
 #if defined(__APPLE__) && defined(__MAC_OS_X_VERSION_MAX_ALLOWED)
-  #if __MAC_OS_X_VERSION_MAX_ALLOWED < 150000
-  static void at_quick_exit(UNUSED void (*fn)(void)) {}
-  #endif
+#if __MAC_OS_X_VERSION_MAX_ALLOWED < 150000
+static void at_quick_exit(UNUSED void (*fn)(void)) {}
+#endif
 #endif
 
 static void fs_tmp_init(void) {
@@ -92,31 +93,26 @@ static void fs_tmp_init(void) {
   });
 }
 
-static void fs_init(void) {
-  call_once(&TMP_INFO_FLAG, fs_tmp_init);
-}
+static void fs_init(void) { call_once(&TMP_INFO_FLAG, fs_tmp_init); }
 
 void fs_create(struct arena_allocator *arena, enum fs_flags flags,
-                   struct fs **fs) {
+               struct fs **fs) {
   fs_init();
 
   *fs = arena_alloc(arena, sizeof(**fs));
 
-  **fs = (struct fs){
-      .arena = arena,
-      .flags = flags,
-      .cache = hashtbl_create_in_arena(arena, sizeof(struct fs_key),
-                                       sizeof(struct fs_file),
-                                       hash_fs_key, eq_fs_key)};
+  **fs = (struct fs){.arena = arena,
+                     .flags = flags,
+                     .cache = hashtbl_create_in_arena(
+                         arena, sizeof(struct fs_key), sizeof(struct fs_file),
+                         hash_fs_key, eq_fs_key)};
 }
 
 FILE *fs_tmpfile(const char **path) {
   fs_init();
 
   ustr_t dir;
-  MTX_LOCK(&TMP_INFO_LOCK, {
-    dir = TMP_INFO.tmp_dir;
-  });
+  MTX_LOCK(&TMP_INFO_LOCK, { dir = TMP_INFO.tmp_dir; });
 
   const char *suffix = "jccobjXXXXXXXX.o";
   char *name = nonnull_malloc(dir.len + strlen(suffix) + 1);
@@ -136,9 +132,7 @@ FILE *fs_tmpfile(const char **path) {
     BUG("fdopen call failed (%s)!", strerror(errno));
   }
 
-  MTX_LOCK(&TMP_INFO_LOCK, {
-    vector_push_back(TMP_INFO.tmp_names, &name);
-  });
+  MTX_LOCK(&TMP_INFO_LOCK, { vector_push_back(TMP_INFO.tmp_names, &name); });
 
   if (path) {
     *path = name;
@@ -152,8 +146,8 @@ enum fc_mode {
   FC_MODE_TEST,
 };
 
-static bool fs_read(struct fs *fs, struct fs_key key,
-                        struct fs_file *file, enum fc_mode mode);
+static bool fs_read(struct fs *fs, struct fs_key key, struct fs_file *file,
+                    enum fc_mode mode);
 
 bool fs_test_path(struct fs *fs, ustr_t path) {
   struct fs_key key = {F_TY_PATH, .key = path};
@@ -167,15 +161,13 @@ bool fs_read_stdin(struct fs *fs, struct fs_file *file) {
   return fs_read(fs, key, file, FC_MODE_READ);
 }
 
-bool fs_read_path(struct fs *fs, ustr_t path,
-                      struct fs_file *file) {
+bool fs_read_path(struct fs *fs, ustr_t path, struct fs_file *file) {
   struct fs_key key = {F_TY_PATH, .key = path};
 
   return fs_read(fs, key, file, FC_MODE_READ);
 }
 
-bool fs_read_proc(struct fs *fs, ustr_t proc,
-                      struct fs_file *file) {
+bool fs_read_proc(struct fs *fs, ustr_t proc, struct fs_file *file) {
   struct fs_key key = {F_TY_PROC, .key = proc};
 
   return fs_read(fs, key, file, FC_MODE_READ);
@@ -184,8 +176,8 @@ bool fs_read_proc(struct fs *fs, ustr_t proc,
 static void read_file_content(struct fs *fs, FILE *file, char **buf,
                               size_t *buf_len);
 
-static bool fs_read(struct fs *fs, struct fs_key key,
-                        struct fs_file *file, enum fc_mode mode) {
+static bool fs_read(struct fs *fs, struct fs_key key, struct fs_file *file,
+                    enum fc_mode mode) {
   // TODO: caching (via mtime) even when flag not present
   if (fs->flags & FS_FLAG_ASSUME_CONSTANT) {
     struct fs_file *cache = hashtbl_lookup(fs->cache, &key);

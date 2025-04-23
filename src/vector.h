@@ -51,8 +51,7 @@ void vector_truncate(struct vector *v, size_t new_len);
 void vector_remove_at(struct vector *v, size_t index);
 void vector_remove_range(struct vector *v, size_t index, size_t len);
 
-void vector_sort(struct vector *v,
-            int (*comp)(const void*, const void*));
+void vector_sort(struct vector *v, int (*comp)(const void *, const void *));
 
 void *vector_pop(struct vector *v);
 

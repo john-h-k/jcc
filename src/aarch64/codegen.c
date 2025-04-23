@@ -2168,7 +2168,8 @@ struct check_reg_type_data {
   enum aarch64_reg_ty reg_ty;
 };
 
-static void check_reg_type_callback(struct cg_instr *instr, struct aarch64_reg reg,
+static void check_reg_type_callback(struct cg_instr *instr,
+                                    struct aarch64_reg reg,
                                     enum aarch64_reg_usage_ty usage_ty,
                                     void *metadata) {
   struct check_reg_type_data *data = metadata;

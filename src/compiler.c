@@ -81,15 +81,14 @@ compiler_create(const struct compiler_create_args *args,
   };
 
   if (preproc_create(args->program, args->fs, preproc_args,
-                     (*compiler)->diagnostics,
-                     (*compiler)->mode,
+                     (*compiler)->diagnostics, (*compiler)->mode,
                      &(*compiler)->preproc) != PREPROC_CREATE_RESULT_SUCCESS) {
     err("failed to create preproc");
     return COMPILER_CREATE_RESULT_FAILURE;
   }
 
-  if (parser_create(args->program, (*compiler)->preproc, args->args.c_standard, args->mode,
-                    (*compiler)->diagnostics,
+  if (parser_create(args->program, (*compiler)->preproc, args->args.c_standard,
+                    args->mode, (*compiler)->diagnostics,
                     &(*compiler)->parser) != PARSER_CREATE_RESULT_SUCCESS) {
     err("failed to create parser");
     return COMPILER_CREATE_RESULT_FAILURE;
@@ -195,7 +194,7 @@ static void compiler_print_diagnostics_context(struct compiler *compiler,
   if (start.line == TEXT_POS_INVALID_LINE ||
       end.line == TEXT_POS_INVALID_LINE) {
     fprintf(sink, "(unable to print due to invalid line pos, likely from "
-                    "macro expansion)");
+                  "macro expansion)");
     return;
   }
 
@@ -227,8 +226,7 @@ static void compiler_print_diagnostics_context(struct compiler *compiler,
       size_t line_len = (size_t)(next - &text[i + 1]);
 
       size_t offset = 7 + num_digits(line + 1);
-      fprintf(sink, "    %zu | %.*s\n", line + 1, (int)line_len,
-              &text[i + 1]);
+      fprintf(sink, "    %zu | %.*s\n", line + 1, (int)line_len, &text[i + 1]);
 
       fprintf(sink, "%*s", (int)offset, "");
 
@@ -285,7 +283,8 @@ static void compiler_print_diagnostics(struct compiler *compiler) {
     close = true;
 
     if (!file) {
-      err("opening diagnostic sink '%s' failed!", compiler->args.diagnostics_sink);
+      err("opening diagnostic sink '%s' failed!",
+          compiler->args.diagnostics_sink);
       return;
     }
   } else {
@@ -316,7 +315,8 @@ static void compiler_print_diagnostics(struct compiler *compiler) {
       break;
     }
 
-    if (diagnostic.ty.severity == COMPILER_DIAGNOSTIC_SEVERITY_WARN  && compiler->args.no_warnings) {
+    if (diagnostic.ty.severity == COMPILER_DIAGNOSTIC_SEVERITY_WARN &&
+        compiler->args.no_warnings) {
       continue;
     }
 
@@ -404,10 +404,12 @@ static enum compile_result compile_stage_lex(struct compiler *compiler,
     return COMPILE_RESULT_BAD_FILE;
   }
 
-  // TODO: lex can fail, also this doesn't match structure of rest of compiler (where create and free are outside of these functions)
+  // TODO: lex can fail, also this doesn't match structure of rest of compiler
+  // (where create and free are outside of these functions)
 
   struct lexer *lexer;
-  lexer_create(compiler->program, compiler->preproc, compiler->args.c_standard, mode, &lexer);
+  lexer_create(compiler->program, compiler->preproc, compiler->args.c_standard,
+               mode, &lexer);
 
   lex_all(lexer);
 
@@ -454,7 +456,8 @@ compile_stage_typechk(struct compiler *compiler,
 
   compiler_print_diagnostics(compiler);
 
-  // do this unconditionally, it really means "was typechk reached (ie no syntax errors)"
+  // do this unconditionally, it really means "was typechk reached (ie no syntax
+  // errors)"
   compiler->typechk_success = true;
 
   if (typechk_result->ty == TYPECHK_RESULT_TY_FAILURE) {
@@ -765,7 +768,8 @@ static enum compile_result
 compile_stage_build_object(struct compiler *compiler,
                            struct emitted_unit *emitted_unit) {
 
-  invariant_assert(compiler->output.ty == COMPILE_FILE_TY_PATH || compiler->output.ty == COMPILE_FILE_TY_FILE,
+  invariant_assert(compiler->output.ty == COMPILE_FILE_TY_PATH ||
+                       compiler->output.ty == COMPILE_FILE_TY_FILE,
                    "can't build object to stdout/stderr");
 
   FILE *file;
@@ -894,7 +898,8 @@ enum compile_result compile(struct compiler *compiler) {
   return COMPILE_RESULT_SUCCESS;
 }
 
-void compiler_get_tchk(struct compiler *compiler, struct typechk **tchk, struct typechk_result *result) {
+void compiler_get_tchk(struct compiler *compiler, struct typechk **tchk,
+                       struct typechk_result *result) {
   if (!compiler->typechk_success) {
     *tchk = NULL;
     return;

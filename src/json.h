@@ -124,7 +124,7 @@ void json_writer_clear(struct json_writer *writer);
   _Generic((value),                                                            \
                                                                                \
       /* Null */                                                               \
-      json_null_t: json_writer_write_null,                              \
+      json_null_t: json_writer_write_null,                                     \
                                                                                \
       /* Bool */                                                               \
       bool: json_writer_write_bool,                                            \

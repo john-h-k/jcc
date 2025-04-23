@@ -890,7 +890,9 @@ static void lower_params(struct ir_func *func) {
           size_t offset_add;
 
           struct ir_var_ty load_ty;
-          size_t field_offset = field_idx + 1 < info.num_fields ? info.fields[field_idx + 1].offset - offset : 0;
+          size_t field_offset = field_idx + 1 < info.num_fields
+                                    ? info.fields[field_idx + 1].offset - offset
+                                    : 0;
           if (field_idx + 1 >= info.num_fields || field_offset >= reg.size) {
             // only loading one field, so load the field ty
             size_t field_size =
@@ -1128,7 +1130,9 @@ void lower_call(struct ir_func *func, const struct ir_op_use_map *use_map,
 
         size_t offset_add;
         struct ir_var_ty store_ty;
-        size_t field_offset = field_idx + 1 < info.num_fields ? info.fields[field_idx + 1].offset - offset : 0;
+        size_t field_offset = field_idx + 1 < info.num_fields
+                                  ? info.fields[field_idx + 1].offset - offset
+                                  : 0;
         if (field_idx + 1 >= info.num_fields || field_offset >= reg.size) {
           // only storeing one field, so store the field ty
           size_t field_size =
@@ -1256,9 +1260,8 @@ static void lower_params_registers(struct ir_func *func) {
                   lcl = addr->addr.lcl;
                   lcl->flags |= IR_LCL_FLAG_PARAM;
                   lcl->alloc_ty = IR_LCL_ALLOC_TY_FIXED;
-                  lcl->alloc = (struct ir_lcl_alloc){.padding = 0,
-                                                     .size = info.size,
-                                                     .offset = offset};
+                  lcl->alloc = (struct ir_lcl_alloc){
+                      .padding = 0, .size = info.size, .offset = offset};
 
                   // if (param_op->ty == IR_OP_TY_MOV) {
 

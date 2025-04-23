@@ -1,8 +1,9 @@
 #ifndef X64_LOWER_H
 #define X64_LOWER_H
 
-#include <stdio.h>
 #include "../ir/ir.h"
+
+#include <stdio.h>
 
 // performs platform specific lowering transformations to the IR
 void x64_lower_variadic(struct ir_func *func);
