@@ -55,7 +55,7 @@ struct builtin_fn_spec {
   BUILTIN_FN(va_end, BUILTIN_TYPE_SPEC_TD_VAR_TY(&TD_VAR_TY_VOID), 1,          \
              ARR_LIT({BUILTIN_TYPE_SPEC_VA_LIST}))                             \
                                                                                \
-  /* TODO: BUILTIN_FN(err_expr, {BUILTIN_TYPE_SPEC_ANY}) */
+  BUILTIN_FN(error, BUILTIN_TYPE_SPEC_TD_VAR_TY(&TD_VAR_TY_VOID), 1, ARR_LIT({BUILTIN_TYPE_SPEC_TD_VAR_TY(&TD_VAR_TY_CONST_CHAR_POINTER)}))
 
 #define BUILTIN_TY(...)
 #define BUILTIN_FN(name, ret_ty, param_count, param_tys)                       \

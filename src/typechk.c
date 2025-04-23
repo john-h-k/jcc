@@ -4078,6 +4078,17 @@ static struct td_expr type_var(struct typechk *tchk,
     // check for builtin late so code can shadow them without breaking
     struct td_builtin_fn *builtin = hashtbl_lookup(tchk->builtin_fns, &name);
     if (builtin) {
+      // TODO: better way of checking if builtin is a specific builtin (e.g
+      // enum)
+      if (ustr_eq(name, MK_USTR("__builtin_error"))) {
+        tchk->result_ty = TYPECHK_RESULT_TY_FAILURE;
+        compiler_diagnostics_add(
+            tchk->diagnostics,
+            MK_SEMANTIC_DIAGNOSTIC(BUILTIN_ERROR, builtin_error, var->span,
+                                   MK_INVALID_TEXT_POS(0),
+                                   "builtin-error: %s"));
+      }
+
       return (struct td_expr){.ty = TD_EXPR_TY_BUILTIN,
                               .var_ty = builtin->var_ty,
                               .builtin = {.identifier = name}};

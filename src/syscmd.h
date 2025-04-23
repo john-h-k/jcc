@@ -33,6 +33,6 @@ void syscmd_set_stdin(struct syscmd *syscmd, ustr_t value);
 
 void syscmd_write_cmd(struct syscmd *cmd, FILE *file);
 
-int syscmd_exec(struct syscmd * restrict *syscmd);
+int syscmd_exec(struct syscmd *restrict *syscmd);
 
 #endif

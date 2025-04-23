@@ -1,8 +1,9 @@
 #ifndef RV32I_LOWER_H
 #define RV32I_LOWER_H
 
-#include <stdio.h>
 #include "../ir/ir.h"
+
+#include <stdio.h>
 
 // performs platform specific lowering transformations to the IR
 void rv32i_lower_variadic(struct ir_func *func);

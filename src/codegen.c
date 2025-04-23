@@ -80,7 +80,7 @@ struct cg_basicblock *cg_alloc_basicblock(struct cg_func *func,
 }
 
 struct cg_instr *cg_alloc_instr(struct cg_func *func,
-                             struct cg_basicblock *basicblock) {
+                                struct cg_basicblock *basicblock) {
   struct cg_instr *instr = arena_alloc(func->unit->arena, sizeof(*instr));
 
   if (!basicblock->first) {

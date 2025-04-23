@@ -1539,9 +1539,10 @@ static bool try_expand_token(struct preproc *preproc,
     switch (value->ty) {
     case PREPROC_DEFINE_VALUE_TY_TOKEN: {
       if (preproc->events) {
-        struct preproc_event event = {.ty = PREPROC_EVENT_TY_MACRO_EXPAND,
-                                      .span = token->span,
-                                      .macro_expand = { .span = macro->name.span }};
+        struct preproc_event event = {
+            .ty = PREPROC_EVENT_TY_MACRO_EXPAND,
+            .span = token->span,
+            .macro_expand = {.span = macro->name.span}};
 
         vector_push_back(preproc->events, &event);
       }
@@ -1554,9 +1555,10 @@ static bool try_expand_token(struct preproc *preproc,
     }
     case PREPROC_DEFINE_VALUE_TY_TOKEN_VEC: {
       if (preproc->events) {
-        struct preproc_event event = {.ty = PREPROC_EVENT_TY_MACRO_EXPAND,
-                                      .span = token->span,
-                                      .macro_expand = { .span = macro->name.span }};
+        struct preproc_event event = {
+            .ty = PREPROC_EVENT_TY_MACRO_EXPAND,
+            .span = token->span,
+            .macro_expand = {.span = macro->name.span}};
 
         vector_push_back(preproc->events, &event);
       }
@@ -1606,9 +1608,10 @@ static bool try_expand_token(struct preproc *preproc,
       }
 
       if (preproc->events) {
-        struct preproc_event event = {.ty = PREPROC_EVENT_TY_MACRO_EXPAND,
-                                      .span = token->span,
-                                      .macro_expand = { .span = macro->name.span }};
+        struct preproc_event event = {
+            .ty = PREPROC_EVENT_TY_MACRO_EXPAND,
+            .span = token->span,
+            .macro_expand = {.span = macro->name.span}};
 
         vector_push_back(preproc->events, &event);
       }

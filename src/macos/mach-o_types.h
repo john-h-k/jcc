@@ -297,16 +297,16 @@ struct build_version_command {
 
 #define N_NO_DEAD_STRIP 0x0020
 #define N_DESC_DISCARDED 0x0020
-#define N_WEAK_REF	0x0040
-#define N_WEAK_DEF	0x0080
-#define	N_REF_TO_WEAK	0x0080
-#define N_ARM_THUMB_DEF	0x0008
-#define N_SYMBOL_RESOLVER  0x0100 
+#define N_WEAK_REF 0x0040
+#define N_WEAK_DEF 0x0080
+#define N_REF_TO_WEAK 0x0080
+#define N_ARM_THUMB_DEF 0x0008
+#define N_SYMBOL_RESOLVER 0x0100
 #define N_ALT_ENTRY 0x0200k
 #define N_COLD_FUNC 0x0400
 
-#define	NO_SECT		0	/* symbol is not in any section */
-#define MAX_SECT	255	/* 1 thru 255 inclusive */
+#define NO_SECT 0    /* symbol is not in any section */
+#define MAX_SECT 255 /* 1 thru 255 inclusive */
 
 struct nlist_64 {
   union {

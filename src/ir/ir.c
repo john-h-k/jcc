@@ -652,7 +652,7 @@ const struct ir_var_ty IR_VAR_TY_I32 = {.ty = IR_VAR_TY_TY_PRIMITIVE,
 const struct ir_var_ty IR_VAR_TY_I64 = {.ty = IR_VAR_TY_TY_PRIMITIVE,
                                         .primitive = IR_VAR_PRIMITIVE_TY_I64};
 const struct ir_var_ty IR_VAR_TY_I128 = {.ty = IR_VAR_TY_TY_PRIMITIVE,
-                                        .primitive = IR_VAR_PRIMITIVE_TY_I128};
+                                         .primitive = IR_VAR_PRIMITIVE_TY_I128};
 const struct ir_var_ty IR_VAR_TY_F16 = {.ty = IR_VAR_TY_TY_PRIMITIVE,
                                         .primitive = IR_VAR_PRIMITIVE_TY_F16};
 const struct ir_var_ty IR_VAR_TY_F32 = {.ty = IR_VAR_TY_TY_PRIMITIVE,

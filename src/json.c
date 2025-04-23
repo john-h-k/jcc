@@ -24,8 +24,7 @@ static size_t json_parse_ws(ustr_t *str) {
   return rd;
 }
 
-static ustr_t process_raw_string(struct json_ctx *ctx,
-                                           ustr_t value) {
+static ustr_t process_raw_string(struct json_ctx *ctx, ustr_t value) {
   // TODO: this i think will wrongly accept multilines
   // FIXME: definitely wrong for wide strings
 
@@ -524,8 +523,7 @@ void json_writer_write_double(struct json_writer *writer, double value) {
   writer->needs_sep = true;
 }
 
-void json_writer_write_string(struct json_writer *writer,
-                              ustr_t value) {
+void json_writer_write_string(struct json_writer *writer, ustr_t value) {
   if (writer->needs_sep) {
     vector_push_back(writer->buffer, &(char){','});
   }
@@ -542,8 +540,7 @@ void json_writer_write_string(struct json_writer *writer,
   writer->needs_sep = true;
 }
 
-void json_writer_write_field_name(struct json_writer *writer,
-                                  ustr_t name) {
+void json_writer_write_field_name(struct json_writer *writer, ustr_t name) {
   json_writer_write_string(writer, name);
 
   writer->needs_sep = false;

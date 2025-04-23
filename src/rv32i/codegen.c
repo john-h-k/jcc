@@ -1527,7 +1527,7 @@ static bool rv32i_instr_is_branch(const struct rv32i_instr *instr) {
 }
 
 static long long pessimistic_bb_distance(struct cg_instr *from,
-                                                  struct cg_basicblock *to) {
+                                         struct cg_basicblock *to) {
   // we never insert more 4 instructions for a jump
   // the 4 instr case is:
   //     b<cond> true, false
@@ -1874,7 +1874,8 @@ static const char *get_reloc_symbol(const struct codegen_debug_state *state,
 }
 
 static void print_instr(const struct codegen_debug_state *state,
-                        enum codegen_flags flags, const struct cg_instr *instr) {
+                        enum codegen_flags flags,
+                        const struct cg_instr *instr) {
 
   FILE *file = state->file;
 

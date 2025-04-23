@@ -54,6 +54,7 @@ enum compiler_diagnostic_class {
           const char *)
 
 #define COMPILER_SEMANTIC_DIAGNOSTIC_LIST                                      \
+  DIAG_FN(ERROR, "builtin-error", builtin_error, BUILTIN_ERROR, const char *)            \
   DIAG_FN(WARN, "mut-global", mut_global, MUT_GLOBAL, const char *)            \
   DIAG_FN(WARN, "empty-init-c23", empty_init_c23, EMPTY_INIT_C23,              \
           const char *)                                                        \

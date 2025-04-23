@@ -64,17 +64,16 @@ const static struct td_var_ty X64_VA_LIST_TAG_TY = {
 
 const static struct td_var_ty X64_VA_LIST_TY = {
     .ty = TD_VAR_TY_TY_ARRAY,
-    .array = {
-        .size = 1,
-        // FIXME:
-        .underlying = CONST_CAST((struct td_var_ty *)&X64_VA_LIST_TAG_TY)
-    }
-};
+    .array = {.size = 1,
+              // FIXME:
+              .underlying =
+                  CONST_CAST((struct td_var_ty *)&X64_VA_LIST_TAG_TY)}};
 
 const struct target X64_MACOS_TARGET = {
     TARGET_ID_X64_MACOS,
     TARGET_LP_SZ_LP64,
-    {.va_list_var_ty = &X64_VA_LIST_TY, .flags = TARGET_VARIADIC_INFO_FLAG_VA_LIST_BYREF},
+    {.va_list_var_ty = &X64_VA_LIST_TY,
+     .flags = TARGET_VARIADIC_INFO_FLAG_VA_LIST_BYREF},
     {
         .ssp = 7,
         .gp_registers = {.max_reg_size = 8,
@@ -111,7 +110,8 @@ const struct target X64_MACOS_TARGET = {
 const struct target X64_LINUX_TARGET = {
     TARGET_ID_X64_LINUX,
     TARGET_LP_SZ_LP64,
-    {.va_list_var_ty = &X64_VA_LIST_TY, .flags = TARGET_VARIADIC_INFO_FLAG_VA_LIST_BYREF},
+    {.va_list_var_ty = &X64_VA_LIST_TY,
+     .flags = TARGET_VARIADIC_INFO_FLAG_VA_LIST_BYREF},
     {
         .ssp = 7,
         .gp_registers = {.max_reg_size = 8,
