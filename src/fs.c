@@ -88,7 +88,7 @@ static void fs_tmp_init(void) {
     TMP_INFO.tmp_dir = MK_USTR(tmp_dir);
 
     atexit(fs_tmp_del);
-    at_quick_exit2(fs_tmp_del);
+    at_quick_exit(fs_tmp_del);
   });
 }
 
