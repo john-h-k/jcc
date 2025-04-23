@@ -60,7 +60,7 @@ static void fs_tmp_del(void) {
 #include <Availability.h>
 // at_quick_exit doesn't seem to exist?
 #if defined(__APPLE__) && defined(__MAC_OS_X_VERSION_MAX_ALLOWED)
-  #if __MAC_OS_X_VERSION_MAX_ALLOWED < 130000
+  #if __MAC_OS_X_VERSION_MAX_ALLOWED < 150000
   static void at_quick_exit(UNUSED void (*fn)(void)) {}
   #endif
 #endif
