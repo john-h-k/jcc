@@ -438,7 +438,7 @@ bootstrap() {
     # fi
 
     # actual build
-    if ! _stage_build cc 0; then
+    if ! _stage_build cc 0 --mode release; then
         exit -1
     fi
 
