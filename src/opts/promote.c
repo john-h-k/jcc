@@ -354,8 +354,7 @@ static void opts_do_promote(struct ir_func *func, struct vector *lcl_uses,
   // need to sort uses so we can walk in a temporal way, updating as we
   // encounter new stores
   if (vector_head(lcl_uses)) {
-    qsort(vector_head(lcl_uses), vector_length(lcl_uses),
-          vector_element_size(lcl_uses), sort_lcl_uses);
+    vector_sort(lcl_uses, sort_lcl_uses);
   }
 
   for (size_t i = 0; i < num_uses; i++) {

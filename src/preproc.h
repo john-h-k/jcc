@@ -41,6 +41,7 @@ enum preproc_create_result
 preproc_create(struct program program, struct fs *fs,
                struct preproc_create_args args,
                struct compiler_diagnostics *diagnostics,
+               enum compile_preproc_mode mode,
                struct preproc **preproc);
 
 struct preprocessed_program {
@@ -152,11 +153,40 @@ struct preproc_token {
   enum preproc_token_flags flags;
 };
 
+struct preproc_event_include {
+  const char *path;
+};
+
+struct preproc_event_macro_expand {
+  struct text_span span;
+};
+
+enum preproc_event_ty {
+  PREPROC_EVENT_TY_INCLUDE,
+  PREPROC_EVENT_TY_MACRO_EXPAND,
+};
+
+struct preproc_event {
+  enum preproc_event_ty ty;
+
+  struct text_span span;
+
+  union {
+    struct preproc_event_include include;
+    struct preproc_event_macro_expand macro_expand;
+  };
+};
+
+struct preproc_events {
+  struct preproc_event *events;
+  size_t num_events;
+};
+
 enum FLAG_ENUM preproc_expand_token_flags {
   PREPROC_EXPAND_TOKEN_FLAG_NONE = 0,
 
   // expand undef tokens to zero (used by #if/#elif)
-  PREPROC_EXPAND_TOKEN_FLAG_UNDEF_ZERO = 1,
+  PREPROC_EXPAND_TOKEN_FLAG_UNDEF_ZERO = 1 << 0,
 };
 
 void preproc_next_token(struct preproc *preproc, struct preproc_token *token,
@@ -164,6 +194,8 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token,
 
 void preproc_next_raw_token(struct preproc *preproc,
                             struct preproc_token *token);
+
+struct preproc_events preproc_get_events(struct preproc *preproc);
 
 void preproc_process(struct preproc *preproc, FILE *file);
 

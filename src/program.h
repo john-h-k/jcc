@@ -47,6 +47,7 @@ struct text_span {
 #define MK_INVALID_TEXT_SPAN2() MK_TEXT_SPAN(MK_INVALID_TEXT_POS(0), MK_INVALID_TEXT_POS(0))                                \
 
 #define TEXT_POS_INVALID(pos) ((pos).col == TEXT_POS_INVALID_COL)
+#define TEXT_SPAN_INVALID(span) (TEXT_POS_INVALID((span.start)))
 
 bool text_span_eq(const void *l, const void *r);
 bool text_pos_eq(const void *l, const void *r);

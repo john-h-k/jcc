@@ -603,7 +603,7 @@ static inline int ustr_cmp(ustr_t l, ustr_t r) {
   return cmp;
 }
 
-#ifdef __GNUC__
+#if __GNUC__ && !__clang__
 // gcc warns on `false ? strlen(NULL) : <other>`
 // (which is silly)
 static inline size_t wrap_strlen(const char *p) {

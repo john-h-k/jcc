@@ -583,6 +583,7 @@ static void lex_next_token(struct lexer *lexer, struct lex_token *token) {
     do {
       switch (lexer->mode) {
       case COMPILE_PREPROC_MODE_PREPROC:
+      case COMPILE_PREPROC_MODE_EMIT_EVENTS:
         preproc_next_token(lexer->preproc, &preproc_token,
                            PREPROC_EXPAND_TOKEN_FLAG_NONE);
         break;

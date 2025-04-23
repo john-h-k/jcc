@@ -41,6 +41,7 @@ set(
 
   src/lsp/lsp.c
   src/lsp/lsp_types.c
+  src/lsp/map.c
 
   src/compiler.c
   src/diagnostics.c

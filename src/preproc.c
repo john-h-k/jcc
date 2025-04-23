@@ -74,6 +74,8 @@ struct preproc {
   ustr_t query_ident;
   bool keep_next_token;
 
+  struct vector *events;
+
   // after a `defined(SYM` symbol, we need to know to look to strip the close
   // bracket
   bool waiting_for_close;
@@ -352,6 +354,15 @@ static void preproc_create_builtin_macros(struct preproc *preproc,
 #undef DEF_BUILTIN
 }
 
+struct preproc_events preproc_get_events(struct preproc *preproc) {
+  DEBUG_ASSERT(
+      preproc->events,
+      "events was NULL (was PREPROC_EXPAND_TOKEN_FLAG_EMIT_EVENTS set?)");
+
+  return (struct preproc_events){.events = vector_head(preproc->events),
+                                 .num_events = vector_length(preproc->events)};
+}
+
 static struct preproc_text create_preproc_text(struct preproc *preproc,
                                                const char *text,
                                                const char *path) {
@@ -448,7 +459,7 @@ enum preproc_create_result
 preproc_create(struct program program, struct fs *fs,
                struct preproc_create_args args,
                struct compiler_diagnostics *diagnostics,
-               struct preproc **preproc) {
+               enum compile_preproc_mode mode, struct preproc **preproc) {
   call_once(&SPECIAL_MACROS_ONCE, build_special_macros);
 
   if (args.fixed_timestamp) {
@@ -466,6 +477,17 @@ preproc_create(struct program program, struct fs *fs,
   p->fs = fs;
   p->args = args;
   p->diagnostics = diagnostics;
+
+  switch (mode) {
+  case COMPILE_PREPROC_MODE_PREPROC:
+    break;
+  case COMPILE_PREPROC_MODE_EMIT_EVENTS:
+    p->events = vector_create_in_arena(sizeof(struct preproc_event), arena);
+    break;
+  case COMPILE_PREPROC_MODE_NO_PREPROC:
+    BUG("preproc with COMPILE_PREPROC_MODE_NO_PREPROC makes no sense (preproc "
+        "should be skipped)");
+  }
 
   if (args.verbose) {
     fprintf(stderr, "sys_include_paths: \n");
@@ -1515,6 +1537,14 @@ static bool try_expand_token(struct preproc *preproc,
     struct preproc_define_value *value = &macro->value;
     switch (value->ty) {
     case PREPROC_DEFINE_VALUE_TY_TOKEN: {
+      if (preproc->events) {
+        struct preproc_event event = {.ty = PREPROC_EVENT_TY_MACRO_EXPAND,
+                                      .span = token->span,
+                                      .macro_expand = { .span = macro->name.span }};
+
+        vector_push_back(preproc->events, &event);
+      }
+
       struct preproc_token def_token = value->token;
       def_token.span = token->span;
       def_token.flags |= PREPROC_TOKEN_FLAG_MACRO_EXPANSION;
@@ -1522,6 +1552,14 @@ static bool try_expand_token(struct preproc *preproc,
       break;
     }
     case PREPROC_DEFINE_VALUE_TY_TOKEN_VEC: {
+      if (preproc->events) {
+        struct preproc_event event = {.ty = PREPROC_EVENT_TY_MACRO_EXPAND,
+                                      .span = token->span,
+                                      .macro_expand = { .span = macro->name.span }};
+
+        vector_push_back(preproc->events, &event);
+      }
+
       size_t num_tokens = vector_length(value->vec);
       for (size_t i = num_tokens; i; i--) {
         struct preproc_token def_tok =
@@ -1564,6 +1602,14 @@ static bool try_expand_token(struct preproc *preproc,
         vector_push_back(buffer, &open);
         PROFILE_END_MULTI(macro_expand);
         return false;
+      }
+
+      if (preproc->events) {
+        struct preproc_event event = {.ty = PREPROC_EVENT_TY_MACRO_EXPAND,
+                                      .span = token->span,
+                                      .macro_expand = { .span = macro->name.span }};
+
+        vector_push_back(preproc->events, &event);
       }
 
       int depth = 1;
@@ -3161,6 +3207,14 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token,
           TODO("handle failed include search for '%s'", include_path.filename);
         } else if (!include_info.content) {
           TODO("handle failed include read for '%s'", include_path.filename);
+        }
+
+        if (preproc->events) {
+          struct preproc_event event = {.ty = PREPROC_EVENT_TY_INCLUDE,
+                                        .span = filename_token->span,
+                                        .include = {.path = include_info.path}};
+
+          vector_push_back(preproc->events, &event);
         }
 
         struct preproc_text include_text = create_preproc_text(

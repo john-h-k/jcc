@@ -82,6 +82,7 @@ compiler_create(const struct compiler_create_args *args,
 
   if (preproc_create(args->program, args->fs, preproc_args,
                      (*compiler)->diagnostics,
+                     (*compiler)->mode,
                      &(*compiler)->preproc) != PREPROC_CREATE_RESULT_SUCCESS) {
     err("failed to create preproc");
     return COMPILER_CREATE_RESULT_FAILURE;
@@ -441,11 +442,12 @@ compile_stage_typechk(struct compiler *compiler,
 
   compiler_print_diagnostics(compiler);
 
+  // do this unconditionally, it really means "was typechk reached (ie no syntax errors)"
+  compiler->typechk_success = true;
+
   if (typechk_result->ty == TYPECHK_RESULT_TY_FAILURE) {
     return COMPILE_RESULT_FAILURE;
   }
-
-  compiler->typechk_success = true;
 
   return COMPILE_RESULT_SUCCESS;
 }
@@ -877,6 +879,10 @@ void compiler_get_tchk(struct compiler *compiler, struct typechk **tchk, struct 
 struct compiler_diagnostics *
 compiler_get_diagnostics(struct compiler *compiler) {
   return compiler->diagnostics;
+}
+
+struct preproc *compiler_get_preproc(struct compiler *compiler) {
+  return compiler->preproc;
 }
 
 void free_compiler(struct compiler **compiler) {

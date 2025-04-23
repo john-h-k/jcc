@@ -4,45 +4,16 @@
 #include "../compiler.h"
 #include "../json.h"
 #include "../log.h"
-#include "../typechk.h"
 #include "../vector.h"
+#include "ctx.h"
 #include "lsp_types.h"
+#include "map.h"
 
 #include <stdbool.h>
 #include <stdio.h>
-#include <unistd.h>
 
 struct lsp_headers {
   size_t content_length;
-};
-
-struct lsp_ctx {
-  struct arena_allocator *arena;
-  struct vector *read_buf;
-  struct json_writer *writer;
-
-  // hmm, ideally we would use fs for all the file caching stuff but it
-  // doesn't currently have the capabilities for modifying docs
-  struct fs *fs;
-  // sized_str (uri) : lsp_doc
-  struct hashtbl *docs;
-
-  struct parsed_args args;
-  struct compile_args compile_args;
-  const struct target *target;
-
-  struct init_params init_params;
-
-  bool shutdown_recv;
-
-  FILE *in;
-  FILE *out;
-  FILE *log;
-};
-
-struct lsp_doc {
-  struct text_doc doc;
-  struct compiler *compiler;
 };
 
 static struct lsp_headers lsp_read_headers(struct lsp_ctx *ctx) {
@@ -124,7 +95,7 @@ static void lsp_parse_doc(struct lsp_ctx *ctx, struct lsp_doc *doc) {
       .args = ctx->compile_args,
       // TODO: working dir
       // .working_dir = ctx->source_path,
-      .mode = COMPILE_PREPROC_MODE_PREPROC,
+      .mode = COMPILE_PREPROC_MODE_EMIT_EVENTS,
       .output = COMPILE_FILE_NONE,
   };
 
@@ -199,7 +170,7 @@ static void lsp_close_doc(struct lsp_ctx *ctx,
 
 #define LSP_WRITE_MESSAGE(block)                                               \
   json_writer_write_begin_obj(ctx->writer);                                    \
-  JSON_WRITE_FIELD(ctx->writer, "jsonrpc", MK_USTR("2.0"));                   \
+  JSON_WRITE_FIELD(ctx->writer, "jsonrpc", MK_USTR("2.0"));                    \
   {block};                                                                     \
   json_writer_write_end_obj(ctx->writer);                                      \
   lsp_write_buf(ctx);
@@ -213,14 +184,15 @@ static struct req_msg lsp_read_msg(struct lsp_ctx *ctx) {
   size_t rem = headers.content_length;
 
   while (rem) {
-   size_t rd = fread(vector_head(ctx->read_buf), 1, headers.content_length, ctx->in);
-   DEBUG_ASSERT(rd, "fread failed");
+    size_t rd =
+        fread(vector_head(ctx->read_buf), 1, headers.content_length, ctx->in);
+    DEBUG_ASSERT(rd, "fread failed");
 
-   rem -= rd;
+    rem -= rd;
   }
 
   ustr_t obj = {.len = vector_length(ctx->read_buf),
-                          .str = vector_head(ctx->read_buf)};
+                .str = vector_head(ctx->read_buf)};
 
   struct json_result result = json_parse(obj);
 
@@ -432,127 +404,40 @@ static void lsp_handle_init(struct lsp_ctx *ctx) {
                    "expected response to be an 'initialized' method");
 }
 
-struct build_def_data {
-  struct vector *locs;
-  struct hashtbl *defs;
-};
-
-static void build_def_cb(const struct td_node *node, void *metadata) {
-  struct build_def_data *data = metadata;
-
-  // TODO: support decls
-  switch (node->ty) {
-  case TD_NODE_TY_EXPR: {
-    const struct td_expr *expr = node->expr;
-    if (expr->ty == TD_EXPR_TY_VAR) {
-      fprintf(stderr, "var l %zu %.*s\n", expr->span.start.line, (int)expr->var.identifier.len, expr->var.identifier.str);
-      vector_push_back(data->locs, node);
-    }
-    break;
-  }
-  case TD_NODE_TY_VAR_DECL: {
-    const struct td_var_declaration *var_decl = node->var_decl;
-    struct text_span span = var_decl->var.span;
-    fprintf(stderr, "add decl %.*s\n", (int)var_decl->var.identifier.len, var_decl->var.identifier.str);
-    hashtbl_insert(data->defs, &var_decl->var, &span);
-    break;
-  }
-  default:
-    break;
-  }
-}
-
-static int compare_text_spans(const void *l, const void *r) {
-  const struct td_node *ls = l;
-  const struct td_node *rs = r;
-
-  const struct text_pos *l_start = &ls->span.start;
-  const struct text_pos *r_start = &rs->span.start;
-
-  if (l_start->idx > r_start->idx) {
-    return 1;
-  } else if (l_start->idx == r_start->idx) {
-    return 0;
-  } else {
-    return -1;
-  }
-}
-
 static void lsp_goto_def(struct lsp_ctx *ctx, lsp_integer id,
                          const struct definition_textdoc_params *params) {
   struct lsp_doc *doc = lsp_get_doc(ctx, params->text_doc.uri);
+  struct lsp_map *map = lsp_map_create(ctx, doc);
 
-  struct compiler *compiler = doc->compiler;
+  struct text_span span = MK_INVALID_TEXT_SPAN2();
 
-  struct typechk *tchk;
-  struct typechk_result result;
-  compiler_get_tchk(compiler, &tchk, &result);
+  if (map) {
+    span = lsp_map_lookup(map, params->pos);
+  }
 
-  if (!tchk) {
+  if (TEXT_SPAN_INVALID(span)) {
     LSP_WRITE_MESSAGE({
       JSON_WRITE_FIELD(ctx->writer, "id", id);
       JSON_WRITE_FIELD(ctx->writer, "result", JSON_NULL);
     });
-
-    return;
-  }
-
-  struct build_def_data data = {
-      .locs = vector_create_in_arena(sizeof(struct td_node), ctx->arena),
-      .defs = hashtbl_create_in_arena(ctx->arena, sizeof(struct td_var),
-                                      sizeof(struct text_span), hash_td_var,
-                                      eq_td_var)};
-  td_walk(tchk, &result.translation_unit, build_def_cb, &data);
-
-  size_t num_locs = vector_length(data.locs);
-
-  qsort(vector_head(data.locs), num_locs, sizeof(struct td_node),
-        compare_text_spans);
-
-  const struct td_var *var = NULL;
-
-  // FIXME: linear search
-  for (size_t i = 0; i < num_locs; i++) {
-    struct td_node *node = vector_get(data.locs, i);
-
-    struct text_pos start = node->span.start;
-    struct text_pos end = node->span.end;
-
-    if ((end.line > params->pos.line || (end.line == params->pos.line &&
-        end.col > params->pos.col)) && (start.line < params->pos.line || (start.line == params->pos.line && start.col <= params->pos.col))) {
-      var = &node->var_decl->var;
-      break;
-    }
-  }
-
-  struct text_span *def = NULL;
-  if (var) {
-    fprintf(stderr, "lookup def %.*s\n", (int)var->identifier.len, var->identifier.str);
-    def = hashtbl_lookup(data.defs, var);
-  }
-
-  if (!def) {
+  } else {
     LSP_WRITE_MESSAGE({
       JSON_WRITE_FIELD(ctx->writer, "id", id);
-      JSON_WRITE_FIELD(ctx->writer, "result", JSON_NULL);
+      JSON_OBJECT(ctx->writer, "result", {
+
+        if (span.start.file) {
+          char *uri =
+              arena_alloc_snprintf(ctx->arena, "file://%s", span.start.file);
+          JSON_WRITE_FIELD(ctx->writer, "uri", MK_USTR(uri));
+        } else {
+          JSON_WRITE_FIELD(ctx->writer, "uri", params->text_doc.uri);
+        }
+
+        JSON_WRITE_FIELD_NAME(ctx->writer, "range");
+        lsp_json_write_span(ctx, span);
+      });
     });
-    return;
   }
-
-  LSP_WRITE_MESSAGE({
-    JSON_WRITE_FIELD(ctx->writer, "id", id);
-    JSON_OBJECT(ctx->writer, "result", {
-      if (def->start.file) {
-        char *uri = arena_alloc_snprintf(ctx->arena, "file://%s", def->start.file);
-        JSON_WRITE_FIELD(ctx->writer, "uri", MK_USTR(uri));
-      } else {
-        JSON_WRITE_FIELD(ctx->writer, "uri", params->text_doc.uri);
-      }
-
-      JSON_WRITE_FIELD_NAME(ctx->writer, "range");
-      lsp_json_write_span(ctx, *def);
-    });
-  });
 }
 
 START_NO_UNUSED_ARGS
@@ -604,25 +489,26 @@ static void lsp_handle_msg(struct lsp_ctx *ctx, const struct req_msg *msg) {
     break;
   }
 }
+
 int lsp_run(struct arena_allocator *arena, struct fs *fs,
             struct parsed_args args, struct compile_args compile_args,
             const struct target *target) {
   fprintf(stderr, "JCC LSP mode\n");
   fprintf(stderr, "This is intended for consumption by an editor\n\n");
 
-  struct lsp_ctx ctx = {.arena = arena,
-                        .read_buf = vector_create_in_arena(sizeof(char), arena),
-                        .docs = hashtbl_create_ustr_keyed_in_arena(
-                            arena, sizeof(struct lsp_doc)),
-                        .writer = json_writer_create(),
-                        .compile_args = compile_args,
-                        .args = args,
-                        .fs = fs,
-                        .target = target,
-                        .shutdown_recv = false,
-                        .in = stdin,
-                        .out = stdout,
-                        .log = stderr};
+  struct lsp_ctx ctx = {
+      .arena = arena,
+      .read_buf = vector_create_in_arena(sizeof(char), arena),
+      .docs = hashtbl_create_ustr_keyed_in_arena(arena, sizeof(struct lsp_doc)),
+      .writer = json_writer_create(),
+      .compile_args = compile_args,
+      .args = args,
+      .fs = fs,
+      .target = target,
+      .shutdown_recv = false,
+      .in = stdin,
+      .out = stdout,
+      .log = stderr};
 
   lsp_handle_init(&ctx);
 

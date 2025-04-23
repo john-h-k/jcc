@@ -196,6 +196,9 @@ enum compile_result {
 enum compile_preproc_mode {
   COMPILE_PREPROC_MODE_PREPROC,
   COMPILE_PREPROC_MODE_NO_PREPROC,
+
+  // emit events for includes expansions etc (used by LSP)
+  COMPILE_PREPROC_MODE_EMIT_EVENTS
 };
 
 struct target;
@@ -216,6 +219,11 @@ compiler_create(const struct compiler_create_args *args,
 
 enum compile_result compile(struct compiler *compiler);
 
+void free_compiler(struct compiler **compiler);
+
+// these are used by LSP which needs to see various parts of compilation
+// sort of hacky
+
 struct typechk;
 struct typechk_result;
 void compiler_get_tchk(struct compiler *compiler, struct typechk **tchk, struct typechk_result *result);
@@ -223,6 +231,6 @@ void compiler_get_tchk(struct compiler *compiler, struct typechk **tchk, struct 
 struct compiler_diagnostics *
 compiler_get_diagnostics(struct compiler *compiler);
 
-void free_compiler(struct compiler **compiler);
+struct preproc *compiler_get_preproc(struct compiler *compiler);
 
 #endif

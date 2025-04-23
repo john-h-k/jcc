@@ -3236,8 +3236,7 @@ static void build_ir_for_init_list(struct ir_func_builder *irb,
     vector_push_back(init_ranges, &range);
   }
 
-  qsort(vector_head(init_ranges), vector_length(init_ranges),
-        vector_element_size(init_ranges), sort_ranges_by_offset);
+  vector_sort(init_ranges, sort_ranges_by_offset);
 
   struct ir_var_ty var_ty =
       ir_var_ty_for_td_var_ty(irb->unit, &init_list->var_ty);
