@@ -378,7 +378,7 @@ static void codegen_prologue(struct cg_state *state) {
                                      .stack_size = stack_size};
 
   state->rv32i_prologue_info =
-      arena_alloc(state->arena, sizeof(*state->rv32i_prologue_info));
+      aralloc(state->arena, sizeof(*state->rv32i_prologue_info));
 
   if (!info.prologue_generated) {
     *state->rv32i_prologue_info = info;
@@ -1110,7 +1110,7 @@ static void codegen_addr_op(struct cg_state *state,
     adrp->rv32i->ty = RV32I_INSTR_TY_LUI;
     adrp->rv32i->lui = (struct rv32i_u){.dest = dest, .imm = 0};
 
-    adrp->reloc = arena_alloc(state->func->unit->arena, sizeof(*adrp->reloc));
+    adrp->reloc = aralloc(state->func->unit->arena, sizeof(*adrp->reloc));
     *adrp->reloc = (struct relocation){
         .ty = glb->def_ty == IR_GLB_DEF_TY_DEFINED ? RELOCATION_TY_LOCAL_PAIR
                                                    : RELOCATION_TY_UNDEF_PAIR,
@@ -1373,7 +1373,7 @@ static void codegen_call_op(struct cg_state *state,
           .target = RV32I_SYMBOL_TARGET(entry), .ret_addr = RET_PTR_REG};
 
       instr->reloc =
-          arena_alloc(state->func->unit->arena, sizeof(*instr->reloc));
+          aralloc(state->func->unit->arena, sizeof(*instr->reloc));
       *instr->reloc = (struct relocation){
           .ty = RELOCATION_TY_CALL,
           .symbol_index = op->call.target->addr.glb->id,
@@ -1388,7 +1388,7 @@ static void codegen_call_op(struct cg_state *state,
       auipc->rv32i->auipc = (struct rv32i_u){.dest = RET_PTR_REG, .imm = 0};
 
       auipc->reloc =
-          arena_alloc(state->func->unit->arena, sizeof(*auipc->reloc));
+          aralloc(state->func->unit->arena, sizeof(*auipc->reloc));
       *auipc->reloc = (struct relocation){
           .ty = RELOCATION_TY_CALL,
           .symbol_index = op->call.target->addr.glb->id,

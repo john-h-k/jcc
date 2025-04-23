@@ -1052,7 +1052,7 @@ static void codegen_addr_op(struct cg_state *state,
     adrp->aarch64->ty = AARCH64_INSTR_TY_ADRP;
     adrp->aarch64->adrp = (struct aarch64_addr_imm){.dest = dest, .imm = 0};
 
-    adrp->reloc = arena_alloc(state->func->unit->arena, sizeof(*adrp->reloc));
+    adrp->reloc = aralloc(state->func->unit->arena, sizeof(*adrp->reloc));
     *adrp->reloc = (struct relocation){
         .ty = glb->def_ty == IR_GLB_DEF_TY_DEFINED ? RELOCATION_TY_LOCAL_PAIR
                                                    : RELOCATION_TY_UNDEF_PAIR,
@@ -1833,7 +1833,7 @@ static void codegen_call_op(struct cg_state *state,
     instr->aarch64->ty = AARCH64_INSTR_TY_BL;
     instr->aarch64->bl = (struct aarch64_branch){.target = NULL};
 
-    instr->reloc = arena_alloc(state->func->unit->arena, sizeof(*instr->reloc));
+    instr->reloc = aralloc(state->func->unit->arena, sizeof(*instr->reloc));
     *instr->reloc = (struct relocation){
         .ty = RELOCATION_TY_CALL,
         .symbol_index = op->call.target->addr.glb->id,
@@ -2054,7 +2054,7 @@ static void codegen_prologue(struct cg_state *state) {
                                        .stack_size = stack_size};
 
   state->aarch64_prologue_info =
-      arena_alloc(state->arena, sizeof(*state->aarch64_prologue_info));
+      aralloc(state->arena, sizeof(*state->aarch64_prologue_info));
 
   if (!info.prologue_generated) {
     *state->aarch64_prologue_info = info;

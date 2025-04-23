@@ -5,7 +5,7 @@
 
 #define CLONE_AND_FREE_VECTOR(arena, vec, num, p)                              \
   do {                                                                         \
-    void *buf = arena_alloc((arena), vector_byte_size((vec)));                 \
+    void *buf = aralloc((arena), vector_byte_size((vec)));                 \
     vector_copy_to((vec), buf);                                                \
     (num) = vector_length((vec));                                              \
     (p) = buf;                                                                 \

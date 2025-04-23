@@ -22,7 +22,7 @@ struct vector *vector_create_in_arena(size_t element_size,
 
   struct vector *v;
   if (arena) {
-    v = arena_alloc(arena, sizeof(*v));
+    v = aralloc(arena, sizeof(*v));
   } else {
     v = nonnull_malloc(sizeof(*v));
   }
@@ -48,7 +48,7 @@ void vector_ensure_capacity(struct vector *v, size_t capacity) {
 
   char *new_data;
   if (v->arena) {
-    new_data = arena_realloc(v->arena, v->data, new_capacity * v->element_size);
+    new_data = arrealloc(v->arena, v->data, new_capacity * v->element_size);
   } else {
     new_data = realloc(v->data, new_capacity * v->element_size);
   }

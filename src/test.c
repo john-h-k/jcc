@@ -46,7 +46,7 @@ struct jobq {
 };
 
 struct jobq *jobq_create(struct arena_allocator *arena, size_t job_size) {
-  struct jobq *jobq = arena_alloc(arena, sizeof(*jobq));
+  struct jobq *jobq = aralloc(arena, sizeof(*jobq));
 
   mtx_t lock;
   invariant_assert(mtx_init(&lock, mtx_plain) == thrd_success,
@@ -190,7 +190,7 @@ static void discover_tests_file(struct arena_allocator *arena,
     if (strstr(path, "langproc/")) {
       int len = strlen(path);
       if (len > 2) {
-        char *drv = arena_alloc(arena, len + 16);
+        char *drv = aralloc(arena, len + 16);
         strncpy(drv, path, len - 2);
         drv[len - 2] = '\0';
         strcat(drv, "_driver.c");
@@ -204,9 +204,9 @@ static void discover_tests_file(struct arena_allocator *arena,
     }
 
     // copy for lifetimes
-    test.file = arena_alloc_strdup(arena, test.file);
+    test.file = aralloc_strdup(arena, test.file);
     if (test.driver) {
-      test.driver = arena_alloc_strdup(arena, test.driver);
+      test.driver = aralloc_strdup(arena, test.driver);
     }
 
     vector_push_back(tests, &test);
@@ -300,7 +300,7 @@ static struct jcc_comp_info run_compilation(const struct jcc_worker_args *args,
     char buf[1024];
     while (fgets(buf, sizeof(buf), file)) {
       size_t len = strlen(buf);
-      result = arena_realloc(args->arena, result, n + len + 1);
+      result = arrealloc(args->arena, result, n + len + 1);
       memcpy(result + n, buf, len);
       n += len;
       result[n] = '\0';
@@ -395,7 +395,7 @@ static struct jcc_test_info get_test_info(const struct jcc_worker_args *args,
     spec = ustr_trim(spec);
     value = ustr_trim(value);
 
-    value = arena_alloc_ustrdup(args->arena, value);
+    value = aralloc_ustrdup(args->arena, value);
 
     if (ustr_eq(spec, MK_USTR("skip"))) {
       info.skip = true;
@@ -417,7 +417,7 @@ static struct jcc_test_info get_test_info(const struct jcc_worker_args *args,
     } else if (ustr_eq(spec, MK_USTR("arch"))) {
       if (!ustr_eq(value, args->opts.arch)) {
         info.skip = true;
-        info.skip_msg = MK_USTR(arena_alloc_snprintf(
+        info.skip_msg = MK_USTR(aralloc_snprintf(
             args->arena,
             "skipped due to arch (test arch: %.*s, runner arch: %.*s)",
             USTR_SPEC(value), USTR_SPEC(args->opts.arch)));
@@ -425,14 +425,14 @@ static struct jcc_test_info get_test_info(const struct jcc_worker_args *args,
     } else if (ustr_eq(spec, MK_USTR("arch-skip"))) {
       if (ustr_eq(value, args->opts.arch)) {
         info.skip = true;
-        info.skip_msg = MK_USTR(arena_alloc_snprintf(
+        info.skip_msg = MK_USTR(aralloc_snprintf(
             args->arena, "skipped due to arch-skip (arch: %.*s)",
             USTR_SPEC(value)));
       }
     } else if (ustr_eq(spec, MK_USTR("os"))) {
       if (!ustr_eq(value, args->opts.os)) {
         info.skip = true;
-        info.skip_msg = MK_USTR(arena_alloc_snprintf(
+        info.skip_msg = MK_USTR(aralloc_snprintf(
             args->arena, "skipped due to os (test os: %.*s, runner os: %.*s)",
             USTR_SPEC(value), USTR_SPEC(args->opts.os)));
       }
@@ -483,7 +483,7 @@ static void run_test(struct jcc_worker_args *args, const struct jcc_test *test,
         args, &(struct jcc_test_result){
                   .status = TEST_STATUS_SKIP,
                   .file = test->file,
-                  .msg = arena_alloc_ustrconv(args->arena, info.skip_msg)});
+                  .msg = aralloc_ustrconv(args->arena, info.skip_msg)});
     return;
   }
 
@@ -507,7 +507,7 @@ static void run_test(struct jcc_worker_args *args, const struct jcc_test *test,
 
   for (size_t i = 0; i < num_flags; i++) {
     ustr_t *flag = vector_get(info.flags, i);
-    char *buf = arena_alloc_ustrconv(args->arena, *flag);
+    char *buf = aralloc_ustrconv(args->arena, *flag);
     vector_push_back(comp_args, &buf);
   }
 
@@ -520,7 +520,7 @@ static void run_test(struct jcc_worker_args *args, const struct jcc_test *test,
   const char *std = "-std";
   vector_push_back(comp_args, &std);
 
-  const char *std_val = arena_alloc_ustrconv(args->arena, info.std);
+  const char *std_val = aralloc_ustrconv(args->arena, info.std);
   vector_push_back(comp_args, &std_val);
 
   const char *tm = "-tm";
@@ -562,7 +562,7 @@ static void run_test(struct jcc_worker_args *args, const struct jcc_test *test,
                   .status = TEST_STATUS_FAIL,
                   .file = test->file,
                   .msg = comp_info.stderr_buf
-                             ? arena_alloc_snprintf(
+                             ? aralloc_snprintf(
                                    args->arena,
                                    "compilation error! build output: \n%s\n",
                                    comp_info.stderr_buf)
@@ -591,7 +591,7 @@ static void run_test(struct jcc_worker_args *args, const struct jcc_test *test,
     add_test_result(args, &(struct jcc_test_result){
                               .status = TEST_STATUS_FAIL,
                               .file = test->file,
-                              .msg = arena_alloc_snprintf(
+                              .msg = aralloc_snprintf(
                                   args->arena, "Exit code %d vs expected %d",
                                   run_ret, info.expected_exc)});
     return;
@@ -604,7 +604,7 @@ static void run_test(struct jcc_worker_args *args, const struct jcc_test *test,
         &(struct jcc_test_result){
             .status = TEST_STATUS_FAIL,
             .file = test->file,
-            .msg = arena_alloc_snprintf(
+            .msg = aralloc_snprintf(
                 args->arena, "Stdout mismatch: expected \"%.*s\" got \"%s\"",
                 USTR_SPEC(info.expected_stdout), run_output)});
     return;
@@ -696,7 +696,7 @@ static bool parse_args(struct arena_allocator *arena, int argc, char *argv[],
 
   if (vector_empty(paths)) {
     opts->num_paths = 1;
-    opts->paths = arena_alloc(arena, sizeof(char *));
+    opts->paths = aralloc(arena, sizeof(char *));
     opts->paths[0] = DEFAULT_TEST_DIR;
   } else {
     opts->num_paths = vector_length(paths);
@@ -705,7 +705,7 @@ static bool parse_args(struct arena_allocator *arena, int argc, char *argv[],
 
   if (vector_empty(arg_groups)) {
     opts->num_arg_groups = 1;
-    opts->arg_groups = arena_alloc(arena, sizeof(char *));
+    opts->arg_groups = aralloc(arena, sizeof(char *));
     opts->arg_groups[0] = NULL;
   } else {
     opts->num_arg_groups = vector_length(arg_groups);
@@ -759,9 +759,9 @@ int main(int argc, char **argv) {
 
   struct timestmp start = get_timestamp();
 
-  thrd_t *threads = arena_alloc(arena, opts.jobs * sizeof(*threads));
+  thrd_t *threads = aralloc(arena, opts.jobs * sizeof(*threads));
   struct arena_allocator **arenas =
-      arena_alloc(arena, opts.jobs * sizeof(*arenas));
+      aralloc(arena, opts.jobs * sizeof(*arenas));
 
   struct jcc_tests_status status = {
       .results = vector_create_in_arena(sizeof(struct jcc_test_result), arena),
@@ -785,7 +785,7 @@ int main(int argc, char **argv) {
     struct jcc_worker_args worker = {
         .jobq = jobq, .results = &status, .opts = opts, .arena = worker_arena};
 
-    void *data = arena_alloc_init(worker_arena, sizeof(worker), &worker);
+    void *data = aralloc_init(worker_arena, sizeof(worker), &worker);
 
     invariant_assert(thrd_create(&threads[i], test_worker, data) ==
                          thrd_success,

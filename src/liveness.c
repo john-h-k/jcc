@@ -259,7 +259,7 @@ struct interval_data construct_intervals(struct ir_func *irb) {
 
   struct interval_data data;
   data.intervals =
-      arena_alloc(irb->arena, sizeof(*data.intervals) * irb->op_count);
+      aralloc(irb->arena, sizeof(*data.intervals) * irb->op_count);
   data.num_intervals = 0;
 
   bool seen_cross_bb = false;

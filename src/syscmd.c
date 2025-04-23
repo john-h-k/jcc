@@ -35,7 +35,7 @@ struct syscmd {
 
 struct syscmd *syscmd_create(struct arena_allocator *arena,
                              const char *process) {
-  struct syscmd *syscmd = arena_alloc(arena, sizeof(*syscmd));
+  struct syscmd *syscmd = aralloc(arena, sizeof(*syscmd));
 
   *syscmd = (struct syscmd){
       .arena = arena,
@@ -106,7 +106,7 @@ void syscmd_write_cmd(struct syscmd *cmd, FILE *file) {
 }
 
 void syscmd_set_stdin(struct syscmd *syscmd, ustr_t value) {
-  syscmd->stdin_val = arena_alloc_ustrconv(syscmd->arena, value);
+  syscmd->stdin_val = aralloc_ustrconv(syscmd->arena, value);
 }
 
 #if SYSCMD_UNIX

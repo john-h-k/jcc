@@ -1376,7 +1376,7 @@ static struct preproc_token preproc_concat(struct preproc *preproc,
       BUG("can only concat L with string/char literal");
     }
 
-    char *new = arena_alloc(preproc->arena, llen + rlen + 1);
+    char *new = aralloc(preproc->arena, llen + rlen + 1);
     memcpy(new, token->text.str, llen);
     memcpy(new + llen, last->text.str, rlen);
     new[llen + rlen] = '\0';
@@ -1403,7 +1403,7 @@ static struct preproc_token preproc_concat(struct preproc *preproc,
     size_t llen = token->text.len;
     size_t rlen = last->text.len;
 
-    char *new = arena_alloc(preproc->arena, llen + rlen);
+    char *new = aralloc(preproc->arena, llen + rlen);
     memcpy(new, token->text.str, llen);
     memcpy(new + llen, last->text.str, rlen);
 
@@ -1459,7 +1459,7 @@ static bool try_expand_token(struct preproc *preproc,
           MK_PREPROC_DIAGNOSTIC(
               BAD_TOKEN_IN_QUERY, bad_token_in_query, token->span,
               MK_INVALID_TEXT_POS(0),
-              arena_alloc_snprintf(
+              aralloc_snprintf(
                   preproc->arena, "bad token in preprocessor query '%.*s'",
                   (int)preproc->query_ident.len, preproc->query_ident.str)));
     }
@@ -1935,7 +1935,7 @@ static bool try_expand_token(struct preproc *preproc,
           preproc_text->file ? preproc_text->file : "(null file)";
       size_t file_len = strlen(file) + 2;
 
-      char *buf = arena_alloc(preproc->arena, sizeof(*buf) * (file_len + 1));
+      char *buf = aralloc(preproc->arena, sizeof(*buf) * (file_len + 1));
       buf[0] = '\"';
       strcpy(&buf[1], file);
       buf[file_len - 1] = '\"';
@@ -1956,7 +1956,7 @@ static bool try_expand_token(struct preproc *preproc,
       // our index is from 0
       line++;
       size_t len = num_digits(line);
-      char *buf = arena_alloc(preproc->arena, sizeof(*buf) * (len + 1));
+      char *buf = aralloc(preproc->arena, sizeof(*buf) * (len + 1));
 
       snprintf(buf, len + 1, "%zu", line);
 
@@ -1970,7 +1970,7 @@ static bool try_expand_token(struct preproc *preproc,
     }
     case PREPROC_SPECIAL_MACRO_TIME: {
       size_t len = 8 + 2;
-      char *buf = arena_alloc(preproc->arena, sizeof(*buf) * (len + 1));
+      char *buf = aralloc(preproc->arena, sizeof(*buf) * (len + 1));
       if (preproc->args.fixed_timestamp) {
         buf[0] = '"';
         memcpy(buf + 1, preproc->args.fixed_timestamp + 12, 8);
@@ -1993,7 +1993,7 @@ static bool try_expand_token(struct preproc *preproc,
     }
     case PREPROC_SPECIAL_MACRO_DATE: {
       size_t len = 11 + 2;
-      char *buf = arena_alloc(preproc->arena, sizeof(*buf) * (len + 1));
+      char *buf = aralloc(preproc->arena, sizeof(*buf) * (len + 1));
       if (preproc->args.fixed_timestamp) {
         buf[0] = '"';
         memcpy(buf + 1, preproc->args.fixed_timestamp, 11);
@@ -2409,7 +2409,7 @@ static struct include_path get_include_path(struct preproc *preproc,
   filename_len -= 2;
 
   // remove quotes
-  char *filename = arena_alloc(preproc->arena, filename_len + 1);
+  char *filename = aralloc(preproc->arena, filename_len + 1);
   filename[filename_len] = 0;
 
   strncpy(filename, &token->text.str[1], filename_len);
@@ -2669,7 +2669,7 @@ static unsigned long long eval_expr(struct preproc *preproc,
             MK_PREPROC_DIAGNOSTIC(
                 BAD_TOKEN_IN_COND, bad_token_in_cond, token->span,
                 MK_INVALID_TEXT_POS(0),
-                arena_alloc_snprintf(
+                aralloc_snprintf(
                     preproc->arena,
                     "bad token in preprocessor condition '%.*s'",
                     (int)token->text.len, token->text.str)));
@@ -3254,7 +3254,7 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token,
           size_t name_len = file_tok.text.len;
 
           char *file =
-              arena_alloc(preproc->arena, (sizeof(*file) * name_len) + 1);
+              aralloc(preproc->arena, (sizeof(*file) * name_len) + 1);
           memcpy(file, file_tok.text.str, name_len);
           file[name_len] = '\0';
 

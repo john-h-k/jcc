@@ -54,7 +54,7 @@ struct hashtbl *hashtbl_create_in_arena(struct arena_allocator *arena,
 
   struct hashtbl *tbl;
   if (arena) {
-    tbl = arena_alloc(arena, sizeof(*tbl));
+    tbl = aralloc(arena, sizeof(*tbl));
   } else {
     tbl = nonnull_malloc(sizeof(*tbl));
   }
@@ -126,7 +126,7 @@ static struct hashtbl_entry hashtbl_mk_entry(struct hashtbl *hashtbl,
 struct hashtbl_iter *hashtbl_iter(struct hashtbl *hashtbl) {
   struct hashtbl_iter *iter;
   if (hashtbl->arena) {
-    iter = arena_alloc(hashtbl->arena, sizeof(*iter));
+    iter = aralloc(hashtbl->arena, sizeof(*iter));
   } else {
     iter = nonnull_malloc(sizeof(*iter));
   }

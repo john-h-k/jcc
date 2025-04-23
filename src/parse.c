@@ -263,7 +263,7 @@ static bool parse_expected_token(struct parser *parser, enum lex_token_ty ty,
   const char *prefix = "expected token ";
   size_t pref_len = strlen(prefix);
   size_t err_len = strlen(err);
-  char *msg = arena_alloc(parser->arena, pref_len + err_len + 1);
+  char *msg = aralloc(parser->arena, pref_len + err_len + 1);
   memcpy(msg, prefix, pref_len);
   memcpy(msg + pref_len, err, err_len);
   msg[pref_len + err_len] = '\0';
@@ -526,7 +526,7 @@ static bool parse_attribute(struct parser *parser,
     parse_expected_token(parser, LEX_TOKEN_TY_COLON, identifier.span.start,
                          "'::' not ':' after attribute prefix", NULL);
 
-    attribute->prefix = arena_alloc(parser->arena, sizeof(*attribute->prefix));
+    attribute->prefix = aralloc(parser->arena, sizeof(*attribute->prefix));
     *attribute->prefix = identifier;
 
     parse_expected_identifier(parser, &identifier, identifier.span.start,
@@ -555,7 +555,7 @@ static bool parse_attribute(struct parser *parser,
 
   attribute->ty = AST_ATTRIBUTE_TY_PARAMETERIZED;
   attribute->name = identifier;
-  attribute->params = arena_alloc(parser->arena, sizeof(*attribute->params) *
+  attribute->params = aralloc(parser->arena, sizeof(*attribute->params) *
                                                      compoundexpr.num_exprs);
   attribute->num_params = compoundexpr.num_exprs;
 
@@ -665,7 +665,7 @@ static bool parse_enumerator(struct parser *parser,
 
   struct text_pos end;
   if (parse_token(parser, LEX_TOKEN_TY_OP_ASSG, NULL)) {
-    enumerator->value = arena_alloc(parser->arena, sizeof(*enumerator->value));
+    enumerator->value = aralloc(parser->arena, sizeof(*enumerator->value));
 
     parse_expected_expr(parser, enumerator->value,
                         "expected expression after = in enum body");
@@ -738,7 +738,7 @@ static bool parse_enum_specifier(struct parser *parser,
     end = identifier.span.end;
 
     enum_specifier->identifier =
-        arena_alloc(parser->arena, sizeof(*enum_specifier->identifier));
+        aralloc(parser->arena, sizeof(*enum_specifier->identifier));
     *enum_specifier->identifier = identifier;
   } else {
     enum_specifier->identifier = NULL;
@@ -754,7 +754,7 @@ static bool parse_enum_specifier(struct parser *parser,
     end = span.end;
 
     enum_specifier->enumerator_list =
-        arena_alloc(parser->arena, sizeof(*enum_specifier->enumerator_list));
+        aralloc(parser->arena, sizeof(*enum_specifier->enumerator_list));
     *enum_specifier->enumerator_list = enumerator_list;
   } else {
     enum_specifier->enumerator_list = NULL;
@@ -805,7 +805,7 @@ static bool parse_struct_or_union_specifier(
 
   struct lex_token identifier;
   if (parse_identifier(parser, &identifier)) {
-    struct_or_union_specifier->identifier = arena_alloc(
+    struct_or_union_specifier->identifier = aralloc(
         parser->arena, sizeof(*struct_or_union_specifier->identifier));
     *struct_or_union_specifier->identifier = identifier;
 
@@ -818,7 +818,7 @@ static bool parse_struct_or_union_specifier(
   struct_or_union_specifier->decl_list = NULL;
 
   if (parse_token(parser, LEX_TOKEN_TY_OPEN_BRACE, NULL)) {
-    struct_or_union_specifier->decl_list = arena_alloc(
+    struct_or_union_specifier->decl_list = aralloc(
         parser->arena, sizeof(*struct_or_union_specifier->decl_list));
     parse_declaration_list(parser, struct_or_union_specifier->decl_list);
 
@@ -1036,7 +1036,7 @@ static bool parse_designator(struct parser *parser,
                          "`]` after expression in designator", &close);
 
     designator->ty = AST_DESIGNATOR_TY_INDEX;
-    designator->index = arena_alloc(parser->arena, sizeof(*designator->index));
+    designator->index = aralloc(parser->arena, sizeof(*designator->index));
     *designator->index = expr;
     designator->span = MK_TEXT_SPAN(start.start, close.end);
 
@@ -1126,7 +1126,7 @@ static bool parse_init_list_init(struct parser *parser,
                          "`=` after designator in init list", NULL);
 
     init_list->designator_list =
-        arena_alloc(parser->arena, sizeof(*init_list->designator_list));
+        aralloc(parser->arena, sizeof(*init_list->designator_list));
     *init_list->designator_list = designator_list;
 
     if (!parse_init(parser, &init)) {
@@ -1169,7 +1169,7 @@ static bool parse_init_list_init(struct parser *parser,
     end = comma.end;
   }
 
-  init_list->init = arena_alloc(parser->arena, sizeof(*init_list->init));
+  init_list->init = aralloc(parser->arena, sizeof(*init_list->init));
   *init_list->init = init;
   init_list->span = MK_TEXT_SPAN(start, end);
   return true;
@@ -1281,7 +1281,7 @@ parse_ast_array_declarator(struct parser *parser,
       parse_expected_expr(parser, &size, "expected expr in static array type");
       ty = AST_ARRAY_DECLARATOR_TY_STATIC_SIZED;
       array_declarator->size =
-          arena_alloc(parser->arena, sizeof(*array_declarator->size));
+          aralloc(parser->arena, sizeof(*array_declarator->size));
       *array_declarator->size = size;
     } else if (next.ty == LEX_TOKEN_TY_CLOSE_SQUARE_BRACKET) {
       ty = AST_ARRAY_DECLARATOR_TY_UNSIZED;
@@ -1289,7 +1289,7 @@ parse_ast_array_declarator(struct parser *parser,
       parse_expected_expr(parser, &size, "expected expr in array type");
       ty = AST_ARRAY_DECLARATOR_TY_SIZED;
       array_declarator->size =
-          arena_alloc(parser->arena, sizeof(*array_declarator->size));
+          aralloc(parser->arena, sizeof(*array_declarator->size));
       *array_declarator->size = size;
     }
   }
@@ -1318,7 +1318,7 @@ parse_ast_func_declarator(struct parser *parser,
   }
 
   func_declarator->param_list =
-      arena_alloc(parser->arena, sizeof(*func_declarator->param_list));
+      aralloc(parser->arena, sizeof(*func_declarator->param_list));
   *func_declarator->param_list = param_list;
   func_declarator->span = param_list.span;
   return true;
@@ -1337,7 +1337,7 @@ static bool parse_direct_abstract_declarator(
   if (parse_ast_array_declarator(parser, &array_declarator)) {
     direct_abstract_declarator->ty =
         AST_DIRECT_ABSTRACT_DECLARATOR_TY_ARRAY_DECLARATOR;
-    direct_abstract_declarator->array_declarator = arena_alloc(
+    direct_abstract_declarator->array_declarator = aralloc(
         parser->arena, sizeof(*direct_abstract_declarator->array_declarator));
     *direct_abstract_declarator->array_declarator = array_declarator;
 
@@ -1349,7 +1349,7 @@ static bool parse_direct_abstract_declarator(
   if (parse_ast_func_declarator(parser, &func_declarator)) {
     direct_abstract_declarator->ty =
         AST_DIRECT_ABSTRACT_DECLARATOR_TY_FUNC_DECLARATOR;
-    direct_abstract_declarator->func_declarator = arena_alloc(
+    direct_abstract_declarator->func_declarator = aralloc(
         parser->arena, sizeof(*direct_abstract_declarator->func_declarator));
     *direct_abstract_declarator->func_declarator = func_declarator;
 
@@ -1366,7 +1366,7 @@ static bool parse_direct_abstract_declarator(
       parse_token(parser, LEX_TOKEN_TY_CLOSE_BRACKET, NULL)) {
     direct_abstract_declarator->ty =
         AST_DIRECT_ABSTRACT_DECLARATOR_TY_PAREN_DECLARATOR;
-    direct_abstract_declarator->paren_declarator = arena_alloc(
+    direct_abstract_declarator->paren_declarator = aralloc(
         parser->arena, sizeof(*direct_abstract_declarator->paren_declarator));
     *direct_abstract_declarator->paren_declarator = abstract_declarator;
 
@@ -1446,7 +1446,7 @@ parse_direct_declarator(struct parser *parser,
   struct ast_array_declarator array_declarator;
   if (parse_ast_array_declarator(parser, &array_declarator)) {
     direct_declarator->ty = AST_DIRECT_DECLARATOR_TY_ARRAY_DECLARATOR;
-    direct_declarator->array_declarator = arena_alloc(
+    direct_declarator->array_declarator = aralloc(
         parser->arena, sizeof(*direct_declarator->array_declarator));
     *direct_declarator->array_declarator = array_declarator;
     direct_declarator->span = direct_declarator->array_declarator->span;
@@ -1457,7 +1457,7 @@ parse_direct_declarator(struct parser *parser,
   if (parse_ast_func_declarator(parser, &func_declarator)) {
     direct_declarator->ty = AST_DIRECT_DECLARATOR_TY_FUNC_DECLARATOR;
     direct_declarator->func_declarator =
-        arena_alloc(parser->arena, sizeof(*direct_declarator->func_declarator));
+        aralloc(parser->arena, sizeof(*direct_declarator->func_declarator));
     *direct_declarator->func_declarator = func_declarator;
     direct_declarator->span = direct_declarator->func_declarator->span;
     return true;
@@ -1473,7 +1473,7 @@ parse_direct_declarator(struct parser *parser,
                          "')' after declarator", NULL);
 
     direct_declarator->ty = AST_DIRECT_DECLARATOR_TY_PAREN_DECLARATOR;
-    direct_declarator->paren_declarator = arena_alloc(
+    direct_declarator->paren_declarator = aralloc(
         parser->arena, sizeof(*direct_declarator->paren_declarator));
     *direct_declarator->paren_declarator = declarator;
     direct_declarator->span = MK_TEXT_SPAN(start.start, end.end);
@@ -1576,9 +1576,9 @@ static bool parse_declarator(struct parser *parser,
                          "')' after asm", NULL);
 
     declarator->declarator_label =
-        arena_alloc(parser->arena, sizeof(*declarator->declarator_label));
+        aralloc(parser->arena, sizeof(*declarator->declarator_label));
     *declarator->declarator_label = (struct ast_declarator_label){
-        .label = arena_alloc(parser->arena,
+        .label = aralloc(parser->arena,
                              sizeof(*declarator->declarator_label->label))};
 
     *declarator->declarator_label->label = expr;
@@ -1593,7 +1593,7 @@ static bool parse_declarator(struct parser *parser,
   if (parse_token(parser, LEX_TOKEN_TY_COLON, NULL) &&
       parse_expr(parser, &expr)) {
     declarator->bitfield_size =
-        arena_alloc(parser->arena, sizeof(*declarator->bitfield_size));
+        aralloc(parser->arena, sizeof(*declarator->bitfield_size));
     *declarator->bitfield_size = expr;
 
     end = expr.span.end;
@@ -1624,7 +1624,7 @@ static bool parse_init_declarator(struct parser *parser,
   if (parse_token(parser, LEX_TOKEN_TY_OP_ASSG, NULL) &&
       parse_init(parser, &init)) {
     init_declarator->init =
-        arena_alloc(parser->arena, sizeof(*init_declarator->init));
+        aralloc(parser->arena, sizeof(*init_declarator->init));
     *init_declarator->init = init;
 
     end = init.span.end;
@@ -2018,9 +2018,9 @@ static bool parse_assg(struct parser *parser, const struct ast_expr *assignee,
   parse_expected_expr(parser, &expr, "expected expr after assignment token");
 
   assg->ty = ty;
-  assg->assignee = arena_alloc(parser->arena, sizeof(*assg->assignee));
+  assg->assignee = aralloc(parser->arena, sizeof(*assg->assignee));
   *assg->assignee = *assignee;
-  assg->expr = arena_alloc(parser->arena, sizeof(*assg->expr));
+  assg->expr = aralloc(parser->arena, sizeof(*assg->expr));
   *assg->expr = expr;
 
   assg->span = MK_TEXT_SPAN(assg->assignee->span.start, assg->expr->span.end);
@@ -2116,7 +2116,7 @@ static bool parse_generic(struct parser *parser, struct ast_generic *generic) {
   parse_expected_token(parser, LEX_TOKEN_TY_OPEN_BRACKET, start.start,
                        "'(' after '_Generic' keyword", NULL);
 
-  generic->ctrl_expr = arena_alloc(parser->arena, sizeof(*generic->ctrl_expr));
+  generic->ctrl_expr = aralloc(parser->arena, sizeof(*generic->ctrl_expr));
   parse_expected_expr(parser, generic->ctrl_expr,
                       "expression after '_Generic' keyword");
 
@@ -2264,7 +2264,7 @@ static bool parse_atom_1(struct parser *parser, struct ast_expr *expr) {
 
     expr->ty = AST_EXPR_TY_VA_ARG;
     expr->va_arg = (struct ast_va_arg){
-        .list = arena_alloc(parser->arena, sizeof(*expr->va_arg.list)),
+        .list = aralloc(parser->arena, sizeof(*expr->va_arg.list)),
         .type = type,
         .span = MK_TEXT_SPAN(token.span.start, type.span.end)};
 
@@ -2289,7 +2289,7 @@ static bool parse_call(struct parser *parser, struct ast_expr *sub_expr,
   }
 
   expr->ty = AST_EXPR_TY_CALL;
-  expr->call.target = arena_alloc(parser->arena, sizeof(*expr->call.target));
+  expr->call.target = aralloc(parser->arena, sizeof(*expr->call.target));
   expr->call.target = sub_expr;
   expr->call.arg_list = arg_list;
   expr->call.span = MK_TEXT_SPAN(sub_expr->span.start, arg_list.span.end);
@@ -2304,7 +2304,7 @@ static bool parse_array_access(struct parser *parser, struct ast_expr *lhs,
 
   struct text_span access;
   if (parse_token(parser, LEX_TOKEN_TY_OPEN_SQUARE_BRACKET, &access)) {
-    struct ast_expr *rhs = arena_alloc(parser->arena, sizeof(*rhs));
+    struct ast_expr *rhs = aralloc(parser->arena, sizeof(*rhs));
 
     parse_expected_expr(parser, rhs,
                         "expression after [ in expression context");
@@ -2409,8 +2409,8 @@ static bool parse_atom_2(struct parser *parser, struct ast_expr *expr) {
   }
 
   while (true) {
-    struct ast_expr *new_expr = arena_alloc(parser->arena, sizeof(*new_expr));
-    struct ast_expr *sub_expr = arena_alloc(parser->arena, sizeof(*new_expr));
+    struct ast_expr *new_expr = aralloc(parser->arena, sizeof(*new_expr));
+    struct ast_expr *sub_expr = aralloc(parser->arena, sizeof(*new_expr));
     *sub_expr = *expr;
 
     if (parse_unary_postfix_op(parser, sub_expr, new_expr) ||
@@ -2438,7 +2438,7 @@ static bool parse_cast(struct parser *parser, struct ast_expr *expr) {
     parse_expected_token(parser, LEX_TOKEN_TY_CLOSE_BRACKET, start.start,
                          "`)` after type in cast", NULL);
 
-    struct ast_expr *sub_expr = arena_alloc(parser->arena, sizeof(*sub_expr));
+    struct ast_expr *sub_expr = aralloc(parser->arena, sizeof(*sub_expr));
     if (!parse_atom_3(parser, sub_expr)) {
       lex_backtrack(parser->lexer, pos);
       return false;
@@ -2512,7 +2512,7 @@ static bool parse_unary_prefix_op(struct parser *parser,
 
   lex_consume_token(parser->lexer, token);
 
-  struct ast_expr *sub_expr = arena_alloc(parser->arena, sizeof(*sub_expr));
+  struct ast_expr *sub_expr = aralloc(parser->arena, sizeof(*sub_expr));
   if (!parse_atom_3(parser, sub_expr)) {
     lex_backtrack(parser->lexer, pos);
     return false;
@@ -2545,7 +2545,7 @@ static void parse_type_or_expr(struct parser *parser, struct text_span context,
       parse_token(parser, LEX_TOKEN_TY_CLOSE_BRACKET, &end)) {
     type_or_expr->ty = AST_TYPE_OR_EXPR_TY_TYPE;
     type_or_expr->type_name =
-        arena_alloc(parser->arena, sizeof(*type_or_expr->type_name));
+        aralloc(parser->arena, sizeof(*type_or_expr->type_name));
     *type_or_expr->type_name = type_name;
     type_or_expr->span = MK_TEXT_SPAN(context.start, end.end);
     return;
@@ -2553,7 +2553,7 @@ static void parse_type_or_expr(struct parser *parser, struct text_span context,
 
   lex_backtrack(parser->lexer, pos);
 
-  struct ast_expr *sub_expr = arena_alloc(parser->arena, sizeof(*sub_expr));
+  struct ast_expr *sub_expr = aralloc(parser->arena, sizeof(*sub_expr));
 
   if (mode == PARSE_TYPE_OR_EXPR_MODE_EXPR_NEEDS_PARENS) {
     // FIXME: provide what keyword is causing the err in the message
@@ -2697,10 +2697,10 @@ static bool parse_expr_precedence_aware(struct parser *parser,
     struct ast_binary_op *binary_op = &expr->binary_op;
     binary_op->ty = info.ty;
 
-    binary_op->lhs = arena_alloc(parser->arena, sizeof(*binary_op->lhs));
+    binary_op->lhs = aralloc(parser->arena, sizeof(*binary_op->lhs));
     *binary_op->lhs = lhs;
 
-    binary_op->rhs = arena_alloc(parser->arena, sizeof(*binary_op->rhs));
+    binary_op->rhs = aralloc(parser->arena, sizeof(*binary_op->rhs));
     *binary_op->rhs = rhs;
 
     binary_op->span = MK_TEXT_SPAN(lhs.span.start, rhs.span.end);
@@ -2736,10 +2736,10 @@ static bool parse_ternary(struct parser *parser, const struct ast_expr *cond,
 
   expr->ty = AST_EXPR_TY_TERNARY;
   expr->ternary = (struct ast_ternary){
-      .cond = arena_alloc(parser->arena, sizeof(*expr->ternary.cond)),
-      .true_expr = arena_alloc(parser->arena, sizeof(*expr->ternary.true_expr)),
+      .cond = aralloc(parser->arena, sizeof(*expr->ternary.cond)),
+      .true_expr = aralloc(parser->arena, sizeof(*expr->ternary.true_expr)),
       .false_expr =
-          arena_alloc(parser->arena, sizeof(*expr->ternary.false_expr)),
+          aralloc(parser->arena, sizeof(*expr->ternary.false_expr)),
   };
 
   *expr->ternary.cond = *cond;
@@ -2985,7 +2985,7 @@ static bool parse_jumpstmt(struct parser *parser,
 
     jump_stmt->ty = AST_JUMPSTMT_TY_RETURN;
     jump_stmt->return_stmt.expr =
-        arena_alloc(parser->arena, sizeof(*jump_stmt->return_stmt.expr));
+        aralloc(parser->arena, sizeof(*jump_stmt->return_stmt.expr));
     *jump_stmt->return_stmt.expr = expr;
 
     jump_stmt->return_stmt.span = MK_TEXT_SPAN(start.start, expr.span.end);
@@ -3096,7 +3096,7 @@ static bool parse_labeledstmt(struct parser *parser,
     return false;
   }
 
-  labeled_stmt->stmt = arena_alloc(parser->arena, sizeof(*labeled_stmt->stmt));
+  labeled_stmt->stmt = aralloc(parser->arena, sizeof(*labeled_stmt->stmt));
   *labeled_stmt->stmt = stmt;
   labeled_stmt->span = MK_TEXT_SPAN(label.span.start, stmt.span.end);
   return true;
@@ -3131,7 +3131,7 @@ static bool parse_ifstmt(struct parser *parser, struct ast_ifstmt *if_stmt) {
   }
 
   if_stmt->cond = expr;
-  if_stmt->body = arena_alloc(parser->arena, sizeof(*if_stmt->body));
+  if_stmt->body = aralloc(parser->arena, sizeof(*if_stmt->body));
   *if_stmt->body = stmt;
   if_stmt->span = MK_TEXT_SPAN(kw.start, stmt.span.end);
 
@@ -3156,10 +3156,10 @@ static bool parse_ifelsestmt(struct parser *parser,
   }
 
   if_else_stmt->cond = if_stmt->cond;
-  if_else_stmt->body = arena_alloc(parser->arena, sizeof(*if_else_stmt->body));
+  if_else_stmt->body = aralloc(parser->arena, sizeof(*if_else_stmt->body));
   if_else_stmt->body = if_stmt->body;
   if_else_stmt->else_body =
-      arena_alloc(parser->arena, sizeof(*if_else_stmt->else_body));
+      aralloc(parser->arena, sizeof(*if_else_stmt->else_body));
   *if_else_stmt->else_body = else_stmt;
   if_else_stmt->span = MK_TEXT_SPAN(if_stmt->span.start, else_stmt.span.end);
 
@@ -3189,7 +3189,7 @@ static bool parse_switchstmt(struct parser *parser,
   }
 
   switch_stmt->ctrl_expr = ctrl_expr;
-  switch_stmt->body = arena_alloc(parser->arena, sizeof(*switch_stmt->body));
+  switch_stmt->body = aralloc(parser->arena, sizeof(*switch_stmt->body));
   *switch_stmt->body = stmt;
   switch_stmt->span = MK_TEXT_SPAN(ctrl_expr.span.start, stmt.span.end);
 
@@ -3225,7 +3225,7 @@ static bool parse_whilestmt(struct parser *parser,
   }
 
   while_stmt->cond = expr;
-  while_stmt->body = arena_alloc(parser->arena, sizeof(*while_stmt->body));
+  while_stmt->body = aralloc(parser->arena, sizeof(*while_stmt->body));
   *while_stmt->body = stmt;
   while_stmt->span = MK_TEXT_SPAN(kw.start, stmt.span.end);
 
@@ -3267,7 +3267,7 @@ static bool parse_dowhilestmt(struct parser *parser,
 
   do_while_stmt->cond = expr;
   do_while_stmt->body =
-      arena_alloc(parser->arena, sizeof(*do_while_stmt->body));
+      aralloc(parser->arena, sizeof(*do_while_stmt->body));
   *do_while_stmt->body = stmt;
   do_while_stmt->span = MK_TEXT_SPAN(kw.start, stmt.span.end);
 
@@ -3312,7 +3312,7 @@ static bool parse_forstmt(struct parser *parser, struct ast_forstmt *for_stmt) {
   // then, we look for a vardecllist or an expression, or neither
   struct ast_declaration_or_expr decl_or_expr;
   if (parse_declaration_or_expr(parser, &decl_or_expr)) {
-    for_stmt->init = arena_alloc(parser->arena, sizeof(*for_stmt->init));
+    for_stmt->init = aralloc(parser->arena, sizeof(*for_stmt->init));
     *for_stmt->init = decl_or_expr;
   } else if (parse_token(parser, LEX_TOKEN_TY_SEMICOLON, NULL)) {
     for_stmt->init = NULL;
@@ -3324,7 +3324,7 @@ static bool parse_forstmt(struct parser *parser, struct ast_forstmt *for_stmt) {
   // parse the condition if present, else a semicolon
   struct ast_expr cond;
   if (parse_compoundexpr_as_expr(parser, &cond)) {
-    for_stmt->cond = arena_alloc(parser->arena, sizeof(*for_stmt->cond));
+    for_stmt->cond = aralloc(parser->arena, sizeof(*for_stmt->cond));
     *for_stmt->cond = cond;
   } else {
     for_stmt->cond = NULL;
@@ -3338,7 +3338,7 @@ static bool parse_forstmt(struct parser *parser, struct ast_forstmt *for_stmt) {
   // parse the iteration statement if present, else nothing
   struct ast_expr iter;
   if (parse_compoundexpr_as_expr(parser, &iter)) {
-    for_stmt->iter = arena_alloc(parser->arena, sizeof(*for_stmt->iter));
+    for_stmt->iter = aralloc(parser->arena, sizeof(*for_stmt->iter));
     // FIXME: there are more places where compound expressions are legal
     // rework expression parsing to handle them better
     *for_stmt->iter = iter;
@@ -3357,7 +3357,7 @@ static bool parse_forstmt(struct parser *parser, struct ast_forstmt *for_stmt) {
     return false;
   }
 
-  for_stmt->body = arena_alloc(parser->arena, sizeof(*for_stmt->body));
+  for_stmt->body = aralloc(parser->arena, sizeof(*for_stmt->body));
   *for_stmt->body = body;
   for_stmt->span = MK_TEXT_SPAN(kw.start, body.span.end);
 
@@ -3438,7 +3438,7 @@ static bool parse_deferstmt(struct parser *parser,
   }
 
   deferstmt->stmt =
-      arena_alloc_init(parser->arena, sizeof(*deferstmt->stmt), &stmt);
+      aralloc_init(parser->arena, sizeof(*deferstmt->stmt), &stmt);
   deferstmt->span = MK_TEXT_SPAN(start.start, stmt.span.end);
 
   return true;
@@ -3460,7 +3460,7 @@ static bool parse_staticassert(struct parser *parser,
 
   if (parse_token(parser, LEX_TOKEN_TY_COMMA, NULL)) {
     staticassert->message =
-        arena_alloc(parser->arena, sizeof(*staticassert->message));
+        aralloc(parser->arena, sizeof(*staticassert->message));
 
     parse_expected_expr(parser, staticassert->message,
                         "message after 'static_assert' expr");

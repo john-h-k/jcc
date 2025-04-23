@@ -72,7 +72,7 @@ struct lsp_map *lsp_map_create(struct lsp_ctx *ctx, const struct lsp_doc *doc) {
     return NULL;
   }
 
-  struct lsp_map *map = arena_alloc(ctx->arena, sizeof(*map));
+  struct lsp_map *map = aralloc(ctx->arena, sizeof(*map));
   *map = (struct lsp_map){
       .doc = doc,
       .locs = vector_create_in_arena(sizeof(struct lsp_node), ctx->arena),

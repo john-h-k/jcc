@@ -715,7 +715,7 @@ ustr_t lex_associated_text(const struct lexer *lexer,
   case LEX_TOKEN_TY_UNSIGNED_LONG_LONG_LITERAL: {
     // TODO: dont copy
     size_t len = token->text.len;
-    char *p = arena_alloc(lexer->arena, len + 1);
+    char *p = aralloc(lexer->arena, len + 1);
     memcpy(p, token->text.str, len);
     p[len] = '\0';
     return (ustr_t){p, len};

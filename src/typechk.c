@@ -528,7 +528,7 @@ td_var_ty_make_pointer(struct typechk *tchk, const struct td_var_ty *var_ty,
                        enum td_type_qualifier_flags qualifiers) {
   // we don't know lifetime of the other one so need to copy it
   // TODO: cache types
-  struct td_var_ty *copied = arena_alloc(tchk->arena, sizeof(*copied));
+  struct td_var_ty *copied = aralloc(tchk->arena, sizeof(*copied));
   *copied = *var_ty;
 
   return (struct td_var_ty){.ty = TD_VAR_TY_TY_POINTER,
@@ -576,7 +576,7 @@ static struct td_expr add_cast_expr(struct typechk *tchk, struct td_expr expr,
       .unary_op =
           (struct td_unary_op){
               .ty = TD_UNARY_OP_TY_CAST,
-              .expr = arena_alloc(tchk->arena, sizeof(*td_expr.unary_op.expr)),
+              .expr = aralloc(tchk->arena, sizeof(*td_expr.unary_op.expr)),
               .cast = (struct td_cast){.var_ty = target_ty}},
 
       .span = expr.span};
@@ -641,14 +641,14 @@ static char *tchk_base_type_name(struct typechk *tchk,
     // (**bar)`
     const char *ret_name = tchk_type_name(tchk, var_ty->func.ret);
 
-    char *base = arena_alloc_snprintf(tchk->arena, "%s (*)(", ret_name);
+    char *base = aralloc_snprintf(tchk->arena, "%s (*)(", ret_name);
     for (size_t i = 0; i < var_ty->func.num_params; i++) {
       if (i + 1 == var_ty->func.num_params) {
-        base = arena_alloc_snprintf(
+        base = aralloc_snprintf(
             tchk->arena, "%s%s)", base,
             tchk_type_name(tchk, &var_ty->func.params[i].var_ty));
       } else {
-        base = arena_alloc_snprintf(
+        base = aralloc_snprintf(
             tchk->arena, "%s%s, ", base,
             tchk_type_name(tchk, &var_ty->func.params[i].var_ty));
       }
@@ -658,11 +658,11 @@ static char *tchk_base_type_name(struct typechk *tchk,
   }
   case TD_VAR_TY_TY_POINTER: {
     const char *el_name = tchk_type_name(tchk, var_ty->array.underlying);
-    return arena_alloc_snprintf(tchk->arena, "%s *", el_name);
+    return aralloc_snprintf(tchk->arena, "%s *", el_name);
   }
   case TD_VAR_TY_TY_ARRAY: {
     const char *el_name = tchk_type_name(tchk, var_ty->array.underlying);
-    return arena_alloc_snprintf(tchk->arena, "%s[%zu]", el_name,
+    return aralloc_snprintf(tchk->arena, "%s[%zu]", el_name,
                                 var_ty->array.size);
   }
 
@@ -694,7 +694,7 @@ static char *tchk_base_type_name(struct typechk *tchk,
     goto named;
 
   named: {
-    return arena_alloc_snprintf(tchk->arena, "%s %.*s", kw, (int)name.len,
+    return aralloc_snprintf(tchk->arena, "%s %.*s", kw, (int)name.len,
                                 name.str);
   }
   }
@@ -721,7 +721,7 @@ static char *tchk_qualifiers_name(struct typechk *tchk,
 
 #undef TQUAL
 
-  char *buf = arena_alloc(tchk->arena, len + 1);
+  char *buf = aralloc(tchk->arena, len + 1);
   size_t head = 0;
 
 #define TQUAL(name, str)                                                       \
@@ -746,7 +746,7 @@ static char *tchk_qualifiers_name(struct typechk *tchk,
 }
 
 char *tchk_type_name(struct typechk *tchk, const struct td_var_ty *var_ty) {
-  return arena_alloc_snprintf(
+  return aralloc_snprintf(
       tchk->arena, "%s%s", tchk_qualifiers_name(tchk, var_ty->type_qualifiers),
       tchk_base_type_name(tchk, var_ty));
 }
@@ -833,7 +833,7 @@ static struct td_expr add_cast_if_needed(struct typechk *tchk,
         tchk->diagnostics,
         MK_SEMANTIC_DIAGNOSTIC(
             CAST, cast, context, MK_INVALID_TEXT_POS(0),
-            arena_alloc_snprintf(tchk->arena,
+            aralloc_snprintf(tchk->arena,
                                  "cast is not legal (from '%s' to '%s')",
                                  tchk_type_name(tchk, &expr.var_ty),
                                  tchk_type_name(tchk, &target_ty))));
@@ -1173,7 +1173,7 @@ static bool is_anonymous_name(ustr_t name) {
 static ustr_t anonymous_name(struct typechk *tchk) {
   size_t id = tchk->next_anonymous_type_name_id++;
 
-  char *buf = arena_alloc_snprintf(tchk->arena, "<anonymous>%zu", id);
+  char *buf = aralloc_snprintf(tchk->arena, "<anonymous>%zu", id);
   return MK_USTR(buf);
 }
 
@@ -1195,9 +1195,9 @@ td_var_ty_for_enum(struct typechk *tchk,
 
   struct var_table_entry *ty_entry =
       vt_create_entry(&tchk->ty_table, VAR_TABLE_NS_ENUM, name);
-  ty_entry->var = arena_alloc(tchk->arena, sizeof(*ty_entry->var));
+  ty_entry->var = aralloc(tchk->arena, sizeof(*ty_entry->var));
   *ty_entry->var = ty_var;
-  ty_entry->var_ty = arena_alloc(tchk->arena, sizeof(*ty_entry->var_ty));
+  ty_entry->var_ty = aralloc(tchk->arena, sizeof(*ty_entry->var_ty));
 
   // clang now uses unsigned enums?
   // struct td_var_ty enum_ty = TD_VAR_TY_WELL_KNOWN_SIGNED_INT;
@@ -1239,9 +1239,9 @@ td_var_ty_for_enum(struct typechk *tchk,
       struct var_table_entry *entry =
           vt_create_entry_at_scope(&tchk->var_table, VAR_TABLE_NS_NONE,
                                    enum_name, vt_cur_scope(&tchk->ty_table));
-      entry->var = arena_alloc(tchk->arena, sizeof(*entry->var));
+      entry->var = aralloc(tchk->arena, sizeof(*entry->var));
       *entry->var = var;
-      entry->var_ty = arena_alloc(tchk->arena, sizeof(*entry->var_ty));
+      entry->var_ty = aralloc(tchk->arena, sizeof(*entry->var_ty));
       *entry->var_ty = enum_ty;
 
       last_value = value;
@@ -1359,7 +1359,7 @@ static struct td_var_ty td_var_ty_for_struct_or_union(
   size_t num_var_decls = vector_length(var_decls);
 
   var_ty.aggregate.num_fields = num_var_decls;
-  var_ty.aggregate.fields = arena_alloc(
+  var_ty.aggregate.fields = aralloc(
       tchk->arena, sizeof(*var_ty.aggregate.fields) * num_var_decls);
 
   for (size_t i = 0; i < num_var_decls; i++) {
@@ -1392,9 +1392,9 @@ static struct td_var_ty td_var_ty_for_struct_or_union(
                        .span = specifier->span};
 
   entry = vt_get_or_create_entry(&tchk->ty_table, ns, name);
-  entry->var = arena_alloc(tchk->arena, sizeof(*entry->var));
+  entry->var = aralloc(tchk->arena, sizeof(*entry->var));
   *entry->var = var;
-  entry->var_ty = arena_alloc(tchk->arena, sizeof(*entry->var_ty));
+  entry->var_ty = aralloc(tchk->arena, sizeof(*entry->var_ty));
   *entry->var_ty = var_ty;
 
   return var_ty;
@@ -1467,7 +1467,7 @@ type_array_declarator(struct typechk *tchk, struct td_var_ty var_ty,
 
     struct td_var_ty pointer_ty = {
         .ty = TD_VAR_TY_TY_POINTER,
-        .pointer = {.underlying = arena_alloc(
+        .pointer = {.underlying = aralloc(
                         tchk->arena, sizeof(*array_ty.array.underlying))}};
     *pointer_ty.pointer.underlying = var_ty;
 
@@ -1483,7 +1483,7 @@ type_array_declarator(struct typechk *tchk, struct td_var_ty var_ty,
       // FIXME: must be a param, else we need to erro
       struct td_var_ty pointer_ty = {
           .ty = TD_VAR_TY_TY_POINTER,
-          .pointer = {.underlying = arena_alloc(
+          .pointer = {.underlying = aralloc(
                           tchk->arena, sizeof(*array_ty.array.underlying))}};
       *pointer_ty.pointer.underlying = var_ty;
 
@@ -1572,7 +1572,7 @@ type_array_declarator(struct typechk *tchk, struct td_var_ty var_ty,
   }
 
   array_ty.array.underlying =
-      arena_alloc(tchk->arena, sizeof(*array_ty.array.underlying));
+      aralloc(tchk->arena, sizeof(*array_ty.array.underlying));
   *array_ty.array.underlying = var_ty;
 
   if (array_ty.array.underlying->ty == TD_VAR_TY_TY_INCOMPLETE_AGGREGATE) {
@@ -1598,7 +1598,7 @@ type_func_declarator(struct typechk *tchk, struct td_var_ty var_ty,
       .ty = TD_VAR_TY_TY_FUNC,
   };
 
-  func_ty.func.ret = arena_alloc(tchk->arena, sizeof(*func_ty.func.ret));
+  func_ty.func.ret = aralloc(tchk->arena, sizeof(*func_ty.func.ret));
   *func_ty.func.ret = var_ty;
 
   struct ast_paramlist *param_list = func_declarator->param_list;
@@ -1621,7 +1621,7 @@ type_func_declarator(struct typechk *tchk, struct td_var_ty var_ty,
 
   func_ty.func.num_params = num_params;
   func_ty.func.params =
-      arena_alloc(tchk->arena, sizeof(*func_ty.func.params) * num_params);
+      aralloc(tchk->arena, sizeof(*func_ty.func.params) * num_params);
 
   for (size_t j = 0; j < num_params; j++) {
     struct ast_param *param = &param_list->params[j];
@@ -1750,7 +1750,7 @@ td_var_ty_for_typedef(struct typechk *tchk,
         tchk->diagnostics,
         MK_SEMANTIC_DIAGNOSTIC(
             BAD_TYPEDEF, bad_typedef, identifier->span, MK_INVALID_TEXT_POS(0),
-            arena_alloc_snprintf(tchk->arena,
+            aralloc_snprintf(tchk->arena,
                                  "typedef name '%.*s' does not exist",
                                  (int)name.len, name.str)));
     return TD_VAR_TY_UNKNOWN;
@@ -1946,7 +1946,7 @@ type_attr_format(struct typechk *tchk, const struct ast_attribute *attribute) {
         MK_SEMANTIC_DIAGNOSTIC(
             BAD_PARAM_COUNT, bad_param_count, attribute->span,
             MK_INVALID_TEXT_POS(0),
-            arena_alloc_snprintf(tchk->arena, "expected 3 params, found %zu",
+            aralloc_snprintf(tchk->arena, "expected 3 params, found %zu",
                                  attribute->num_params)));
 
     return (struct td_attr_format){0};
@@ -1978,7 +1978,7 @@ type_attr_format(struct typechk *tchk, const struct ast_attribute *attribute) {
         MK_SEMANTIC_DIAGNOSTIC(
             UNRECOGNISED_ATTR, unrecognised_attr, archetype_expr->span,
             MK_INVALID_TEXT_POS(0),
-            arena_alloc_snprintf(
+            aralloc_snprintf(
                 tchk->arena,
                 "unrecognised format type '%.*s', (expected 'printf')",
                 (int)archetype_name.len, archetype_name.str)));
@@ -2040,7 +2040,7 @@ static void type_attribute_list(struct typechk *tchk,
           ustr_eq(name, MK_USTR("weak_import"))) {
         attrs->weak = true;
       } else if (ustr_eq(name, MK_USTR("format"))) {
-        attrs->format = arena_alloc(tchk->arena, sizeof(*attrs->format));
+        attrs->format = aralloc(tchk->arena, sizeof(*attrs->format));
         *attrs->format = type_attr_format(tchk, attr);
       } else if (!silent_ignore) {
         compiler_diagnostics_add(
@@ -2048,7 +2048,7 @@ static void type_attribute_list(struct typechk *tchk,
             MK_SEMANTIC_DIAGNOSTIC(
                 UNRECOGNISED_ATTR, unrecognised_attr, attr->span,
                 MK_INVALID_TEXT_POS(0),
-                arena_alloc_snprintf(tchk->arena,
+                aralloc_snprintf(tchk->arena,
                                      "unrecognised attribute '%.*s' ignored",
                                      (int)name.len, name.str)));
       }
@@ -2497,9 +2497,9 @@ eval_constant_integral_expr(struct typechk *tchk, const struct td_expr *expr,
 static struct td_expr type_ternary(struct typechk *tchk,
                                    const struct ast_ternary *ternary) {
   struct td_ternary td_ternary = {
-      .cond = arena_alloc(tchk->arena, sizeof(*td_ternary.cond)),
-      .true_expr = arena_alloc(tchk->arena, sizeof(*td_ternary.true_expr)),
-      .false_expr = arena_alloc(tchk->arena, sizeof(*td_ternary.false_expr)),
+      .cond = aralloc(tchk->arena, sizeof(*td_ternary.cond)),
+      .true_expr = aralloc(tchk->arena, sizeof(*td_ternary.true_expr)),
+      .false_expr = aralloc(tchk->arena, sizeof(*td_ternary.false_expr)),
   };
 
   *td_ternary.cond = type_expr(tchk, TYPE_EXPR_FLAGS_NONE, ternary->cond);
@@ -2586,7 +2586,7 @@ static struct td_var_ty type_type_name(struct typechk *tchk,
 static struct td_arglist type_arglist(struct typechk *tchk,
                                       const struct ast_arglist *arg_list) {
   struct td_arglist td_arg_list = (struct td_arglist){
-      .args = arena_alloc(tchk->arena,
+      .args = aralloc(tchk->arena,
                           sizeof(*td_arg_list.args) * arg_list->num_args),
       .num_args = arg_list->num_args};
 
@@ -2904,7 +2904,7 @@ static struct printf_args parse_printf_format(struct typechk *tchk,
 static struct td_expr type_call(struct typechk *tchk,
                                 const struct ast_call *call) {
   struct td_call td_call = {
-      .target = arena_alloc(tchk->arena, sizeof(*td_call.target)),
+      .target = aralloc(tchk->arena, sizeof(*td_call.target)),
       .arg_list = type_arglist(tchk, &call->arg_list)};
 
   *td_call.target = type_expr(tchk, TYPE_EXPR_FLAGS_NONE, call->target);
@@ -2924,7 +2924,7 @@ static struct td_expr type_call(struct typechk *tchk,
         MK_SEMANTIC_DIAGNOSTIC(
             FN_NOT_CALLABLE, fn_not_callable, call->span,
             MK_INVALID_TEXT_POS(0),
-            arena_alloc_snprintf(tchk->arena,
+            aralloc_snprintf(tchk->arena,
                                  "can't call non func expression with ty '%s'",
                                  tchk_type_name(tchk, &target_var_ty))));
 
@@ -3179,7 +3179,7 @@ static struct td_expr type_call(struct typechk *tchk,
                     tchk->diagnostics,
                     MK_SEMANTIC_DIAGNOSTIC(
                         BAD_PRINTF_ARGS, bad_printf_args, span, span.end,
-                        arena_alloc_snprintf(
+                        aralloc_snprintf(
                             tchk->arena,
                             "printf min-width specifier expects type '%s' "
                             "but type '%s' was provided",
@@ -3217,7 +3217,7 @@ static struct td_expr type_call(struct typechk *tchk,
                     tchk->diagnostics,
                     MK_SEMANTIC_DIAGNOSTIC(
                         BAD_PRINTF_ARGS, bad_printf_args, span, span.end,
-                        arena_alloc_snprintf(
+                        aralloc_snprintf(
                             tchk->arena,
                             "printf precision specifier expects type '%s' "
                             "but type '%s' was provided",
@@ -3254,7 +3254,7 @@ static struct td_expr type_call(struct typechk *tchk,
                   tchk->diagnostics,
                   MK_SEMANTIC_DIAGNOSTIC(
                       BAD_PRINTF_ARGS, bad_printf_args, span, span.end,
-                      arena_alloc_snprintf(tchk->arena,
+                      aralloc_snprintf(tchk->arena,
                                            "printf specifier expects type '%s' "
                                            "but type '%s' was provided",
                                            tchk_type_name(tchk, &exp_ty),
@@ -3309,7 +3309,7 @@ static struct td_expr type_unary_op(struct typechk *tchk,
   struct td_var_ty result_ty;
 
   struct td_unary_op td_unary_op = {
-      .expr = arena_alloc(tchk->arena, sizeof(*td_unary_op.expr)),
+      .expr = aralloc(tchk->arena, sizeof(*td_unary_op.expr)),
   };
 
   enum type_expr_flags flags;
@@ -3416,7 +3416,7 @@ static struct td_expr type_unary_op(struct typechk *tchk,
           tchk->diagnostics,
           MK_SEMANTIC_DIAGNOSTIC(
               CAST, cast, expr.span, MK_INVALID_TEXT_POS(0),
-              arena_alloc_snprintf(tchk->arena,
+              aralloc_snprintf(tchk->arena,
                                    "cast is not legal (from '%s' to '%s')",
                                    tchk_type_name(tchk, &expr.var_ty),
                                    tchk_type_name(tchk, &target_ty))));
@@ -3577,8 +3577,8 @@ static struct td_expr type_binary_op_typed(struct typechk *tchk,
 
   struct td_binary_op td_binary_op = {
       .ty = ty,
-      .lhs = arena_alloc(tchk->arena, sizeof(*td_binary_op.lhs)),
-      .rhs = arena_alloc(tchk->arena, sizeof(*td_binary_op.rhs))};
+      .lhs = aralloc(tchk->arena, sizeof(*td_binary_op.lhs)),
+      .rhs = aralloc(tchk->arena, sizeof(*td_binary_op.rhs))};
 
   *td_binary_op.lhs = perform_integer_promotion(tchk, *lhs_expr);
   *td_binary_op.rhs = perform_integer_promotion(tchk, *rhs_expr);
@@ -3611,8 +3611,8 @@ static struct td_expr
 type_arrayaccess(struct typechk *tchk,
                  const struct ast_arrayaccess *arrayaccess) {
   struct td_arrayaccess td_arrayaccess = {
-      .lhs = arena_alloc(tchk->arena, sizeof(*td_arrayaccess.lhs)),
-      .rhs = arena_alloc(tchk->arena, sizeof(*td_arrayaccess.rhs)),
+      .lhs = aralloc(tchk->arena, sizeof(*td_arrayaccess.lhs)),
+      .rhs = aralloc(tchk->arena, sizeof(*td_arrayaccess.rhs)),
   };
 
   struct td_expr lhs = type_expr(tchk, TYPE_EXPR_FLAGS_NONE, arrayaccess->lhs);
@@ -3725,7 +3725,7 @@ static struct td_var_ty get_completed_aggregate(struct typechk *tchk,
   if (!try_get_completed_aggregate(tchk, var_ty, &complete)) {
     // TODO: need to allow extern / tentative decls here
 
-    char *msg = arena_alloc_snprintf(
+    char *msg = aralloc_snprintf(
         tchk->arena, "incomplete type '%.*s' cannot be used here",
         (int)var_ty->incomplete_aggregate.name.len,
         var_ty->incomplete_aggregate.name.str);
@@ -3832,7 +3832,7 @@ static struct td_expr
 type_memberaccess(struct typechk *tchk, enum type_expr_flags flags,
                   const struct ast_memberaccess *memberaccess) {
   struct td_memberaccess td_memberaccess = {
-      .lhs = arena_alloc(tchk->arena, sizeof(*td_memberaccess.lhs)),
+      .lhs = aralloc(tchk->arena, sizeof(*td_memberaccess.lhs)),
       .member = identifier_str(tchk->parser, &memberaccess->member)};
 
   *td_memberaccess.lhs =
@@ -3864,7 +3864,7 @@ type_memberaccess(struct typechk *tchk, enum type_expr_flags flags,
     // decay this to addressof
     struct td_unary_op addr = {
         .ty = TD_UNARY_OP_TY_ADDRESSOF,
-        .expr = arena_alloc(tchk->arena, sizeof(*addr.expr))};
+        .expr = aralloc(tchk->arena, sizeof(*addr.expr))};
 
     *addr.expr = expr;
 
@@ -3883,7 +3883,7 @@ type_pointeraccess(struct typechk *tchk, enum type_expr_flags flags,
                    const struct ast_pointeraccess *pointeraccess) {
 
   struct td_pointeraccess td_pointeraccess = {
-      .lhs = arena_alloc(tchk->arena, sizeof(*td_pointeraccess.lhs)),
+      .lhs = aralloc(tchk->arena, sizeof(*td_pointeraccess.lhs)),
       .member = identifier_str(tchk->parser, &pointeraccess->member)};
 
   *td_pointeraccess.lhs =
@@ -3935,7 +3935,7 @@ type_pointeraccess(struct typechk *tchk, enum type_expr_flags flags,
     // decay this to addressof
     struct td_unary_op addr = {
         .ty = TD_UNARY_OP_TY_ADDRESSOF,
-        .expr = arena_alloc(tchk->arena, sizeof(*addr.expr))};
+        .expr = aralloc(tchk->arena, sizeof(*addr.expr))};
 
     *addr.expr = expr;
 
@@ -3952,8 +3952,8 @@ type_pointeraccess(struct typechk *tchk, enum type_expr_flags flags,
 static struct td_expr type_assg(struct typechk *tchk,
                                 const struct ast_assg *assg) {
   struct td_assg td_assg = {
-      .assignee = arena_alloc(tchk->arena, sizeof(*td_assg.assignee)),
-      .expr = arena_alloc(tchk->arena, sizeof(*td_assg.expr)),
+      .assignee = aralloc(tchk->arena, sizeof(*td_assg.assignee)),
+      .expr = aralloc(tchk->arena, sizeof(*td_assg.expr)),
   };
 
   enum td_binary_op_ty bin_op;
@@ -4233,7 +4233,7 @@ type_compoundexpr(struct typechk *tchk, enum type_expr_flags flags,
                   const struct ast_compoundexpr *compoundexpr) {
   struct td_compoundexpr td_compoundexpr = {
       .num_exprs = compoundexpr->num_exprs,
-      .exprs = arena_alloc(tchk->arena, sizeof(*td_compoundexpr.exprs) *
+      .exprs = aralloc(tchk->arena, sizeof(*td_compoundexpr.exprs) *
                                             compoundexpr->num_exprs)};
 
   for (size_t i = 0; i < compoundexpr->num_exprs; i++) {
@@ -4303,7 +4303,7 @@ static struct td_expr type_generic(struct typechk *tchk,
       if (td_var_ty_compatible(tchk, &assoc_var_ty, &ctrl_var_ty,
                                TD_VAR_TY_COMPATIBLE_FLAG_NONE)) {
         if (selected_association) {
-          char *msg = arena_alloc_snprintf(
+          char *msg = aralloc_snprintf(
               tchk->arena,
               "multiple associations in '_Generic' matched ("
               "controlling type '%s' matched associations for '%s' (assocation "
@@ -4357,7 +4357,7 @@ static struct td_expr type_generic(struct typechk *tchk,
           MK_SEMANTIC_DIAGNOSTIC(
               DUPLICATE_GENERIC_DEFAULT, duplicate_generic_default,
               generic->span, MK_INVALID_TEXT_POS(0),
-              arena_alloc_snprintf(
+              aralloc_snprintf(
                   tchk->arena,
                   "no association matched type '%s' and no default found",
                   tchk_type_name(tchk, &ctrl_var_ty))));
@@ -4380,7 +4380,7 @@ static struct td_expr type_va_arg(struct typechk *tchk,
   return (struct td_expr){
       .ty = TD_EXPR_TY_VA_ARG,
       .var_ty = type,
-      .va_arg = {.list = arena_alloc_init(tchk->arena, sizeof(list), &list),
+      .va_arg = {.list = aralloc_init(tchk->arena, sizeof(list), &list),
                  .var_ty = type}};
 }
 
@@ -4589,7 +4589,7 @@ static struct td_var_ty_info td_var_ty_info(struct typechk *tchk,
       size_t max_alignment = 0;
       size_t size = 0;
       size_t num_fields = ty->aggregate.num_fields;
-      size_t *offsets = arena_alloc(tchk->arena, sizeof(*offsets) * num_fields);
+      size_t *offsets = aralloc(tchk->arena, sizeof(*offsets) * num_fields);
 
       for (size_t i = 0; i < ty->aggregate.num_fields; i++) {
         struct td_struct_field *field = &ty->aggregate.fields[i];
@@ -4990,7 +4990,7 @@ eval_constant_integral_expr(struct typechk *tchk, const struct td_expr *expr,
             tchk->diagnostics,
             MK_SEMANTIC_DIAGNOSTIC(
                 CAST, cast, expr->span, MK_INVALID_TEXT_POS(0),
-                arena_alloc_snprintf(
+                aralloc_snprintf(
                     tchk->arena, "cast is not legal (from '%s' to '%s')",
                     tchk_type_name(tchk, &expr->var_ty),
                     tchk_type_name(tchk, &expr->unary_op.cast.var_ty))));
@@ -5351,7 +5351,7 @@ type_static_init_expr(struct typechk *tchk, struct td_expr expr,
         .pointer_access =
             (struct td_pointeraccess){
                 .lhs =
-                    arena_alloc(tchk->arena, sizeof(*res.pointer_access.lhs)),
+                    aralloc(tchk->arena, sizeof(*res.pointer_access.lhs)),
                 .member = expr.pointer_access.member,
             },
         .span = expr.span,
@@ -5386,7 +5386,7 @@ type_static_init_expr(struct typechk *tchk, struct td_expr expr,
         .var_ty = expr.var_ty,
         .member_access =
             (struct td_memberaccess){
-                .lhs = arena_alloc(tchk->arena, sizeof(*res.member_access.lhs)),
+                .lhs = aralloc(tchk->arena, sizeof(*res.member_access.lhs)),
                 .member = expr.member_access.member,
             },
         .span = expr.span,
@@ -5407,8 +5407,8 @@ type_static_init_expr(struct typechk *tchk, struct td_expr expr,
         .var_ty = expr.var_ty,
         .array_access =
             (struct td_arrayaccess){
-                .lhs = arena_alloc(tchk->arena, sizeof(*res.array_access.lhs)),
-                .rhs = arena_alloc(tchk->arena, sizeof(*res.array_access.rhs)),
+                .lhs = aralloc(tchk->arena, sizeof(*res.array_access.lhs)),
+                .rhs = aralloc(tchk->arena, sizeof(*res.array_access.rhs)),
             },
         .span = expr.span,
     };
@@ -5427,7 +5427,7 @@ type_static_init_expr(struct typechk *tchk, struct td_expr expr,
           .ty = TD_EXPR_TY_UNARY_OP,
           .var_ty = expr.var_ty,
           .unary_op = (struct td_unary_op){.ty = TD_UNARY_OP_TY_ADDRESSOF,
-                                           .expr = arena_alloc(
+                                           .expr = aralloc(
                                                tchk->arena,
                                                sizeof(*addr.unary_op.expr))},
           .span = expr.span,
@@ -5455,7 +5455,7 @@ type_static_init_expr(struct typechk *tchk, struct td_expr expr,
           tchk->diagnostics,
           MK_SEMANTIC_DIAGNOSTIC(
               CAST, cast, expr.span, MK_INVALID_TEXT_POS(0),
-              arena_alloc_snprintf(
+              aralloc_snprintf(
                   tchk->arena,
                   "cast is not legal in constant expression (from '%s' to "
                   "'%s')",
@@ -5529,8 +5529,8 @@ type_static_init_expr(struct typechk *tchk, struct td_expr expr,
         .binary_op =
             (struct td_binary_op){
                 .ty = expr.binary_op.ty,
-                .lhs = arena_alloc(tchk->arena, sizeof(*res.binary_op.lhs)),
-                .rhs = arena_alloc(tchk->arena, sizeof(*res.binary_op.rhs)),
+                .lhs = aralloc(tchk->arena, sizeof(*res.binary_op.lhs)),
+                .rhs = aralloc(tchk->arena, sizeof(*res.binary_op.rhs)),
             },
         .span = expr.span,
     };
@@ -5614,7 +5614,7 @@ type_labeledstmt(struct typechk *tchk, const struct ast_labeledstmt *labeled) {
     break;
   }
 
-  td_labeled.stmt = arena_alloc(tchk->arena, sizeof(*td_labeled.stmt));
+  td_labeled.stmt = aralloc(tchk->arena, sizeof(*td_labeled.stmt));
   *td_labeled.stmt = type_stmt(tchk, labeled->stmt);
 
   return td_labeled;
@@ -5647,20 +5647,20 @@ static struct td_forstmt type_forstmt(struct typechk *tchk,
       .init = NULL, .cond = NULL, .body = NULL, .iter = NULL};
 
   if (forstmt->init) {
-    td_for.init = arena_alloc(tchk->arena, sizeof(*td_for.init));
+    td_for.init = aralloc(tchk->arena, sizeof(*td_for.init));
     *td_for.init = type_declaration_or_expr(tchk, forstmt->init);
   }
 
-  td_for.body = arena_alloc(tchk->arena, sizeof(*td_for.body));
+  td_for.body = aralloc(tchk->arena, sizeof(*td_for.body));
   *td_for.body = type_stmt(tchk, forstmt->body);
 
   if (forstmt->cond) {
-    td_for.cond = arena_alloc(tchk->arena, sizeof(*td_for.cond));
+    td_for.cond = aralloc(tchk->arena, sizeof(*td_for.cond));
     *td_for.cond = type_expr(tchk, TYPE_EXPR_FLAGS_NONE, forstmt->cond);
   }
 
   if (forstmt->iter) {
-    td_for.iter = arena_alloc(tchk->arena, sizeof(*td_for.iter));
+    td_for.iter = aralloc(tchk->arena, sizeof(*td_for.iter));
     *td_for.iter = type_expr(tchk, TYPE_EXPR_FLAGS_NONE, forstmt->iter);
   }
 
@@ -5675,7 +5675,7 @@ type_dowhilestmt(struct typechk *tchk,
       .cond = type_expr(tchk, TYPE_EXPR_FLAGS_NONE, &dowhilestmt->cond),
   };
 
-  td_dowhile.body = arena_alloc(tchk->arena, sizeof(*td_dowhile.body));
+  td_dowhile.body = aralloc(tchk->arena, sizeof(*td_dowhile.body));
   *td_dowhile.body = type_stmt(tchk, dowhilestmt->body);
 
   return td_dowhile;
@@ -5687,7 +5687,7 @@ type_whilestmt(struct typechk *tchk, const struct ast_whilestmt *whilestmt) {
       .cond = type_expr(tchk, TYPE_EXPR_FLAGS_NONE, &whilestmt->cond),
   };
 
-  td_while.body = arena_alloc(tchk->arena, sizeof(*td_while.body));
+  td_while.body = aralloc(tchk->arena, sizeof(*td_while.body));
   *td_while.body = type_stmt(tchk, whilestmt->body);
 
   return td_while;
@@ -5735,7 +5735,7 @@ static struct td_jumpstmt type_jumpstmt(struct typechk *tchk,
 
     if (jumpstmt->return_stmt.expr) {
       td_jump.return_stmt = (struct td_returnstmt){
-          .expr = arena_alloc(tchk->arena, sizeof(*td_jump.return_stmt.expr))};
+          .expr = aralloc(tchk->arena, sizeof(*td_jump.return_stmt.expr))};
 
       *td_jump.return_stmt.expr = add_cast_if_needed(
           tchk, jumpstmt->span,
@@ -5755,7 +5755,7 @@ static struct td_ifstmt type_ifstmt(struct typechk *tchk,
                                     const struct ast_ifstmt *ifstmt) {
   struct td_ifstmt td_if = {
       .cond = type_expr(tchk, TYPE_EXPR_FLAGS_NONE, &ifstmt->cond),
-      .body = arena_alloc(tchk->arena, sizeof(*td_if.body))};
+      .body = aralloc(tchk->arena, sizeof(*td_if.body))};
 
   *td_if.body = type_stmt(tchk, ifstmt->body);
 
@@ -5766,8 +5766,8 @@ static struct td_ifelsestmt
 type_ifelsestmt(struct typechk *tchk, const struct ast_ifelsestmt *ifelsestmt) {
   struct td_ifelsestmt td_if_else = {
       .cond = type_expr(tchk, TYPE_EXPR_FLAGS_NONE, &ifelsestmt->cond),
-      .body = arena_alloc(tchk->arena, sizeof(*td_if_else.body)),
-      .else_body = arena_alloc(tchk->arena, sizeof(*td_if_else.else_body))};
+      .body = aralloc(tchk->arena, sizeof(*td_if_else.body)),
+      .else_body = aralloc(tchk->arena, sizeof(*td_if_else.else_body))};
 
   *td_if_else.body = type_stmt(tchk, ifelsestmt->body);
   *td_if_else.else_body = type_stmt(tchk, ifelsestmt->else_body);
@@ -5780,7 +5780,7 @@ type_switchstmt(struct typechk *tchk, const struct ast_switchstmt *switchstmt) {
   struct td_switchstmt td_switch = {
       .ctrl_expr =
           type_expr(tchk, TYPE_EXPR_FLAGS_NONE, &switchstmt->ctrl_expr),
-      .body = arena_alloc(tchk->arena, sizeof(*td_switch.body)),
+      .body = aralloc(tchk->arena, sizeof(*td_switch.body)),
   };
 
   *td_switch.body = type_stmt(tchk, switchstmt->body);
@@ -5818,7 +5818,7 @@ type_deferstmt(struct typechk *tchk, const struct ast_deferstmt *deferstmt) {
   struct td_stmt stmt = type_stmt(tchk, deferstmt->stmt);
 
   return (struct td_deferstmt){
-      .stmt = arena_alloc_init(tchk->arena, sizeof(stmt), &stmt)};
+      .stmt = aralloc_init(tchk->arena, sizeof(stmt), &stmt)};
 }
 
 static struct td_stmt type_stmt(struct typechk *tchk,
@@ -5888,7 +5888,7 @@ type_compoundstmt(struct typechk *tchk,
 
   struct td_compoundstmt td_cmpd = {
       .num_stmts = compound_stmt->num_stmts,
-      .stmts = arena_alloc(tchk->arena,
+      .stmts = aralloc(tchk->arena,
                            sizeof(*td_cmpd.stmts) * compound_stmt->num_stmts)};
 
   for (size_t i = 0; i < compound_stmt->num_stmts; i++) {
@@ -5924,9 +5924,9 @@ static struct td_funcdef type_funcdef(struct typechk *tchk,
 
   struct var_table_entry *func_entry = vt_create_entry(
       &tchk->var_table, VAR_TABLE_NS_NONE, declaration.var.identifier);
-  func_entry->var = arena_alloc(tchk->arena, sizeof(*func_entry->var));
+  func_entry->var = aralloc(tchk->arena, sizeof(*func_entry->var));
   *func_entry->var = declaration.var;
-  func_entry->var_ty = arena_alloc(tchk->arena, sizeof(*func_entry->var_ty));
+  func_entry->var_ty = aralloc(tchk->arena, sizeof(*func_entry->var_ty));
   *func_entry->var_ty = declaration.var_ty;
 
   // param scope
@@ -5950,9 +5950,9 @@ static struct td_funcdef type_funcdef(struct typechk *tchk,
 
     struct var_table_entry *entry =
         vt_create_entry(&tchk->var_table, VAR_TABLE_NS_NONE, identifier);
-    entry->var = arena_alloc(tchk->arena, sizeof(*entry->var));
+    entry->var = aralloc(tchk->arena, sizeof(*entry->var));
     *entry->var = var;
-    entry->var_ty = arena_alloc(tchk->arena, sizeof(*entry->var_ty));
+    entry->var_ty = aralloc(tchk->arena, sizeof(*entry->var_ty));
     *entry->var_ty = param->var_ty;
 
     // decay array params to pointers here
@@ -5972,9 +5972,9 @@ static struct td_funcdef type_funcdef(struct typechk *tchk,
 
   struct var_table_entry *entry =
       vt_create_entry(&tchk->var_table, VAR_TABLE_NS_NONE, var.identifier);
-  entry->var = arena_alloc(tchk->arena, sizeof(*entry->var));
+  entry->var = aralloc(tchk->arena, sizeof(*entry->var));
   *entry->var = var;
-  entry->var_ty = arena_alloc(tchk->arena, sizeof(*entry->var_ty));
+  entry->var_ty = aralloc(tchk->arena, sizeof(*entry->var_ty));
   *entry->var_ty = TD_VAR_TY_CONST_CHAR_POINTER;
 
   struct td_funcdef td_funcdef = {
@@ -6034,7 +6034,7 @@ type_designator_list(struct typechk *tchk, const struct td_var_ty *var_ty,
   struct td_designator_list td_designator_list = {
       .num_designators = designator_list->num_designators,
       .designators =
-          arena_alloc(tchk->arena, sizeof(*td_designator_list.designators) *
+          aralloc(tchk->arena, sizeof(*td_designator_list.designators) *
                                        designator_list->num_designators)};
 
   struct td_var_ty cur_var_ty = *var_ty;
@@ -6058,12 +6058,12 @@ type_init_list_init(struct typechk *tchk, const struct td_var_ty *var_ty,
                     enum td_init_mode mode) {
   struct td_init_list_init td_init_list_init = {
       .designator_list = NULL,
-      .init = arena_alloc(tchk->arena, sizeof(*td_init_list_init.init))};
+      .init = aralloc(tchk->arena, sizeof(*td_init_list_init.init))};
 
   struct td_var_ty init_list_var_ty;
   if (init_list_init->designator_list) {
     td_init_list_init.designator_list =
-        arena_alloc(tchk->arena, sizeof(*td_init_list_init.designator_list));
+        aralloc(tchk->arena, sizeof(*td_init_list_init.designator_list));
     *td_init_list_init.designator_list =
         type_designator_list(tchk, var_ty, init_list_init->designator_list);
 
@@ -6214,7 +6214,7 @@ static struct td_init_list type_init_list_for_aggregate_or_array(
       } else {
         td_init_list_init = (struct td_init_list_init){
             .designator_list = NULL,
-            .init = arena_alloc(tchk->arena, sizeof(*td_init_list_init.init))};
+            .init = aralloc(tchk->arena, sizeof(*td_init_list_init.init))};
 
         size_t sub_inits_used = 0;
         *td_init_list_init.init =
@@ -6241,7 +6241,7 @@ static struct td_init_list type_init_list_for_aggregate_or_array(
   struct td_init_list td_init_list = {
       .var_ty = *var_ty,
       .num_inits = vector_length(inits),
-      .inits = arena_alloc(tchk->arena, vector_byte_size(inits))};
+      .inits = aralloc(tchk->arena, vector_byte_size(inits))};
 
   vector_copy_to(inits, td_init_list.inits);
   vector_free(&inits);
@@ -6303,11 +6303,11 @@ static struct td_init_list type_init_list(struct typechk *tchk,
     struct td_init_list scalar = {
         .var_ty = *var_ty,
         .num_inits = 1,
-        .inits = arena_alloc(tchk->arena, sizeof(*scalar.inits))};
+        .inits = aralloc(tchk->arena, sizeof(*scalar.inits))};
 
     scalar.inits[0] = (struct td_init_list_init){
         .designator_list = NULL,
-        .init = arena_alloc(tchk->arena, sizeof(*scalar.inits[0].init))};
+        .init = aralloc(tchk->arena, sizeof(*scalar.inits[0].init))};
 
     struct td_expr expr = type_expr(tchk, TYPE_EXPR_FLAGS_ARRAYS_DONT_DECAY,
                                     &init_list->inits[0].init->expr);
@@ -6368,7 +6368,7 @@ static struct td_init type_init(struct typechk *tchk, struct text_span context,
               .ty = TD_VAR_TY_TY_ARRAY,
               .array = {.size = str.ty == TD_CNST_STR_TY_ASCII ? str.ascii.len
                                                                : str.wide.len,
-                        .underlying = arena_alloc(
+                        .underlying = aralloc(
                             tchk->arena,
                             sizeof(*td_init.expr.var_ty.array.underlying))}};
 
@@ -6382,7 +6382,7 @@ static struct td_init type_init(struct typechk *tchk, struct text_span context,
               tchk->diagnostics,
               MK_SEMANTIC_DIAGNOSTIC(
                   CAST, cast, context, MK_INVALID_TEXT_POS(0),
-                  arena_alloc_snprintf(
+                  aralloc_snprintf(
                       tchk->arena, "cast is not legal (from '%s' to '%s')",
                       tchk_type_name(tchk, &td_init.expr.var_ty),
                       tchk_type_name(tchk, var_ty))));
@@ -6486,9 +6486,9 @@ type_init_declarator(struct typechk *tchk, struct text_span context,
     }
   }
 
-  entry->var = arena_alloc(tchk->arena, sizeof(*entry->var));
+  entry->var = aralloc(tchk->arena, sizeof(*entry->var));
   *entry->var = td_var_decl.var;
-  entry->var_ty = arena_alloc(tchk->arena, sizeof(*entry->var_ty));
+  entry->var_ty = aralloc(tchk->arena, sizeof(*entry->var_ty));
   *entry->var_ty = td_var_decl.var_ty;
 
   if (init_declarator->init) {
@@ -6517,7 +6517,7 @@ type_init_declarator(struct typechk *tchk, struct text_span context,
     struct td_init init = type_init(tchk, context, &td_var_decl.var_ty,
                                     init_declarator->init, init_mode);
 
-    td_var_decl.init = arena_alloc(tchk->arena, sizeof(*td_var_decl.init));
+    td_var_decl.init = aralloc(tchk->arena, sizeof(*td_var_decl.init));
     *td_var_decl.init = init;
   }
 
@@ -6535,7 +6535,7 @@ static struct td_declaration type_init_declarator_list(
       .base_ty = specifiers->type_specifier,
       .num_var_declarations = declarator_list->num_init_declarators,
       .var_declarations =
-          arena_alloc(tchk->arena, sizeof(*td_declaration.var_declarations) *
+          aralloc(tchk->arena, sizeof(*td_declaration.var_declarations) *
                                        declarator_list->num_init_declarators),
       .span = declarator_list->span};
 
@@ -6642,10 +6642,10 @@ static void tchk_add_builtin_fn(struct typechk *tchk, ustr_t name,
   struct td_var_ty builtin_fn_ty = {
       .ty = TD_VAR_TY_TY_FUNC,
       .func = {.ty = TD_TY_FUNC_TY_KNOWN_ARGS,
-               .ret = arena_alloc_init(tchk->arena,
+               .ret = aralloc_init(tchk->arena,
                                        sizeof(*builtin_fn_ty.func.ret), &ret),
                .params =
-                   arena_alloc(tchk->arena, sizeof(*builtin_fn_ty.func.params) *
+                   aralloc(tchk->arena, sizeof(*builtin_fn_ty.func.params) *
                                                 fn->num_params),
                .num_params = fn->num_params}};
 
@@ -6687,14 +6687,14 @@ typechk_create(const struct target *target, const struct compile_args *args,
   struct var_table_entry *entry = vt_create_entry(
       &t->ty_table, VAR_TABLE_NS_TYPEDEF, MK_USTR("__builtin_va_list"));
 
-  entry->var = arena_alloc_init(
+  entry->var = aralloc_init(
       t->arena, sizeof(*entry->var),
       &(struct td_var){.ty = TD_VAR_VAR_TY_VAR,
                        .identifier = MK_USTR("__builtin_va_list"),
                        .scope = SCOPE_GLOBAL,
                        .span = MK_INVALID_TEXT_SPAN2()});
 
-  entry->var_ty = arena_alloc_init(t->arena, sizeof(*entry->var_ty),
+  entry->var_ty = aralloc_init(t->arena, sizeof(*entry->var_ty),
                                    target->variadic_info.va_list_var_ty);
 
 #define BUILTIN_TY(...)
@@ -6743,7 +6743,7 @@ static void type_staticassert(struct typechk *tchk,
     }
 
     struct ast_cnst_str cnst = staticassert->message->cnst.str_value;
-    message = arena_alloc_snprintf(tchk->arena, "static_assert failed: %.*s",
+    message = aralloc_snprintf(tchk->arena, "static_assert failed: %.*s",
                                    (int)cnst.ascii.len, cnst.ascii.value);
   } else {
     message = "static_assert failed";
@@ -6762,7 +6762,7 @@ struct typechk_result td_typechk(struct typechk *tchk,
                                  struct ast_translationunit *translation_unit) {
   struct td_translationunit td_translation_unit = {
       .num_external_declarations = translation_unit->num_external_declarations,
-      .external_declarations = arena_alloc(
+      .external_declarations = aralloc(
           tchk->arena, sizeof(*td_translation_unit.external_declarations) *
                            translation_unit->num_external_declarations)};
 

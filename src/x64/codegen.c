@@ -615,7 +615,7 @@ static void codegen_addr_op(struct cg_state *state,
     addr->x64->ty = X64_INSTR_TY_LEA_PCREL;
     addr->x64->lea_pcrel = (struct x64_lea_pcrel){.dest = dest, .offset = 0};
 
-    addr->reloc = arena_alloc(state->func->unit->arena, sizeof(*addr->reloc));
+    addr->reloc = aralloc(state->func->unit->arena, sizeof(*addr->reloc));
     *addr->reloc = (struct relocation){
         .ty = glb->def_ty == IR_GLB_DEF_TY_DEFINED ? RELOCATION_TY_LOCAL_SINGLE
                                                    : RELOCATION_TY_UNDEF_SINGLE,
@@ -1326,7 +1326,7 @@ static void codegen_call_op(struct cg_state *state,
     instr->x64->ty = X64_INSTR_TY_CALL;
     instr->x64->call = (struct x64_branch){.target = NULL};
 
-    instr->reloc = arena_alloc(state->func->unit->arena, sizeof(*instr->reloc));
+    instr->reloc = aralloc(state->func->unit->arena, sizeof(*instr->reloc));
     *instr->reloc = (struct relocation){
         .ty = RELOCATION_TY_CALL,
         .symbol_index = op->call.target->addr.glb->id,
@@ -1356,7 +1356,7 @@ static void codegen_prologue(struct cg_state *state) {
                                    .stack_size = stack_size};
 
   state->x64_prologue_info =
-      arena_alloc(state->arena, sizeof(*state->x64_prologue_info));
+      aralloc(state->arena, sizeof(*state->x64_prologue_info));
 
   if (!info.prologue_generated) {
     *state->x64_prologue_info = info;

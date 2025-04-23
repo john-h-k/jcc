@@ -179,13 +179,13 @@ static struct ir_op *ir_clone_op(struct ir_func *func, const struct ir_op *op,
   case IR_OP_TY_CALL:
     copy->call = op->call;
     copy->call.num_args = op->call.num_args;
-    copy->call.args = arena_alloc_init(
+    copy->call.args = aralloc_init(
         func->arena, op->call.num_args * sizeof(struct ir_op *), op->call.args);
     break;
   case IR_OP_TY_PHI:
     copy->phi = (struct ir_op_phi){
         .num_values = op->phi.num_values,
-        .values = arena_alloc_init(
+        .values = aralloc_init(
             func->arena, op->phi.num_values * sizeof(op->phi.values[0]),
             op->phi.values)};
 
@@ -198,7 +198,7 @@ static struct ir_op *ir_clone_op(struct ir_func *func, const struct ir_op *op,
   case IR_OP_TY_GATHER:
     copy->gather = (struct ir_op_gather){
         .num_values = op->gather.num_values,
-        .values = arena_alloc_init(
+        .values = aralloc_init(
             func->arena, op->gather.num_values * sizeof(op->gather.values[0]),
             op->gather.values)};
     break;
@@ -308,7 +308,7 @@ ir_clone_basicblock(struct ir_func *func,
 
   // doesn't copy metadata field
 
-  struct ir_basicblock *copy = arena_alloc(func->arena, sizeof(*copy));
+  struct ir_basicblock *copy = aralloc(func->arena, sizeof(*copy));
 
   ir_initialise_basicblock(copy, func->next_basicblock_id++);
 
@@ -331,7 +331,7 @@ ir_clone_basicblock(struct ir_func *func,
   }
 
   copy->num_preds = basicblock->num_preds;
-  copy->preds = arena_alloc(func->arena,
+  copy->preds = aralloc(func->arena,
                             sizeof(struct ir_basicblock *) * copy->num_preds);
   for (size_t i = 0; i < copy->num_preds; i++) {
     copy->preds[i] = ir_clone_basicblock(func, basicblock->preds[i], cloned);
@@ -358,7 +358,7 @@ ir_clone_basicblock(struct ir_func *func,
     copy->switch_case = (struct ir_basicblock_switch){
         .num_cases = basicblock->switch_case.num_cases,
         .cases =
-            arena_alloc(func->arena, sizeof(*copy->switch_case.cases) *
+            aralloc(func->arena, sizeof(*copy->switch_case.cases) *
                                          basicblock->switch_case.num_cases),
         .default_target = ir_clone_basicblock(
             func, basicblock->switch_case.default_target, cloned),

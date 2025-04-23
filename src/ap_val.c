@@ -406,7 +406,7 @@ struct ap_int ap_int_rshift(struct ap_int lhs, struct ap_int rhs) {
 
 size_t ap_float_try_parse(struct arena_allocator *arena, enum ap_float_ty ty,
                           ustr_t str, struct ap_float *ap_float) {
-  char *buf = arena_alloc_strndup(arena, str.str, str.len);
+  char *buf = aralloc_strndup(arena, str.str, str.len);
 
   char *end;
 

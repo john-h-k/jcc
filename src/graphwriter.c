@@ -32,7 +32,7 @@ struct graphwriter *graphwriter_create(struct arena_allocator *arena,
                                        enum graph_ty ty,
                                        enum graph_strictness strictness,
                                        FILE *file) {
-  struct graphwriter *gwr = arena_alloc(arena, sizeof(*gwr));
+  struct graphwriter *gwr = aralloc(arena, sizeof(*gwr));
 
   gwr->ty = ty;
   gwr->strictness = strictness;
@@ -94,7 +94,7 @@ static void write_edge(struct graph_edge *edge) {
 
 static struct graph_vertex *create_vertex(struct graphwriter *gwr,
                                           const char *id) {
-  struct graph_vertex *gvx = arena_alloc(gwr->arena, sizeof(*gvx));
+  struct graph_vertex *gvx = aralloc(gwr->arena, sizeof(*gvx));
 
   gvx->gwr = gwr;
   gvx->id = id;
@@ -104,7 +104,7 @@ static struct graph_vertex *create_vertex(struct graphwriter *gwr,
 
 struct graph_vertex *vertex_from_str(struct graphwriter *gwr, const char *id) {
   // don't tie vertex lifetime to caller string, copy into arena
-  char *copy = arena_alloc_strdup(gwr->arena, id);
+  char *copy = aralloc_strdup(gwr->arena, id);
   struct graph_vertex *vertex = create_vertex(gwr, copy);
   write_vertex(vertex);
   write_end(gwr);
@@ -114,7 +114,7 @@ struct graph_vertex *vertex_from_str(struct graphwriter *gwr, const char *id) {
 struct graph_vertex *vertex_from_integral(struct graphwriter *gwr, size_t id) {
   size_t digits = num_digits(id);
   size_t sz = (sizeof(char) * digits) + 1;
-  char *buff = arena_alloc(gwr->arena, sz);
+  char *buff = aralloc(gwr->arena, sz);
 
   snprintf(buff, sz, "%zu", id);
 
@@ -126,7 +126,7 @@ struct graph_vertex *vertex_from_integral(struct graphwriter *gwr, size_t id) {
 
 struct graph_edge *edge(struct graphwriter *gwr, struct graph_vertex *from,
                         struct graph_vertex *to) {
-  struct graph_edge *edge = arena_alloc(gwr->arena, sizeof(*edge));
+  struct graph_edge *edge = aralloc(gwr->arena, sizeof(*edge));
 
   edge->gwr = gwr;
   edge->from = from;

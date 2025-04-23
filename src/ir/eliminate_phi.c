@@ -225,7 +225,7 @@ void eliminate_phi(struct ir_func *irb) {
   struct ir_basicblock *basicblock = irb->first;
 
   struct bb_moves *bb_moves =
-      arena_alloc(irb->arena, sizeof(*bb_moves) * irb->basicblock_count * 2);
+      aralloc(irb->arena, sizeof(*bb_moves) * irb->basicblock_count * 2);
 
   for (size_t i = 0; i < irb->basicblock_count * 2; i++) {
     bb_moves[i].gp_from = vector_create(sizeof(struct location));

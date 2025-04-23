@@ -166,55 +166,55 @@ void arena_allocator_free(struct arena_allocator **allocator) {
 
 bool try_alloc_in_arena(struct arena *arena, size_t size, void **allocation);
 
-void *arena_alloc_strndup(struct arena_allocator *allocator, const char *str,
+void *aralloc_strndup(struct arena_allocator *allocator, const char *str,
                           size_t len) {
   len = MIN(len, strlen(str));
 
-  char *cp = arena_alloc(allocator, len + 1);
+  char *cp = aralloc(allocator, len + 1);
   memcpy(cp, str, len * sizeof(*str));
   cp[len] = '\0';
 
   return cp;
 }
 
-void *arena_alloc_strdup(struct arena_allocator *allocator, const char *str) {
+void *aralloc_strdup(struct arena_allocator *allocator, const char *str) {
   size_t len = strlen(str);
 
-  char *cp = arena_alloc(allocator, len + 1);
+  char *cp = aralloc(allocator, len + 1);
   memcpy(cp, str, len * sizeof(*str));
   cp[len] = '\0';
 
   return cp;
 }
 
-ustr_t arena_alloc_ustrdup(struct arena_allocator *allocator, ustr_t str) {
+ustr_t aralloc_ustrdup(struct arena_allocator *allocator, ustr_t str) {
   if (!str.str) {
     return str;
   }
 
-  char *cp = arena_alloc(allocator, str.len);
+  char *cp = aralloc(allocator, str.len);
   memcpy(cp, str.str, str.len);
   return (ustr_t){.str = cp, .len = str.len};
 }
 
-char *arena_alloc_ustrconv(struct arena_allocator *allocator, ustr_t str) {
+char *aralloc_ustrconv(struct arena_allocator *allocator, ustr_t str) {
   DEBUG_ASSERT(ustr_nullsafe(str), "ustr was not nullsafe!");
 
   if (!str.str) {
     str.str = "";
   }
 
-  char *cp = arena_alloc(allocator, str.len + 1);
+  char *cp = aralloc(allocator, str.len + 1);
   memcpy(cp, str.str, str.len);
   cp[str.len] = '\0';
   return cp;
 }
 
 PRINTF_ARGS(1)
-char *arena_alloc_snprintf(struct arena_allocator *allocator,
+char *aralloc_snprintf(struct arena_allocator *allocator,
                            const char *format, ...) {
   if (!format || !format[0]) {
-    return arena_alloc_strdup(allocator, "");
+    return aralloc_strdup(allocator, "");
   }
 
   va_list args;
@@ -229,7 +229,7 @@ char *arena_alloc_snprintf(struct arena_allocator *allocator,
 
   DEBUG_ASSERT(len >= 0, "vnsprintf call failed");
 
-  char *buf = arena_alloc(allocator, len + 1);
+  char *buf = aralloc(allocator, len + 1);
 
   if (!buf) {
     va_end(args);
@@ -242,15 +242,15 @@ char *arena_alloc_snprintf(struct arena_allocator *allocator,
   return buf;
 }
 
-void *arena_realloc(struct arena_allocator *allocator, void *ptr, size_t size) {
+void *arrealloc(struct arena_allocator *allocator, void *ptr, size_t size) {
   if (!ptr || !size) {
-    return arena_alloc(allocator, size);
+    return aralloc(allocator, size);
   }
 
   // TODO: make this actually try to not realloc
   struct alloc_metadata *metadata = ((struct alloc_metadata *)ptr) - 1;
 
-  void *new = arena_alloc(allocator, size);
+  void *new = aralloc(allocator, size);
 
   // need to unpoison due to alignment bytes
 #ifdef ASAN
@@ -267,9 +267,9 @@ void *arena_realloc(struct arena_allocator *allocator, void *ptr, size_t size) {
   return new;
 }
 
-void *arena_alloc_init(struct arena_allocator *allocator, size_t size,
+void *aralloc_init(struct arena_allocator *allocator, size_t size,
                        const void *data) {
-  void *p = arena_alloc(allocator, size);
+  void *p = aralloc(allocator, size);
 
   if (p && data) {
     memcpy(p, data, size);
@@ -319,7 +319,7 @@ static void *arena_alloc_in_new(struct arena_allocator *allocator,
   return allocation;
 }
 
-void *arena_alloc(struct arena_allocator *allocator, size_t size) {
+void *aralloc(struct arena_allocator *allocator, size_t size) {
   if (!size) {
     return 0;
   }

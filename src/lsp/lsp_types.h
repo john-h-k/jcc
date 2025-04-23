@@ -374,7 +374,7 @@ struct type_definition_textdoc_params {
     }                                                                          \
                                                                                \
     const struct json_array *arr = &val->arr_val;                              \
-    char *arr_vals = arena_alloc(ctx->arena, sizeof(*name) * arr->num_values); \
+    char *arr_vals = aralloc(ctx->arena, sizeof(*name) * arr->num_values); \
     for (size_t i = 0; i < arr->num_values; i++) {                             \
       TRY_DE_##de_ty(&arr->values[i], (void *)&arr_vals[i * sizeof(*name)],    \
                      __VA_ARGS__);                                             \

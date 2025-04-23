@@ -167,7 +167,7 @@ static const char *get_default_isysroot(struct fs *fs,
       BUG("xcrun call failed!");
     }
 
-    char *path = arena_alloc_strndup(arena, sdk_path.data, sdk_path.len);
+    char *path = aralloc_strndup(arena, sdk_path.data, sdk_path.len);
 
     if (sdk_path.len && sdk_path.data[sdk_path.len - 1] == '\n') {
       // strip newline
@@ -329,7 +329,7 @@ try_get_compile_args(int argc, char **argv, struct parsed_args *args,
 
   size_t num_sys_include_paths = args->sys_include_paths.num_values + 2;
   const char **sys_include_paths =
-      arena_alloc(arena, sizeof(*sys_include_paths) * num_sys_include_paths);
+      aralloc(arena, sizeof(*sys_include_paths) * num_sys_include_paths);
 
   if (!args->isys_root) {
     args->isys_root = get_default_isysroot(*fs, arena, args->target);
@@ -387,7 +387,7 @@ try_get_compile_args(int argc, char **argv, struct parsed_args *args,
       .output = output,
 
       .num_defines = args->define_macros.num_values,
-      .defines = arena_alloc(arena, sizeof(compile_args->defines[0]) *
+      .defines = aralloc(arena, sizeof(compile_args->defines[0]) *
                                         args->define_macros.num_values)};
 
   for (size_t i = 0; i < args->define_macros.num_values; i++) {

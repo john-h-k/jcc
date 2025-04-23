@@ -92,9 +92,9 @@ struct ir_func_builder {
 
 static struct ir_label *add_label(struct ir_func_builder *irb, ustr_t name,
                                   struct ir_basicblock *basicblock) {
-  struct ir_label *label = arena_alloc(irb->arena, sizeof(*label));
+  struct ir_label *label = aralloc(irb->arena, sizeof(*label));
 
-  label->name = arena_alloc_strndup(irb->arena, name.str, name.len);
+  label->name = aralloc_strndup(irb->arena, name.str, name.len);
   label->basicblock = basicblock;
   label->succ = irb->labels;
 
@@ -261,7 +261,7 @@ ir_var_ty_for_td_var_ty_impl(struct ir_unit *iru,
     case TD_TY_AGGREGATE_TY_STRUCT:
       ty.ty = IR_VAR_TY_TY_STRUCT;
       ty.aggregate.num_fields = aggregate.num_fields;
-      ty.aggregate.fields = arena_alloc(
+      ty.aggregate.fields = aralloc(
           iru->arena, sizeof(struct ir_var_ty) * ty.aggregate.num_fields);
 
       for (size_t i = 0; i < ty.aggregate.num_fields; i++) {
@@ -274,7 +274,7 @@ ir_var_ty_for_td_var_ty_impl(struct ir_unit *iru,
     case TD_TY_AGGREGATE_TY_UNION:
       ty.ty = IR_VAR_TY_TY_UNION;
       ty.aggregate.num_fields = aggregate.num_fields;
-      ty.aggregate.fields = arena_alloc(
+      ty.aggregate.fields = aralloc(
           iru->arena, sizeof(struct ir_var_ty) * ty.aggregate.num_fields);
 
       for (size_t i = 0; i < ty.aggregate.num_fields; i++) {
@@ -303,7 +303,7 @@ ir_var_ty_for_td_var_ty_impl(struct ir_unit *iru,
 
     struct ir_var_ty ty;
     ty.ty = IR_VAR_TY_TY_FUNC;
-    ty.func.ret_ty = arena_alloc(iru->arena, sizeof(*ty.func.ret_ty));
+    ty.func.ret_ty = aralloc(iru->arena, sizeof(*ty.func.ret_ty));
     *ty.func.ret_ty =
         ir_var_ty_for_td_var_ty_impl(iru, var_ty->func.ret, allow_incomplete);
 
@@ -311,7 +311,7 @@ ir_var_ty_for_td_var_ty_impl(struct ir_unit *iru,
     // instead a flag
     ty.func.num_params = var_ty->func.num_params;
     ty.func.params =
-        arena_alloc(iru->arena, sizeof(struct ir_op) * ty.func.num_params);
+        aralloc(iru->arena, sizeof(struct ir_op) * ty.func.num_params);
 
     ty.func.flags = IR_VAR_FUNC_TY_FLAG_NONE;
     if (variadic) {
@@ -1118,7 +1118,7 @@ static struct ir_op *build_ir_for_binaryop(struct ir_func_builder *irb,
 
     phi->phi = (struct ir_op_phi){
         .num_values = 2,
-        .values = arena_alloc(irb->arena, sizeof(struct ir_phi_entry) * 2)};
+        .values = aralloc(irb->arena, sizeof(struct ir_phi_entry) * 2)};
 
     phi->phi.values[0] = (struct ir_phi_entry){
         .basicblock = true_op->stmt->basicblock, .value = true_op};
@@ -1215,7 +1215,7 @@ static struct ir_glb *build_str_literal(struct ir_unit *iru,
                                         const struct td_cnst *cnst) {
   DEBUG_ASSERT(cnst->ty == TD_CNST_TY_STRING, "expected string");
 
-  struct ir_var_ty *chr = arena_alloc(iru->arena, sizeof(*chr));
+  struct ir_var_ty *chr = aralloc(iru->arena, sizeof(*chr));
 
   // if string literal contains null chars (or is wide char), it will mess up
   // counting and so put it in data
@@ -1235,7 +1235,7 @@ static struct ir_glb *build_str_literal(struct ir_unit *iru,
   struct ir_glb *glb =
       ir_add_global(iru, IR_GLB_TY_DATA, &var_ty, IR_GLB_DEF_TY_DEFINED, NULL);
 
-  glb->var = arena_alloc(iru->arena, sizeof(*glb->var));
+  glb->var = aralloc(iru->arena, sizeof(*glb->var));
 
   if (is_data) {
     *glb->var = (struct ir_var){.unit = iru,
@@ -1375,7 +1375,7 @@ static struct ir_op *build_ir_for_two_ternary(struct ir_func_builder *irb,
   struct ir_op *phi = ir_insert_phi(irb->func, end_bb, var_ty);
   phi->phi = (struct ir_op_phi){
       .num_values = 2,
-      .values = arena_alloc(irb->arena, sizeof(struct ir_op_phi) * 2),
+      .values = aralloc(irb->arena, sizeof(struct ir_op_phi) * 2),
   };
 
   phi->phi.values[0] = (struct ir_phi_entry){
@@ -1492,7 +1492,7 @@ static struct ir_op *build_ir_for_ternary(struct ir_func_builder *irb,
   struct ir_op *phi = ir_insert_phi(irb->func, end_bb, var_ty);
   phi->phi = (struct ir_op_phi){
       .num_values = 2,
-      .values = arena_alloc(irb->arena, sizeof(struct ir_op_phi) * 2),
+      .values = aralloc(irb->arena, sizeof(struct ir_op_phi) * 2),
   };
 
   phi->phi.values[0] = (struct ir_phi_entry){
@@ -1533,7 +1533,7 @@ static const char *mangle_static_name(struct ir_var_builder *irb,
     len++; // for "."
   }
 
-  char *buff = arena_alloc(irb->arena, sizeof(*name.str) * len);
+  char *buff = aralloc(irb->arena, sizeof(*name.str) * len);
   size_t head = 0;
 
   buff[head++] = '.';
@@ -1569,7 +1569,7 @@ static struct ir_op *build_ir_for_var(struct ir_func_builder *irb,
       struct ir_glb *glb = ir_add_global(irb->unit, IR_GLB_TY_DATA, &str_var_ty,
                                          IR_GLB_DEF_TY_DEFINED, name);
       glb->linkage = IR_LINKAGE_INTERNAL;
-      glb->var = arena_alloc(irb->arena, sizeof(*glb->var));
+      glb->var = aralloc(irb->arena, sizeof(*glb->var));
       *glb->var = (struct ir_var){
           .ty = IR_VAR_TY_STRING_LITERAL,
           .unit = irb->unit,
@@ -1672,7 +1672,7 @@ static struct ir_op *build_ir_for_var(struct ir_func_builder *irb,
 
   add_var_write(irb, phi, var);
 
-  phi->metadata = arena_alloc(irb->arena, sizeof(struct td_var));
+  phi->metadata = aralloc(irb->arena, sizeof(struct td_var));
   *(struct td_var *)phi->metadata = *var;
 
   key = get_var_key(var, (*stmt)->basicblock);
@@ -1819,9 +1819,9 @@ static struct ir_op *build_ir_for_call(struct ir_func_builder *irb,
   }
 
   struct ir_op **args =
-      arena_alloc(irb->arena, sizeof(struct ir_op *) * call->arg_list.num_args);
+      aralloc(irb->arena, sizeof(struct ir_op *) * call->arg_list.num_args);
 
-  struct ir_var_ty *arg_var_tys = arena_alloc(
+  struct ir_var_ty *arg_var_tys = aralloc(
       irb->arena, sizeof(struct ir_var_ty) * call->arg_list.num_args);
 
   size_t num_non_variadic_args = call->target->var_ty.func.num_params;
@@ -3021,7 +3021,7 @@ static struct ir_basicblock *build_ir_for_goto(struct ir_func_builder *irb,
   // put the label we target into metadata
   // copy it out to ignore const warnings
   size_t label_len = goto_stmt->label.len;
-  br->metadata = arena_alloc(irb->arena, label_len + 1);
+  br->metadata = aralloc(irb->arena, label_len + 1);
   memcpy(br->metadata, goto_stmt->label.str, label_len + 1);
 
   struct ir_basicblock *after_goto_basicblock = ir_alloc_basicblock(irb->func);
@@ -3342,7 +3342,7 @@ build_ir_for_global_var(struct ir_var_builder *irb, struct ir_func *func,
       var_ty.ty != IR_VAR_TY_TY_FUNC) {
     symbol_name = mangle_static_name(irb, func, name);
   } else {
-    symbol_name = arena_alloc_strndup(irb->arena, name.str, name.len);
+    symbol_name = aralloc_strndup(irb->arena, name.str, name.len);
   }
 
   struct var_key key = {.name = name,
@@ -3432,7 +3432,7 @@ build_ir_for_global_var(struct ir_var_builder *irb, struct ir_func *func,
   }
 
   if (!glb->var) {
-    glb->var = arena_alloc(irb->arena, sizeof(*glb->var));
+    glb->var = aralloc(irb->arena, sizeof(*glb->var));
   }
 
   *glb->var = (struct ir_var){.unit = irb->unit,
@@ -3691,7 +3691,7 @@ static void gen_var_phis(struct ir_func_builder *irb,
 
     phi->phi = (struct ir_op_phi){
         .num_values = basicblock->num_preds,
-        .values = arena_alloc(irb->arena, sizeof(*phi->phi.values) *
+        .values = aralloc(irb->arena, sizeof(*phi->phi.values) *
                                               basicblock->num_preds)};
     *build->entry =
         (struct ir_phi_entry){.basicblock = basicblock, .value = phi};
@@ -3723,7 +3723,7 @@ static void find_phi_exprs(struct ir_func_builder *irb, struct ir_op *phi) {
 
   struct ir_basicblock *basicblock = phi->stmt->basicblock;
 
-  struct ir_op **basicblock_ops_for_var = arena_alloc(
+  struct ir_op **basicblock_ops_for_var = aralloc(
       irb->arena, sizeof(struct ir_op *) * irb->func->basicblock_count);
   memset(basicblock_ops_for_var, 0,
          sizeof(struct ir_op *) * irb->func->basicblock_count);
@@ -3731,7 +3731,7 @@ static void find_phi_exprs(struct ir_func_builder *irb, struct ir_op *phi) {
 
   phi->phi = (struct ir_op_phi){
       .num_values = basicblock->num_preds,
-      .values = arena_alloc(irb->arena,
+      .values = aralloc(irb->arena,
                             sizeof(*phi->phi.values) * basicblock->num_preds)};
 
   struct vector *phi_builds = vector_create(sizeof(struct ir_build_phi_build));
@@ -3816,7 +3816,7 @@ static struct ir_func *build_ir_for_function(struct ir_unit *unit,
       .unit = unit,
       .func_ty =
           ir_var_ty_for_td_var_ty(unit, &def->var_declaration.var_ty).func,
-      .name = arena_alloc_strndup(unit->arena, ident.str, ident.len),
+      .name = aralloc_strndup(unit->arena, ident.str, ident.len),
       .arena = arena,
       .flags = IR_FUNC_FLAG_NONE,
       .first = NULL,
@@ -3825,10 +3825,10 @@ static struct ir_func *build_ir_for_function(struct ir_unit *unit,
       .lcl_count = 0,
       .total_locals_size = 0};
 
-  struct ir_func *f = arena_alloc(arena, sizeof(b));
+  struct ir_func *f = aralloc(arena, sizeof(b));
   *f = b;
 
-  struct ir_func_builder *builder = arena_alloc(arena, sizeof(b));
+  struct ir_func_builder *builder = aralloc(arena, sizeof(b));
   *builder = (struct ir_func_builder){
       .flags = flags,
       .arena = arena,
@@ -4253,7 +4253,7 @@ build_init_list_layout(struct ir_unit *iru, struct typechk *tchk,
 
   struct ir_build_init_list_layout layout = {
       .num_inits = vector_length(inits),
-      .inits = arena_alloc(iru->arena, vector_byte_size(inits))};
+      .inits = aralloc(iru->arena, vector_byte_size(inits))};
 
   vector_copy_to(inits, layout.inits);
   vector_free(&inits);
@@ -4292,7 +4292,7 @@ build_ir_for_compound_literal_addr(struct ir_var_builder *irb,
   struct ir_var_value var_value = build_ir_for_var_value_addr(
       irb, addr, offset, &addr->compound_literal.var_ty);
 
-  glb->var = arena_alloc(irb->arena, sizeof(*glb->var));
+  glb->var = aralloc(irb->arena, sizeof(*glb->var));
   *glb->var = (struct ir_var){.unit = irb->unit,
                               .ty = IR_VAR_TY_DATA,
                               .var_ty = glb->var_ty,
@@ -4373,7 +4373,7 @@ static struct ir_var_value build_ir_for_var_value_addr(
       offset_cnst = offset_value.int_value * info.size;
     }
 
-    glb->var = arena_alloc(irb->arena, sizeof(*glb->var));
+    glb->var = aralloc(irb->arena, sizeof(*glb->var));
     *glb->var = (struct ir_var){
         .unit = irb->unit,
         .ty = IR_VAR_TY_DATA,
@@ -4739,9 +4739,9 @@ build_ir_for_var_value_init_list(struct ir_var_builder *irb,
 
   struct ir_var_value_list value_list = {
       .num_values = layout.num_inits,
-      .values = arena_alloc(irb->arena,
+      .values = aralloc(irb->arena,
                             sizeof(*value_list.values) * layout.num_inits),
-      .offsets = arena_alloc(irb->arena,
+      .offsets = aralloc(irb->arena,
                              sizeof(*value_list.offsets) * layout.num_inits),
   };
 
@@ -4810,7 +4810,7 @@ build_ir_for_translationunit(const struct target *target, struct typechk *tchk,
                              struct td_translationunit *translation_unit,
                              enum ir_build_flags flags) {
 
-  struct ir_unit *iru = arena_alloc(arena, sizeof(*iru));
+  struct ir_unit *iru = aralloc(arena, sizeof(*iru));
   *iru = (struct ir_unit){.arena = arena,
                           .target = target,
                           .first_global = NULL,
@@ -4873,7 +4873,7 @@ build_ir_for_translationunit(const struct target *target, struct typechk *tchk,
       DEBUG_ASSERT(glb->ty == IR_GLB_TY_DATA, "tentative func makes no sense");
 
       glb->def_ty = IR_GLB_DEF_TY_DEFINED;
-      glb->var = arena_alloc(iru->arena, sizeof(*glb->var));
+      glb->var = aralloc(iru->arena, sizeof(*glb->var));
       *glb->var = (struct ir_var){.unit = iru,
                                   .ty = IR_VAR_TY_DATA,
                                   .var_ty = glb->var_ty,

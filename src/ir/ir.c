@@ -907,14 +907,14 @@ void ir_order_basicblocks(struct ir_func *func) {
   };
 
   size_t total = func->basicblock_count;
-  bool *visited = arena_alloc(func->arena, total * sizeof(bool));
+  bool *visited = aralloc(func->arena, total * sizeof(bool));
   memset(visited, 0, total * sizeof(bool));
 
-  struct bb_with_iter *stack = arena_alloc(func->arena, total * sizeof(*stack));
+  struct bb_with_iter *stack = aralloc(func->arena, total * sizeof(*stack));
   size_t top = 0;
 
   struct ir_basicblock **postorder =
-      arena_alloc(func->arena, total * sizeof(struct ir_basicblock *));
+      aralloc(func->arena, total * sizeof(struct ir_basicblock *));
   size_t postorder_count = 0;
 
   struct ir_basicblock *entry = func->first;
@@ -1156,7 +1156,7 @@ static void ir_prune_globals_walk_var_value(struct ir_unit *iru, bool *seen,
 }
 
 void ir_prune_globals(struct ir_unit *iru) {
-  bool *seen = arena_alloc(iru->arena, sizeof(*seen) * iru->num_globals);
+  bool *seen = aralloc(iru->arena, sizeof(*seen) * iru->num_globals);
   memset(seen, 0, sizeof(*seen) * iru->num_globals);
 
   struct ir_glb *glb = iru->first_global;
@@ -1241,7 +1241,7 @@ void ir_prune_basicblocks(struct ir_func *irb) {
     return;
   }
 
-  bool *seen = arena_alloc(irb->arena, sizeof(*seen) * irb->basicblock_count);
+  bool *seen = aralloc(irb->arena, sizeof(*seen) * irb->basicblock_count);
   memset(seen, 0, sizeof(*seen) * irb->basicblock_count);
 
   ir_prune_stmts(irb, irb->first);
@@ -1736,7 +1736,7 @@ struct ir_op *ir_insert_after_op(struct ir_func *irb,
     insert_after = insert_after->stmt->succ->first;
   }
 
-  struct ir_op *op = arena_alloc(irb->arena, sizeof(*op));
+  struct ir_op *op = aralloc(irb->arena, sizeof(*op));
 
   ir_initialise_op(op, irb->next_op_id++, ty, var_ty, NO_REG, NULL);
 
@@ -1752,7 +1752,7 @@ struct ir_op *ir_insert_before_op(struct ir_func *irb,
   DEBUG_ASSERT((insert_before->ty == IR_OP_TY_PHI) == (ty == IR_OP_TY_PHI),
                "cannot insert non phi before phi/phi before non phi");
 
-  struct ir_op *op = arena_alloc(irb->arena, sizeof(*op));
+  struct ir_op *op = aralloc(irb->arena, sizeof(*op));
 
   ir_initialise_op(op, irb->next_op_id++, ty, var_ty, NO_REG, NULL);
 
@@ -1775,7 +1775,7 @@ struct ir_stmt *ir_insert_after_stmt(struct ir_func *irb,
                                      struct ir_stmt *insert_after) {
   DEBUG_ASSERT(insert_after, "invalid insertion point!");
 
-  struct ir_stmt *stmt = arena_alloc(irb->arena, sizeof(*stmt));
+  struct ir_stmt *stmt = aralloc(irb->arena, sizeof(*stmt));
 
   ir_initialise_stmt(stmt, irb->next_stmt_id++);
 
@@ -1788,7 +1788,7 @@ struct ir_stmt *ir_insert_before_stmt(struct ir_func *irb,
                                       struct ir_stmt *insert_before) {
   DEBUG_ASSERT(insert_before, "invalid insertion point!");
 
-  struct ir_stmt *stmt = arena_alloc(irb->arena, sizeof(*stmt));
+  struct ir_stmt *stmt = aralloc(irb->arena, sizeof(*stmt));
 
   ir_initialise_stmt(stmt, irb->next_stmt_id++);
 
@@ -1837,7 +1837,7 @@ ir_insert_before_basicblock(struct ir_func *irb,
   DEBUG_ASSERT(insert_before, "invalid insertion point!");
 
   struct ir_basicblock *basicblock =
-      arena_alloc(irb->arena, sizeof(*basicblock));
+      aralloc(irb->arena, sizeof(*basicblock));
 
   ir_initialise_basicblock(basicblock, irb->next_basicblock_id++);
 
@@ -1852,7 +1852,7 @@ ir_insert_after_basicblock(struct ir_func *irb,
   DEBUG_ASSERT(insert_after, "invalid insertion point!");
 
   struct ir_basicblock *basicblock =
-      arena_alloc(irb->arena, sizeof(*basicblock));
+      aralloc(irb->arena, sizeof(*basicblock));
 
   ir_initialise_basicblock(basicblock, irb->next_basicblock_id++);
 
@@ -1868,7 +1868,7 @@ void ir_swap_ops_in_place(struct ir_func *irb, struct ir_op *left,
   DEBUG_ASSERT(left->succ == right && right->pred == left,
                "can only swap in place ops that are adjacent");
 
-  struct ir_op *tmp = arena_alloc(irb->arena, sizeof(*tmp));
+  struct ir_op *tmp = aralloc(irb->arena, sizeof(*tmp));
   *tmp = *left;
   *left = *right;
   *right = *tmp;
@@ -1918,7 +1918,7 @@ void ir_swap_ops(struct ir_func *irb, struct ir_op *left, struct ir_op *right) {
 
 struct ir_basicblock *ir_alloc_basicblock(struct ir_func *irb) {
   struct ir_basicblock *basicblock =
-      arena_alloc(irb->arena, sizeof(*basicblock));
+      aralloc(irb->arena, sizeof(*basicblock));
 
   if (!irb->first) {
     irb->first = basicblock;
@@ -1952,7 +1952,7 @@ struct ir_basicblock *ir_alloc_basicblock(struct ir_func *irb) {
 
 struct ir_stmt *ir_alloc_stmt(struct ir_func *irb,
                               struct ir_basicblock *basicblock) {
-  struct ir_stmt *stmt = arena_alloc(irb->arena, sizeof(*stmt));
+  struct ir_stmt *stmt = aralloc(irb->arena, sizeof(*stmt));
 
   if (!basicblock->first) {
     basicblock->first = stmt;
@@ -1980,7 +1980,7 @@ struct ir_stmt *ir_alloc_stmt(struct ir_func *irb,
 
 // TODO: this should call `initialise_ir_op`
 struct ir_op *ir_alloc_op(struct ir_func *irb, struct ir_stmt *stmt) {
-  struct ir_op *op = arena_alloc(irb->arena, sizeof(*op));
+  struct ir_op *op = aralloc(irb->arena, sizeof(*op));
 
   if (!stmt->first) {
     stmt->first = op;
@@ -2235,7 +2235,7 @@ mk_op: {
 struct ir_var_ty ir_var_ty_make_array(struct ir_unit *iru,
                                       const struct ir_var_ty *underlying,
                                       size_t num_elements) {
-  struct ir_var_ty *copied = arena_alloc(iru->arena, sizeof(*copied));
+  struct ir_var_ty *copied = aralloc(iru->arena, sizeof(*copied));
 
   *copied = *underlying;
 
@@ -2291,7 +2291,7 @@ void ir_add_pred_to_basicblock(struct ir_func *irb,
 
   basicblock->num_preds++;
   basicblock->preds =
-      arena_realloc(irb->arena, basicblock->preds,
+      arrealloc(irb->arena, basicblock->preds,
                     sizeof(struct ir_basicblock *) * basicblock->num_preds);
 
   basicblock->preds[basicblock->num_preds - 1] = pred;
@@ -2330,7 +2330,7 @@ void ir_make_basicblock_switch(struct ir_func *irb,
 
   basicblock->ty = IR_BASICBLOCK_TY_SWITCH;
   basicblock->switch_case = (struct ir_basicblock_switch){
-      .cases = arena_alloc(irb->arena,
+      .cases = aralloc(irb->arena,
                            sizeof(*basicblock->switch_case.cases) * num_cases),
       .num_cases = num_cases,
       .default_target = default_target};
@@ -2428,12 +2428,12 @@ struct ir_glb *ir_add_well_known_global(struct ir_unit *iru,
       return iru->well_known_glbs.memmove;
     }
 
-    struct ir_var_ty *ptr = arena_alloc(iru->arena, sizeof(*ptr));
+    struct ir_var_ty *ptr = aralloc(iru->arena, sizeof(*ptr));
     *ptr = IR_VAR_TY_POINTER;
 
     size_t num_params = 3;
     struct ir_var_ty *params =
-        arena_alloc(iru->arena, sizeof(*params) * num_params);
+        aralloc(iru->arena, sizeof(*params) * num_params);
 
     params[0] = IR_VAR_TY_POINTER;
     params[1] = IR_VAR_TY_POINTER; // TODO: const-qualified
@@ -2457,12 +2457,12 @@ struct ir_glb *ir_add_well_known_global(struct ir_unit *iru,
       return iru->well_known_glbs.memcpy;
     }
 
-    struct ir_var_ty *ptr = arena_alloc(iru->arena, sizeof(*ptr));
+    struct ir_var_ty *ptr = aralloc(iru->arena, sizeof(*ptr));
     *ptr = IR_VAR_TY_POINTER;
 
     size_t num_params = 3;
     struct ir_var_ty *params =
-        arena_alloc(iru->arena, sizeof(*params) * num_params);
+        aralloc(iru->arena, sizeof(*params) * num_params);
 
     params[0] = IR_VAR_TY_POINTER;
     params[1] = IR_VAR_TY_POINTER; // TODO: const-qualified
@@ -2485,12 +2485,12 @@ struct ir_glb *ir_add_well_known_global(struct ir_unit *iru,
       return iru->well_known_glbs.memset;
     }
 
-    struct ir_var_ty *ptr = arena_alloc(iru->arena, sizeof(*ptr));
+    struct ir_var_ty *ptr = aralloc(iru->arena, sizeof(*ptr));
     *ptr = IR_VAR_TY_POINTER;
 
     size_t num_params = 3;
     struct ir_var_ty *params =
-        arena_alloc(iru->arena, sizeof(*params) * num_params);
+        aralloc(iru->arena, sizeof(*params) * num_params);
 
     params[0] = IR_VAR_TY_POINTER;
     params[1] = IR_VAR_TY_I32;
@@ -2514,7 +2514,7 @@ struct ir_glb *ir_add_well_known_global(struct ir_unit *iru,
 struct ir_glb *ir_add_global(struct ir_unit *iru, enum ir_glb_ty ty,
                              const struct ir_var_ty *var_ty,
                              enum ir_glb_def_ty def_ty, const char *name) {
-  struct ir_glb *glb = arena_alloc(iru->arena, sizeof(*glb));
+  struct ir_glb *glb = aralloc(iru->arena, sizeof(*glb));
 
   struct ir_glb *pred = iru->last_global;
 
@@ -2544,7 +2544,7 @@ struct ir_glb *ir_add_global(struct ir_unit *iru, enum ir_glb_ty ty,
 
 struct ir_lcl *ir_add_local(struct ir_func *irb,
                             const struct ir_var_ty *var_ty) {
-  struct ir_lcl *lcl = arena_alloc(irb->arena, sizeof(*lcl));
+  struct ir_lcl *lcl = aralloc(irb->arena, sizeof(*lcl));
   lcl->id = irb->lcl_count++;
 
   lcl->func = irb;
@@ -2766,7 +2766,7 @@ struct ir_var_ty_info ir_var_ty_info(struct ir_unit *iru,
     size_t max_alignment = 1;
     size_t size = 0;
     size_t num_fields = ty->aggregate.num_fields;
-    size_t *offsets = arena_alloc(iru->arena, sizeof(*offsets) * num_fields);
+    size_t *offsets = aralloc(iru->arena, sizeof(*offsets) * num_fields);
 
     for (size_t i = 0; i < ty->aggregate.num_fields; i++) {
       struct ir_var_ty *field = &ty->aggregate.fields[i];
@@ -2892,10 +2892,10 @@ struct ir_op_use_map ir_build_op_uses_map(struct ir_func *func) {
   struct build_op_uses_callback_data data = {
       .op = NULL,
       .use_data =
-          arena_alloc(func->arena, sizeof(*data.use_data) * func->op_count)};
+          aralloc(func->arena, sizeof(*data.use_data) * func->op_count)};
 
   struct lcl_use_data *lcl_usage =
-      arena_alloc(func->arena, sizeof(*lcl_usage) * func->lcl_count);
+      aralloc(func->arena, sizeof(*lcl_usage) * func->lcl_count);
 
   struct ir_func_iter iter = ir_func_iter(func, IR_FUNC_ITER_FLAG_NONE);
 
@@ -2981,10 +2981,10 @@ struct ir_op_use_map ir_build_op_uses_map(struct ir_func *func) {
   struct ir_op_use_map uses = {
       .num_op_use_datas = func->op_count,
       .op_use_datas =
-          arena_alloc(func->arena, sizeof(*uses.op_use_datas) * func->op_count),
+          aralloc(func->arena, sizeof(*uses.op_use_datas) * func->op_count),
 
       .num_lcl_use_datas = func->lcl_count,
-      .lcl_use_datas = arena_alloc(func->arena, sizeof(*uses.lcl_use_datas) *
+      .lcl_use_datas = aralloc(func->arena, sizeof(*uses.lcl_use_datas) *
                                                     func->lcl_count),
   };
 
@@ -2996,7 +2996,7 @@ struct ir_op_use_map ir_build_op_uses_map(struct ir_func *func) {
     uses.op_use_datas[i] = (struct ir_op_usage){
         .op = use_data->op,
         .num_uses = vector_length(use_data->uses),
-        .uses = arena_alloc(func->arena, vector_byte_size(use_data->uses))};
+        .uses = aralloc(func->arena, vector_byte_size(use_data->uses))};
 
     vector_copy_to(use_data->uses, uses.op_use_datas[i].uses);
     vector_free(&use_data->uses);
@@ -3011,7 +3011,7 @@ struct ir_op_use_map ir_build_op_uses_map(struct ir_func *func) {
         .lcl = use_data->lcl,
         .num_consumers = vector_length(use_data->uses),
         .consumers =
-            arena_alloc(func->arena, vector_byte_size(use_data->uses))};
+            aralloc(func->arena, vector_byte_size(use_data->uses))};
 
     vector_copy_to(use_data->uses, uses.lcl_use_datas[i].consumers);
     vector_free(&use_data->uses);
@@ -3040,7 +3040,7 @@ struct move_set gen_move_order(struct arena_allocator *arena,
 
   struct vector *result = vector_create(sizeof(struct move));
 
-  enum status *status = arena_alloc(arena, sizeof(*status) * num);
+  enum status *status = aralloc(arena, sizeof(*status) * num);
   if (status) {
     memset(status, 0, sizeof(*status) * num);
   }
@@ -3102,7 +3102,7 @@ struct move_set gen_move_order(struct arena_allocator *arena,
 
   struct move_set move_set = {.num_moves = vector_length(result),
                               .moves =
-                                  arena_alloc(arena, vector_byte_size(result))};
+                                  aralloc(arena, vector_byte_size(result))};
 
   vector_copy_to(result, move_set.moves);
   vector_free(&result);
@@ -3286,17 +3286,17 @@ struct ir_idoms {
 };
 
 static struct ir_idoms compute_idoms(struct ir_func *func) {
-  struct ir_basicblock **idoms = arena_alloc(
+  struct ir_basicblock **idoms = aralloc(
       func->arena, func->basicblock_count * sizeof(struct ir_basicblock *));
 
   size_t *rpo =
-      arena_alloc(func->arena, func->basicblock_count * sizeof(size_t));
+      aralloc(func->arena, func->basicblock_count * sizeof(size_t));
 
-  struct ir_basicblock **rpo_order = arena_alloc(
+  struct ir_basicblock **rpo_order = aralloc(
       func->arena, func->basicblock_count * sizeof(struct ir_basicblock *));
 
   bool *visited =
-      arena_alloc(func->arena, func->basicblock_count * sizeof(bool));
+      aralloc(func->arena, func->basicblock_count * sizeof(bool));
   memset(visited, false, func->basicblock_count * sizeof(bool));
 
   size_t count = 0;
@@ -3417,12 +3417,12 @@ static void compute_df_recursive(struct ir_basicblock *basicblock,
 
 struct ir_dominance_frontier
 ir_compute_dominance_frontier(struct ir_func *func) {
-  struct vector **domf = arena_alloc(func->arena, func->basicblock_count *
+  struct vector **domf = aralloc(func->arena, func->basicblock_count *
                                                       sizeof(struct vector *));
 
-  struct vector **dom_trees = arena_alloc(
+  struct vector **dom_trees = aralloc(
       func->arena, func->basicblock_count * sizeof(struct vector *));
-  struct vector **children = arena_alloc(
+  struct vector **children = aralloc(
       func->arena, func->basicblock_count * sizeof(struct vector *));
 
   struct ir_idoms idoms = compute_idoms(func);

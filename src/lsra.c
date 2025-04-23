@@ -496,11 +496,11 @@ static struct interval_data register_alloc_pass(struct ir_func *irb,
 
   struct register_alloc_state state = {
       .interval_data = data,
-      .active = arena_alloc(
+      .active = aralloc(
           irb->arena, sizeof(size_t) * (info->num_fp_regs + info->num_gp_regs)),
       .num_active = 0,
       .preferences =
-          arena_alloc(irb->arena, sizeof(struct ir_reg) * irb->op_count),
+          aralloc(irb->arena, sizeof(struct ir_reg) * irb->op_count),
       .fp_reg_states = vector_create(sizeof(struct reg_state)),
       .gp_reg_states = vector_create(sizeof(struct reg_state)),
       .gp_reg_pool = vector_create(sizeof(size_t)),
@@ -881,7 +881,7 @@ void lsra_register_alloc(struct ir_func *irb, struct reg_info reg_info) {
 
   irb->reg_usage = (struct ir_reg_usage){
       .nonvolatile_used =
-          arena_alloc(irb->arena, sizeof(*irb->reg_usage.nonvolatile_used) *
+          aralloc(irb->arena, sizeof(*irb->reg_usage.nonvolatile_used) *
                                       num_nonvolatile_used),
       .num_nonvolatile_used = num_nonvolatile_used};
 

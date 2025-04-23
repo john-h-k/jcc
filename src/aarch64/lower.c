@@ -465,7 +465,7 @@ struct ir_func_info aarch64_lower_func_ty(struct ir_func *func,
                                        ? &IR_VAR_TY_POINTER
                                        : func_ty.ret_ty);
 
-    ret_info = arena_alloc(func->arena, sizeof(*ret_info));
+    ret_info = aralloc(func->arena, sizeof(*ret_info));
 
     struct ir_var_ty member_ty;
     size_t num_hfa_members;
@@ -711,7 +711,7 @@ struct ir_func_info aarch64_lower_func_ty(struct ir_func *func,
 
   struct ir_var_func_ty new_func_ty = {
       .flags = func_ty.flags,
-      .ret_ty = arena_alloc(func->arena, sizeof(ret_ty))};
+      .ret_ty = aralloc(func->arena, sizeof(ret_ty))};
 
   *new_func_ty.ret_ty = ret_ty;
 
@@ -777,7 +777,7 @@ static struct ir_aarch64_save_info lower_va_args_generic(struct ir_func *func) {
   save_sz = save_sz / 8;
 
   struct ir_var_ty *el_ty =
-      arena_alloc_init(func->arena, sizeof(*el_ty), &IR_VAR_TY_I64);
+      aralloc_init(func->arena, sizeof(*el_ty), &IR_VAR_TY_I64);
   struct ir_var_ty save_ty = {.ty = IR_VAR_TY_TY_ARRAY,
                               .array = {
                                   // TODO: make constant ptr

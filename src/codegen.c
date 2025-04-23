@@ -50,7 +50,7 @@ struct cg_instr *cg_get_next_instr(struct cg_basicblock *target) {
 struct cg_basicblock *cg_alloc_basicblock(struct cg_func *func,
                                           struct ir_basicblock *ir_basicblock) {
   struct cg_basicblock *basicblock =
-      arena_alloc(func->unit->arena, sizeof(*basicblock));
+      aralloc(func->unit->arena, sizeof(*basicblock));
 
   if (!func->first) {
     func->first = basicblock;
@@ -81,7 +81,7 @@ struct cg_basicblock *cg_alloc_basicblock(struct cg_func *func,
 
 struct cg_instr *cg_alloc_instr(struct cg_func *func,
                                 struct cg_basicblock *basicblock) {
-  struct cg_instr *instr = arena_alloc(func->unit->arena, sizeof(*instr));
+  struct cg_instr *instr = aralloc(func->unit->arena, sizeof(*instr));
 
   if (!basicblock->first) {
     basicblock->first = instr;
@@ -92,7 +92,7 @@ struct cg_instr *cg_alloc_instr(struct cg_func *func,
   instr->succ = NULL;
   instr->reloc = NULL;
   instr->op = NULL;
-  instr->p = arena_alloc(func->unit->arena, func->unit->instr_size);
+  instr->p = aralloc(func->unit->arena, func->unit->instr_size);
 
   if (basicblock->last) {
     basicblock->last->succ = instr;
@@ -123,7 +123,7 @@ const char *cg_mangle_str_cnst_name(struct arena_allocator *arena,
   len += id_len;
 
   len += 1; // null char
-  char *buff = arena_alloc(arena, len);
+  char *buff = aralloc(arena, len);
   size_t head = 0;
 
   strcpy(&buff[head], "p_");
@@ -320,7 +320,7 @@ static struct cg_entry codegen_var_data(struct ir_unit *ir, size_t id,
 
     size_t len = info.size;
 
-    char *data = arena_alloc(ir->arena, len);
+    char *data = aralloc(ir->arena, len);
     memset(data, 0, len);
 
     codegen_write_var_value(ir, relocs, 0, &glb->var->value, data);
@@ -446,7 +446,7 @@ static struct cg_entry codegen_func(struct cg_unit *unit, struct ir_glb *glb,
 }
 
 struct cg_unit *codegen(struct ir_unit *unit, enum codegen_flags flags) {
-  struct cg_unit *codegen_unit = arena_alloc(unit->arena, sizeof(*unit));
+  struct cg_unit *codegen_unit = aralloc(unit->arena, sizeof(*unit));
 
   struct codegen_info info = unit->target->codegen;
 
@@ -455,7 +455,7 @@ struct cg_unit *codegen(struct ir_unit *unit, enum codegen_flags flags) {
       .target = unit->target,
       .instr_size = info.instr_sz,
       .num_entries = unit->num_globals,
-      .entries = arena_alloc(unit->arena,
+      .entries = aralloc(unit->arena,
                              unit->num_globals * sizeof(struct cg_entry))};
 
   arena_allocator_create("codegen", &codegen_unit->arena);
@@ -491,7 +491,7 @@ struct cg_unit *codegen(struct ir_unit *unit, enum codegen_flags flags) {
         switch (glb->var->ty) {
         case IR_VAR_TY_STRING_LITERAL: {
           size_t len = ir_var_ty_info(unit, &glb->var->value.var_ty).size;
-          char *data = arena_alloc(unit->arena, len);
+          char *data = aralloc(unit->arena, len);
           memcpy(data, glb->var->value.str_value.value, len);
 
           struct symbol symbol = codegen_symbol(glb, SYMBOL_TY_STRING, name);

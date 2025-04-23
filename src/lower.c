@@ -459,7 +459,7 @@ static void lower_mem_set(struct ir_func *func, struct ir_op *op) {
 
   size_t num_args = 3;
   struct ir_op **args =
-      arena_alloc(func->arena, sizeof(struct ir_op *) * num_args);
+      aralloc(func->arena, sizeof(struct ir_op *) * num_args);
 
   args[0] = addr;
   args[1] = value_cnst;
@@ -569,7 +569,7 @@ static void lower_mem_copy(struct ir_func *func, struct ir_op *op) {
 
   size_t num_args = 3;
   struct ir_op **args =
-      arena_alloc(func->arena, sizeof(struct ir_op *) * num_args);
+      aralloc(func->arena, sizeof(struct ir_op *) * num_args);
 
   args[0] = dest;
   args[1] = source;
@@ -876,7 +876,7 @@ static void lower_params(struct ir_func *func) {
                                                    op->ret.value->var_ty);
         gather->gather = (struct ir_op_gather){
             .num_values = num_reg,
-            .values = arena_alloc(func->arena,
+            .values = aralloc(func->arena,
                                   sizeof(*gather->gather.values) * num_reg)};
 
         struct ir_op *last = gather;

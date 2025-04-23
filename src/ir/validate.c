@@ -45,7 +45,7 @@ struct validate_op_order_metadata {
 #define VALIDATION_ERR(obj, fmt, ...)                                          \
   do {                                                                         \
     const char *msg =                                                          \
-        arena_alloc_snprintf(state->unit->arena, (fmt), __VA_ARGS__);          \
+        aralloc_snprintf(state->unit->arena, (fmt), __VA_ARGS__);          \
     struct ir_validate_error error = {.err = msg,                              \
                                       .object = IR_MK_OBJECT((obj))};          \
     vector_push_back((state)->errors, &error);                                 \

@@ -234,7 +234,7 @@ static void gen_var_phis(struct ir_func *irb, struct hashtbl *stores,
 
     phi->phi = (struct ir_op_phi){
         .num_values = basicblock->num_preds,
-        .values = arena_alloc(irb->arena, sizeof(*phi->phi.values) *
+        .values = aralloc(irb->arena, sizeof(*phi->phi.values) *
                                               basicblock->num_preds)};
     *build->entry =
         (struct ir_phi_entry){.basicblock = basicblock, .value = phi};
@@ -265,14 +265,14 @@ static void find_phi_exprs(struct ir_func *irb, struct hashtbl *stores,
   struct ir_basicblock *basicblock = phi->stmt->basicblock;
 
   struct ir_op **basicblock_ops_for_var =
-      arena_alloc(irb->arena, sizeof(struct ir_op *) * irb->basicblock_count);
+      aralloc(irb->arena, sizeof(struct ir_op *) * irb->basicblock_count);
   memset(basicblock_ops_for_var, 0,
          sizeof(struct ir_op *) * irb->basicblock_count);
   basicblock_ops_for_var[basicblock->id] = phi;
 
   phi->phi = (struct ir_op_phi){
       .num_values = basicblock->num_preds,
-      .values = arena_alloc(irb->arena,
+      .values = aralloc(irb->arena,
                             sizeof(*phi->phi.values) * basicblock->num_preds)};
 
   struct vector *phi_builds = vector_create(sizeof(struct ir_build_phi_build));
@@ -379,7 +379,7 @@ static void opts_do_promote(struct ir_func *func, struct vector *lcl_uses,
       if (ir_var_ty_is_aggregate(&op->var_ty)) {
         first_field = use->field_idx;
         num_fields = op->var_ty.aggregate.num_fields;
-        gather_values = arena_alloc(
+        gather_values = aralloc(
             func->arena, num_fields * sizeof(struct ir_gather_value));
         fields = op->var_ty.aggregate.fields;
       } else {
@@ -522,7 +522,7 @@ static bool opts_promote_pass(struct ir_func *func) {
 
   // note: this requires contigous lcl ids
   bool *candidates =
-      arena_alloc(func->arena, sizeof(*candidates) * func->lcl_count);
+      aralloc(func->arena, sizeof(*candidates) * func->lcl_count);
 
   if (!candidates) {
     return false;
@@ -531,7 +531,7 @@ static bool opts_promote_pass(struct ir_func *func) {
   memset(candidates, true, sizeof(*candidates) * func->lcl_count);
 
   struct vector **lcl_uses =
-      arena_alloc(func->arena, sizeof(struct vector *) * func->lcl_count);
+      aralloc(func->arena, sizeof(struct vector *) * func->lcl_count);
 
   for (size_t i = 0; i < func->lcl_count; i++) {
     lcl_uses[i] = vector_create(sizeof(struct lcl_use));

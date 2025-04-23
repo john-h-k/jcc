@@ -18,7 +18,7 @@ struct path_components path_components(struct arena_allocator *arena,
     size_t dir_len = (size_t)(last_slash - path);
     file = last_slash + 1;
 
-    dir = arena_alloc_strndup(arena, path, dir_len);
+    dir = aralloc_strndup(arena, path, dir_len);
   }
 
   char *ext = strrchr(file, '.');
@@ -37,7 +37,7 @@ char *path_combine(struct arena_allocator *arena, const char *l,
   size_t r_len = strlen(r);
 
   size_t total = (l_len ? l_len + 1 : 0) + r_len + 1;
-  char *path = arena_alloc(arena, sizeof(*path) * total);
+  char *path = aralloc(arena, sizeof(*path) * total);
 
   char *head = path;
   if (l_len) {
@@ -75,7 +75,7 @@ char *path_replace_ext(struct arena_allocator *arena, const char *path,
 
   size_t res_sz = prefix_len + 1 + ext_len + 1;
 
-  char *buff = arena_alloc(arena, sizeof(*buff) * res_sz);
+  char *buff = aralloc(arena, sizeof(*buff) * res_sz);
   size_t head = 0;
 
   strncpy(&buff[head], path, prefix_len);
@@ -100,7 +100,7 @@ char *path_add_ext(struct arena_allocator *arena, const char *path,
   size_t ext_len = strlen(ext);
 
   size_t res_sz = path_len + 1 + ext_len + 1;
-  char *buff = arena_alloc(arena, sizeof(*buff) * res_sz);
+  char *buff = aralloc(arena, sizeof(*buff) * res_sz);
   size_t head = 0;
 
   strncpy(&buff[head], path, path_len);

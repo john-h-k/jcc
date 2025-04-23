@@ -10,7 +10,7 @@
 const char *aarch64_macos_mangle(struct arena_allocator *arena,
                                  const char *name) {
   char *dest =
-      arena_alloc(arena, strlen(name) + /* null terminator + '_' char */ 2);
+      aralloc(arena, strlen(name) + /* null terminator + '_' char */ 2);
 
   dest[0] = '_';
   strcpy(dest + 1, name);
@@ -281,7 +281,7 @@ static void emit_instr(const struct emit_state *state,
 struct emitted_unit aarch64_emit(const struct cg_unit *unit) {
   size_t num_entries = unit->num_entries;
   struct object_entry *entries =
-      arena_alloc(unit->arena, num_entries * sizeof(*entries));
+      aralloc(unit->arena, num_entries * sizeof(*entries));
 
   for (size_t i = 0; i < unit->num_entries; i++) {
     struct cg_entry *entry = &unit->entries[i];
@@ -372,7 +372,7 @@ struct emitted_unit aarch64_emit(const struct cg_unit *unit) {
       }
 
       size_t len = aarch64_emit_bytesize(emitter);
-      void *data = arena_alloc(unit->arena, len);
+      void *data = aralloc(unit->arena, len);
       aarch64_emit_copy_to(emitter, data);
 
       free_aarch64_emitter(&emitter);

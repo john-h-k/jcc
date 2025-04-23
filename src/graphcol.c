@@ -188,7 +188,7 @@ static void build_interf_graph(struct graphcol_state *state,
     vector_pop(trivial);
 
     bool *used_regs =
-        arena_alloc(state->irb->arena, sizeof(*used_regs) * total_reg);
+        aralloc(state->irb->arena, sizeof(*used_regs) * total_reg);
     memset(used_regs, false, total_reg);
 
     struct vector *adj = interf[i];
@@ -234,9 +234,9 @@ void graphcol_register_alloc(struct ir_func *irb, struct reg_info reg_info) {
 
   // adjacency list
   struct vector **gp_interf =
-      arena_alloc(irb->arena, sizeof(struct interval *) * data.num_intervals);
+      aralloc(irb->arena, sizeof(struct interval *) * data.num_intervals);
   struct vector **fp_interf =
-      arena_alloc(irb->arena, sizeof(struct interval *) * data.num_intervals);
+      aralloc(irb->arena, sizeof(struct interval *) * data.num_intervals);
 
   struct graphcol_state state = {
       .irb = irb,

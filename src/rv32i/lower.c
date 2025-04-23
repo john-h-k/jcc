@@ -85,7 +85,7 @@ struct ir_func_info rv32i_lower_func_ty(struct ir_func *func,
                                        ? &IR_VAR_TY_POINTER
                                        : func_ty.ret_ty);
 
-    ret_info = arena_alloc(func->arena, sizeof(*ret_info));
+    ret_info = aralloc(func->arena, sizeof(*ret_info));
 
     struct hfa_info hfa_info[2];
     size_t num_int;
@@ -312,7 +312,7 @@ struct ir_func_info rv32i_lower_func_ty(struct ir_func *func,
 
   struct ir_var_func_ty new_func_ty = {
       .flags = func_ty.flags,
-      .ret_ty = arena_alloc(func->arena, sizeof(ret_ty))};
+      .ret_ty = aralloc(func->arena, sizeof(ret_ty))};
 
   *new_func_ty.ret_ty = ret_ty;
 
@@ -361,7 +361,7 @@ static void lower_fp_cnst(struct ir_func *func, struct ir_op *op) {
     struct ir_glb *glb = ir_add_global(func->unit, IR_GLB_TY_DATA, &op->var_ty,
                                        IR_GLB_DEF_TY_DEFINED, NULL);
 
-    glb->var = arena_alloc(func->arena, sizeof(*glb->var));
+    glb->var = aralloc(func->arena, sizeof(*glb->var));
 
     *glb->var = (struct ir_var){.ty = IR_VAR_TY_CONST_DATA,
                                 .var_ty = op->var_ty,
@@ -522,7 +522,7 @@ static struct ir_lcl *lower_va_args(struct ir_func *func) {
   save_sz = save_sz / 4;
 
   struct ir_var_ty *el_ty =
-      arena_alloc_init(func->arena, sizeof(*el_ty), &IR_VAR_TY_I32);
+      aralloc_init(func->arena, sizeof(*el_ty), &IR_VAR_TY_I32);
   struct ir_var_ty save_ty = {.ty = IR_VAR_TY_TY_ARRAY,
                               .array = {
                                   // TODO: make constant ptr

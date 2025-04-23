@@ -85,7 +85,7 @@ static void lsp_write_diagnostics(struct lsp_ctx *ctx, struct lsp_doc *doc,
 static void lsp_parse_doc(struct lsp_ctx *ctx, struct lsp_doc *doc) {
   struct program program = {
       // FIXME: not sized
-      .text = arena_alloc_strndup(ctx->arena, doc->doc.text.str,
+      .text = aralloc_strndup(ctx->arena, doc->doc.text.str,
                                   doc->doc.text.len)};
 
   struct compiler_create_args comp_args = {
@@ -426,7 +426,7 @@ static void lsp_goto_def(struct lsp_ctx *ctx, lsp_integer id,
       JSON_OBJECT(ctx->writer, "result", {
         if (span.start.file) {
           char *uri =
-              arena_alloc_snprintf(ctx->arena, "file://%s", span.start.file);
+              aralloc_snprintf(ctx->arena, "file://%s", span.start.file);
           JSON_WRITE_FIELD(ctx->writer, "uri", MK_USTR(uri));
         } else {
           JSON_WRITE_FIELD(ctx->writer, "uri", params->text_doc.uri);

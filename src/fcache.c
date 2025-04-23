@@ -31,7 +31,7 @@ static bool eq_fs_key(const void *l, const void *r) {
 
 void fs_create(struct arena_allocator *arena, enum fs_flags flags,
                struct fs **fs) {
-  *fs = arena_alloc(arena, sizeof(**fs));
+  *fs = aralloc(arena, sizeof(**fs));
 
   **fs = (struct fs){.arena = arena,
                      .flags = flags,
@@ -128,8 +128,8 @@ static bool fs_read(struct fs *fs, struct fs_key key, struct fs_file *file,
     file->data = data;
 
     // clone becaue fs may outlive callers
-    key.key = arena_alloc_ustrdup(fs->arena, key.key);
-    file->name = arena_alloc_ustrdup(fs->arena, file->name);
+    key.key = aralloc_ustrdup(fs->arena, key.key);
+    file->name = aralloc_ustrdup(fs->arena, file->name);
 
     hashtbl_insert(fs->cache, &key, file);
   }
@@ -166,7 +166,7 @@ static void read_file_content(struct fs *fs, FILE *file, char **buf,
     char *head;
 
     do {
-      content = arena_realloc(fs->arena, content, len + READ_BUF_SZ);
+      content = arrealloc(fs->arena, content, len + READ_BUF_SZ);
       head = &content[len];
 
       len += read;
@@ -183,7 +183,7 @@ static void read_file_content(struct fs *fs, FILE *file, char **buf,
   fseek(file, 0, SEEK_END);
   fseek(file, 0, SEEK_SET);
 
-  char *content = arena_alloc(fs->arena, (unsigned long)fsize + 1);
+  char *content = aralloc(fs->arena, (unsigned long)fsize + 1);
   size_t read = fread(content, 1, (unsigned long)fsize, file);
 
   if (read != (size_t)fsize) {
