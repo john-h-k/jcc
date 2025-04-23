@@ -3,7 +3,8 @@
 #include "../util.h"
 
 void rv32i_write_object(const struct build_object_args *args) {
-  FILE *file = fopen(args->output, "wb");
+  FILE *file = args->output;
+
   if (file == NULL) {
     perror("fopen");
     exit(EXIT_FAILURE);

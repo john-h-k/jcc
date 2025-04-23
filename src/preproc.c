@@ -477,6 +477,7 @@ preproc_create(struct program program, struct fs *fs,
   p->fs = fs;
   p->args = args;
   p->diagnostics = diagnostics;
+  p->events = NULL;
 
   switch (mode) {
   case COMPILE_PREPROC_MODE_PREPROC:

@@ -3,7 +3,6 @@
 #include "../compiler.h"
 #include "../util.h"
 #include "../vector.h"
-
 #include "mach-o_types.h"
 
 #include <stdint.h>
@@ -240,8 +239,9 @@ static void write_relocations(FILE *file, const struct reloc_info *info) {
   write_relocation(file, info->data_relocs);
 }
 
-static void write_segment_command(FILE *file,
-                                  const struct build_object_args *args) {
+static void write_segment_command(const struct build_object_args *args) {
+  FILE *file = args->output;
+
   size_t str_align = 1;
   size_t func_align = 4;
   size_t const_align = 1;
@@ -304,8 +304,12 @@ static void write_segment_command(FILE *file,
   }
 
   total_func_size = ROUND_UP(total_func_size, str_align);
-  total_str_size = ROUND_UP(total_func_size + total_str_size, const_align) - total_func_size;
-  total_const_size = ROUND_UP(total_func_size + total_str_size + total_const_size, data_align) - (total_func_size + total_str_size);
+  total_str_size =
+      ROUND_UP(total_func_size + total_str_size, const_align) - total_func_size;
+  total_const_size =
+      ROUND_UP(total_func_size + total_str_size + total_const_size,
+               data_align) -
+      (total_func_size + total_str_size);
 
   size_t total_size =
       total_func_size + total_str_size + total_const_size + total_data_size;
@@ -620,14 +624,6 @@ static void write_segment_command(FILE *file,
 }
 
 void write_macho(const struct build_object_args *args) {
-  FILE *file = fopen(args->output, "wb");
-  if (file == NULL) {
-    perror("fopen");
-    exit(EXIT_FAILURE);
-  }
-
-  write_mach_header(file, args->compile_args);
-  write_segment_command(file, args);
-
-  fclose(file);
+  write_mach_header(args->output, args->compile_args);
+  write_segment_command(args);
 }

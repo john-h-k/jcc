@@ -198,6 +198,8 @@ ustr_t arena_alloc_ustrdup(struct arena_allocator *allocator, ustr_t str) {
 }
 
 char *arena_alloc_ustrconv(struct arena_allocator *allocator, ustr_t str) {
+  DEBUG_ASSERT(ustr_nullsafe(str), "ustr was not nullsafe!");
+
   if (!str.str) {
     str.str = "";
   }

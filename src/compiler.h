@@ -118,6 +118,7 @@ enum compile_opts_level {
 enum compile_file_ty {
   COMPILE_FILE_TY_NONE,
   COMPILE_FILE_TY_PATH,
+  COMPILE_FILE_TY_FILE,
   COMPILE_FILE_TY_STDOUT,
 };
 
@@ -127,16 +128,15 @@ enum compile_file_ty {
 struct compile_file {
   enum compile_file_ty ty;
 
-  union {
-    const char *path;
-  };
+  const char *path;
+  FILE *file;
 };
 
 #define COMPILE_FILE_NONE ((struct compile_file){.ty = COMPILE_FILE_TY_NONE})
 #define COMPILE_FILE_STDOUT                                                    \
   ((struct compile_file){.ty = COMPILE_FILE_TY_STDOUT})
 
-FILE *compiler_open_file(struct compile_file file);
+void compiler_open_file(struct compile_file file, FILE **f, const char **path);
 
 struct compile_args {
   enum compile_c_standard c_standard;

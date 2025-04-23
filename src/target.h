@@ -98,7 +98,7 @@ struct object_entry {
 struct build_object_args {
   const struct compile_args *compile_args;
 
-  const char *output;
+  FILE *output;
 
   const struct object_entry *entries;
   size_t num_entries;

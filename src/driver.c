@@ -576,9 +576,6 @@ static int jcc_driver_compiler(struct arena_allocator *arena,
                                const char **sources) {
   int exc = 1;
 
-  // FIXME: proper temp management
-  struct vector *tmps = vector_create_in_arena(sizeof(const char *), arena);
-
   const char **objects = nonnull_malloc(sizeof(*objects) * num_sources);
 
   info("beginning compilation stage...");
@@ -658,6 +655,7 @@ static int jcc_driver_compiler(struct arena_allocator *arena,
         file = (struct compile_file){
             .ty = COMPILE_FILE_TY_PATH,
             .path = path_replace_ext(arena, source_path, "s")};
+
         info("compiling source file '%s' into assembly file '%s'", source_path,
              file.path);
       } else {
@@ -665,27 +663,17 @@ static int jcc_driver_compiler(struct arena_allocator *arena,
       }
     } else if (target_needs_linking(&compile_args, target) ||
                compile_args.output.ty == COMPILE_FILE_TY_NONE) {
+      const char *path;
+      FILE *tmp = fs_tmpfile(fs, &path);
 
-      // FIXME: not portable!
-      char *name = arena_alloc_strdup(arena, "jcc-obj-XXXXXXXX");
-      vector_push_back(tmps, &name);
-      int fd = mkstemp(name);
-      invariant_assert(fd >= 0, "mkstemp failed");
-
-      FILE *f = fdopen(fd, "r");
-      invariant_assert(f, "fdopen failed");
-      fclose(f);
-
-      file = (struct compile_file){.ty = COMPILE_FILE_TY_PATH, .path = name};
-      info("compiling source file '%s' into object file '%s'", source_path,
-           file.path);
+      file = (struct compile_file){.ty = COMPILE_FILE_TY_FILE, .file = tmp, .path = path};
     } else {
       file = compile_args.output;
       info("compiling source file '%s' into object file '%s'", source_path,
            file.path);
     }
 
-    if (file.ty == COMPILE_FILE_TY_PATH) {
+    if (file.ty == COMPILE_FILE_TY_PATH || file.ty == COMPILE_FILE_TY_FILE) {
       objects[i] = file.path;
     }
 
@@ -738,6 +726,7 @@ static int jcc_driver_compiler(struct arena_allocator *arena,
       output = "a.out";
       break;
     case COMPILE_FILE_TY_PATH:
+    case COMPILE_FILE_TY_FILE:
       output = compile_args.output.path;
       break;
     case COMPILE_FILE_TY_STDOUT:
@@ -773,11 +762,6 @@ static int jcc_driver_compiler(struct arena_allocator *arena,
   exc = 0;
 
 exit:
-  while (vector_length(tmps)) {
-    char **p = vector_pop(tmps);
-    remove(*p);
-  }
-
   if (args.profile) {
     profiler_print_text(stderr);
   }

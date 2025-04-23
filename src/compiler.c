@@ -128,14 +128,22 @@ static void debug_print_stage(struct compiler *compiler, struct ir_unit *ir,
   }
 }
 
-FILE *compiler_open_file(struct compile_file file) {
+void compiler_open_file(struct compile_file file, FILE **f, const char **path) {
   switch (file.ty) {
   case COMPILE_FILE_TY_NONE:
     BUG("can't open file ty NONE");
   case COMPILE_FILE_TY_PATH:
-    return fopen(file.path, "w");
+    *f = fopen(file.path, "w");
+    *path = file.path;
+    break;
+  case COMPILE_FILE_TY_FILE:
+    *f = file.file;
+    *path = file.path;
+    break;
   case COMPILE_FILE_TY_STDOUT:
-    return stdout;
+    *f = stdout;
+    *path = NULL;
+    break;
   }
 }
 
@@ -369,7 +377,9 @@ static enum compile_result compile_stage_preproc(struct compiler *compiler,
   // this is only run in preproc only mode (`-E/--preprocess`), else it is
   // part of parsing
 
-  FILE *file = compiler_open_file(compiler->output);
+  FILE *file;
+  const char *path;
+  compiler_open_file(compiler->output, &file, &path);
   if (!file) {
     return COMPILE_RESULT_BAD_FILE;
   }
@@ -387,7 +397,9 @@ static enum compile_result compile_stage_lex(struct compiler *compiler,
                                              enum compile_preproc_mode mode) {
   // variadic dummy because takes no args but macro needs args
 
-  FILE *file = compiler_open_file(compiler->output);
+  FILE *file;
+  const char *path;
+  compiler_open_file(compiler->output, &file, &path);
   if (!file) {
     return COMPILE_RESULT_BAD_FILE;
   }
@@ -703,7 +715,9 @@ compile_stage_codegen(struct compiler *compiler, struct ir_unit *ir,
 
   if (compiler->args.build_asm_file) {
     if (target->emit_asm) {
-      FILE *file = compiler_open_file(compiler->output);
+      FILE *file;
+      const char *path;
+      compiler_open_file(compiler->output, &file, &path);
 
       if (!file) {
         return COMPILE_RESULT_BAD_FILE;
@@ -716,7 +730,10 @@ compile_stage_codegen(struct compiler *compiler, struct ir_unit *ir,
       return COMPILE_RESULT_SUCCESS;
     } else if (target->debug_print_codegen) {
       warn("using debug codegen output; not valid assembler input");
-      FILE *file = compiler_open_file(compiler->output);
+
+      FILE *file;
+      const char *path;
+      compiler_open_file(compiler->output, &file, &path);
 
       if (!file) {
         return COMPILE_RESULT_BAD_FILE;
@@ -748,21 +765,32 @@ static enum compile_result
 compile_stage_build_object(struct compiler *compiler,
                            struct emitted_unit *emitted_unit) {
 
-  invariant_assert(compiler->output.ty == COMPILE_FILE_TY_PATH,
+  invariant_assert(compiler->output.ty == COMPILE_FILE_TY_PATH || compiler->output.ty == COMPILE_FILE_TY_FILE,
                    "can't build object to stdout/stderr");
 
+  FILE *file;
+  const char *path;
+  compiler_open_file(compiler->output, &file, &path);
+
   struct build_object_args args = {.compile_args = &compiler->args,
-                                   .output = compiler->output.path,
+                                   .output = file,
                                    .entries = emitted_unit->entries,
                                    .num_entries = emitted_unit->num_entries};
 
   compiler->target->build_object(&args);
 
+  fflush(file);
+  fclose(file);
+
   if (log_enabled()) {
     if (!compiler->target->debug_disasm) {
       warn("DISASM not supported for current target");
     } else {
-      compiler->target->debug_disasm(compiler->args.target, args.output, NULL);
+      if (path) {
+        compiler->target->debug_disasm(compiler->args.target, path, NULL);
+      } else {
+        err("output type did not have path associated, cannot disasm");
+      }
     }
   }
 

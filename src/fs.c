@@ -4,6 +4,10 @@
 #include "hashtbl.h"
 #include "profile.h"
 #include "util.h"
+#include "thrd.h"
+#include "vector.h"
+#include <stdlib.h>
+#include <string.h>
 
 struct fs_key {
   enum f_ty { F_TY_PATH, F_TY_PROC, F_TY_STDIN } ty;
@@ -30,8 +34,60 @@ static bool eq_fs_key(const void *l, const void *r) {
   return lc->ty == rc->ty && ustr_eq(lc->key, rc->key);
 }
 
+#include <unistd.h>
+#include <errno.h>
+
+static struct {
+  struct vector *tmp_names;
+  ustr_t tmp_dir;
+} TMP_INFO;
+
+static mtx_t TMP_INFO_LOCK;
+static once_flag TMP_INFO_FLAG = ONCE_FLAG_INIT;
+
+static void fs_tmp_del(void) {
+  MTX_LOCK(&TMP_INFO_LOCK, {
+    while (vector_length(TMP_INFO.tmp_names)) {
+      char *name = *(char **)vector_pop(TMP_INFO.tmp_names);
+
+      unlink(name);
+      free(name);
+    }
+  });
+}
+
+static void fs_tmp_init(void) {
+  mtx_init(&TMP_INFO_LOCK, mtx_plain);
+
+  MTX_LOCK(&TMP_INFO_LOCK, {
+    const char *tmp_dir = getenv("TMPDIR");
+    if (!tmp_dir || !tmp_dir[0]) {
+      tmp_dir = "/tmp/";
+    }
+
+    size_t len = strlen(tmp_dir);
+    if (tmp_dir[len - 1] != '/') {
+      char *new = malloc((len + 2) * sizeof(*tmp_dir));
+      strcpy(new, tmp_dir);
+
+      new[len] = '/';
+      new[len + 1] = '\0';
+
+      tmp_dir = new;
+    }
+
+    TMP_INFO.tmp_names = vector_create(sizeof(char *));
+    TMP_INFO.tmp_dir = MK_USTR(tmp_dir);
+
+    atexit(fs_tmp_del);
+    at_quick_exit(fs_tmp_del);
+  });
+}
+
 void fs_create(struct arena_allocator *arena, enum fs_flags flags,
                    struct fs **fs) {
+  call_once(&TMP_INFO_FLAG, fs_tmp_init);
+
   *fs = arena_alloc(arena, sizeof(**fs));
 
   **fs = (struct fs){
@@ -40,6 +96,41 @@ void fs_create(struct arena_allocator *arena, enum fs_flags flags,
       .cache = hashtbl_create_in_arena(arena, sizeof(struct fs_key),
                                        sizeof(struct fs_file),
                                        hash_fs_key, eq_fs_key)};
+}
+
+FILE *fs_tmpfile(UNUSED struct fs *fs, const char **path) {
+  ustr_t dir;
+  MTX_LOCK(&TMP_INFO_LOCK, {
+    dir = TMP_INFO.tmp_dir;
+  });
+
+  const char *suffix = "jccobjXXXXXXXX.o";
+  char *name = nonnull_malloc(dir.len + strlen(suffix) + 1);
+
+  memcpy(name, dir.str, dir.len);
+  name[dir.len] = '\0';
+
+  strcat(name, suffix);
+
+  int fd = mkstemps(name, 2);
+  if (fd < 0) {
+    BUG("mkstemps call failed (%s)!", strerror(errno));
+  }
+
+  FILE *file = fdopen(fd, "wb");
+  if (!file) {
+    BUG("fdopen call failed (%s)!", strerror(errno));
+  }
+
+  MTX_LOCK(&TMP_INFO_LOCK, {
+    vector_push_back(TMP_INFO.tmp_names, &name);
+  });
+
+  if (path) {
+    *path = name;
+  }
+
+  return file;
 }
 
 enum fc_mode {

@@ -385,7 +385,8 @@ static void safe_fseek_set(FILE *file, long offset) {
 }
 
 static void write_elf_object(const struct build_object_args *args) {
-  FILE *file = fopen(args->output, "wb");
+  FILE *file = args->output;
+
   invariant_assert(file, "could not open object output file");
 
   size_t *entry_offsets =
@@ -809,10 +810,6 @@ static void write_elf_object(const struct build_object_args *args) {
   }
   default:
     unreachable();
-  }
-
-  if (fclose(file)) {
-    warn("closing %s failed!", args->output);
   }
 
   vector_free(&symbols);
