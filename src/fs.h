@@ -23,10 +23,10 @@ struct fs_file {
   size_t len;
 };
 
+FILE *fs_tmpfile(const char **path);
+
 void fs_create(struct arena_allocator *arena, enum fs_flags flags,
                    struct fs **fs);
-
-FILE *fs_tmpfile(const char **path);
 
 bool fs_read_stdin(struct fs *fs, struct fs_file *file);
 
