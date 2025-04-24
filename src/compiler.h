@@ -16,6 +16,9 @@ enum FLAG_ENUM codegen_flags {
 
   // use mnemonics in assembly output
   CODEGEN_FLAG_MNEMONICS = 1 << 0,
+
+  // ABI is already lowered so do not run that pass
+  CODEGEN_FLAG_ABI_LOWERED = 1 << 1,
 };
 
 enum compile_arch {
@@ -180,6 +183,24 @@ struct compile_args {
   struct compile_file output;
 };
 
+struct compile_ir_args {
+  enum compile_target target;
+  enum compile_log_flags log_flags;
+  enum compile_opts_level opts_level;
+  enum codegen_flags codegen_flags;
+
+  struct hashtbl *log_symbols;
+
+  bool build_asm_file;
+  bool build_object_file;
+
+  bool verbose;
+
+  bool use_graphcol_regalloc;
+
+  struct compile_file output;
+};
+
 enum compiler_create_result {
   COMPILER_CREATE_RESULT_SUCCESS,
   COMPILER_CREATE_RESULT_FAILURE
@@ -217,7 +238,22 @@ enum compiler_create_result
 compiler_create(const struct compiler_create_args *args,
                 struct compiler **compiler);
 
+struct compiler_ir_create_args {
+  struct fs *fs;
+  const struct target *target;
+  struct compile_file output;
+  struct compile_ir_args args;
+};
+
+enum compiler_create_result
+compiler_create_for_ir(const struct compiler_ir_create_args *args,
+                struct compiler **compiler);
+
+
 enum compile_result compile(struct compiler *compiler);
+
+struct ir_unit;
+enum compile_result compile_ir(struct compiler *compiler, struct ir_unit *ir);
 
 void free_compiler(struct compiler **compiler);
 

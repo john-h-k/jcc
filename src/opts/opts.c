@@ -21,8 +21,8 @@ static void opts_run_pass_func(struct ir_func *func,
     if (opt) {
       debug("%s: optimised %%%zu", pass->name, op->id);
       if (debug_enabled()) {
-        debug_print_op(stderr, func, &prev);
-        debug_print_op(stderr, func, op);
+        debug_print_op(stderr, &prev);
+        debug_print_op(stderr, op);
       }
       debug_nl();
     }

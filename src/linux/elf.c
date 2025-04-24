@@ -496,7 +496,7 @@ static void write_elf_object(const struct build_object_args *args) {
   size_t shstr_off;
   size_t shoff;
 
-  switch (args->compile_args->target) {
+  switch (args->target) {
   case COMPILE_TARGET_LINUX_RV32I: {
     MK_OFFSETS(32);
     write_header_32(file, EM_RISCV, EF_RISCV_FLOAT_ABI_DOUBLE, shoff);
@@ -561,7 +561,7 @@ static void write_elf_object(const struct build_object_args *args) {
   struct vector *symbols;
 
   // first null entry
-  switch (args->compile_args->target) {
+  switch (args->target) {
   case COMPILE_TARGET_LINUX_RV32I: {
     symbols = vector_create(sizeof(Elf32_Sym));
     Elf32_Sym sym;
@@ -663,7 +663,7 @@ static void write_elf_object(const struct build_object_args *args) {
         break;
       }
 
-      switch (args->compile_args->target) {
+      switch (args->target) {
       case COMPILE_TARGET_LINUX_RV32I: {
         Elf32_Sym sym = {.st_name = st_name,
                          .st_shndx = st_shndx,
@@ -694,13 +694,13 @@ static void write_elf_object(const struct build_object_args *args) {
   /* relocations */
   safe_fseek_set(file, rela_text_off);
   write_relocations_elf(file, args, sym_id_to_idx, info.text_relocs,
-                        args->compile_args->target);
+                        args->target);
   safe_fseek_set(file, rela_const_off);
   write_relocations_elf(file, args, sym_id_to_idx, info.const_data_relocs,
-                        args->compile_args->target);
+                        args->target);
   safe_fseek_set(file, rela_data_off);
   write_relocations_elf(file, args, sym_id_to_idx, info.data_relocs,
-                        args->compile_args->target);
+                        args->target);
 
   /* symbol table */
   safe_fseek_set(file, symtab_off);
@@ -796,7 +796,7 @@ static void write_elf_object(const struct build_object_args *args) {
   safe_fseek_set(file, shoff);                                                 \
   fwrite(shdr, sizeof(shdr), 1, file);
 
-  switch (args->compile_args->target) {
+  switch (args->target) {
   case COMPILE_TARGET_LINUX_RV32I: {
     Elf32_Shdr shdr[10];
     memset(shdr, 0, sizeof(shdr));

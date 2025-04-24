@@ -161,7 +161,7 @@ static bool ir_var_ty_needs_cast_op(struct ir_func_builder *irb,
     return false;
   }
 
-  if (ir_var_ty_eq(irb->unit, l, r)) {
+  if (ir_var_ty_eq(l, r)) {
     return false;
   }
 
@@ -1466,7 +1466,7 @@ static struct ir_op *build_ir_for_ternary(struct ir_func_builder *irb,
   struct ir_var_ty load_ty;
   if ((false_op && ir_var_ty_is_aggregate(&false_op->var_ty) && true_op &&
        ir_var_ty_is_aggregate(&true_op->var_ty))) {
-    DEBUG_ASSERT(ir_var_ty_eq(irb->unit, &false_op->var_ty, &true_op->var_ty),
+    DEBUG_ASSERT(ir_var_ty_eq(&false_op->var_ty, &true_op->var_ty),
                  "expected branches to have same ty");
 
     gen_load = true;
@@ -3844,7 +3844,7 @@ static struct ir_func *build_ir_for_function(struct ir_unit *unit,
       .var_refs = var_refs,
       .global_var_refs = global_var_refs};
 
-  // needs at letd one initial basic block
+  // needs at least one initial basic block
   ir_alloc_basicblock(builder->func);
   struct ir_basicblock *basicblock = builder->func->first;
 

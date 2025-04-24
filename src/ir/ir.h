@@ -231,7 +231,7 @@ enum ir_var_ty_ty {
 
 enum FLAG_ENUM ir_var_func_ty_flags {
   IR_VAR_FUNC_TY_FLAG_NONE = 0,
-  IR_VAR_FUNC_TY_FLAG_VARIADIC = 1
+  IR_VAR_FUNC_TY_FLAG_VARIADIC = 1 << 0
 };
 
 struct ir_var_func_ty {
@@ -1184,6 +1184,9 @@ void ir_make_basicblock_split(struct ir_func *irb,
                               struct ir_basicblock *true_target,
                               struct ir_basicblock *false_target);
 
+void ir_make_basicblock_ret(struct ir_func *irb,
+                              struct ir_basicblock *basicblock);
+
 void ir_make_basicblock_merge(struct ir_func *irb,
                               struct ir_basicblock *basicblock,
                               struct ir_basicblock *target);
@@ -1299,6 +1302,9 @@ struct ir_var_ty_flattened {
   size_t num_fields;
 };
 
+// if called without a unit, pointer sizes cannot be resolved
+#define IR_TY_INFO_SZ_PTR ((size_t)-1)
+
 struct ir_var_ty_flattened ir_var_ty_info_flat(struct ir_unit *iru,
                                                const struct ir_var_ty *ty);
 
@@ -1310,13 +1316,16 @@ struct ir_var_ty_info {
   size_t *offsets;
 };
 
-struct ir_var_ty_info ir_var_ty_info(struct ir_unit *iru,
+struct ir_var_ty_info ir_var_ty_info(const struct ir_unit *iru,
                                      const struct ir_var_ty *ty);
 
-enum ir_var_primitive_ty ir_var_ty_pointer_primitive_ty(struct ir_unit *iru);
+struct ir_var_ty_info ir_var_ty_info_op(
+                                     const struct ir_var_ty *ty);
 
-struct ir_var_ty ir_var_ty_for_pointer_size(struct ir_unit *iru);
-struct ir_var_ty ir_var_ty_make_array(struct ir_unit *iru,
+enum ir_var_primitive_ty ir_var_ty_pointer_primitive_ty(const struct ir_unit *iru);
+
+struct ir_var_ty ir_var_ty_for_pointer_size(const struct ir_unit *iru);
+struct ir_var_ty ir_var_ty_make_array(const struct ir_unit *iru,
                                       const struct ir_var_ty *underlying,
                                       size_t num_elements);
 
@@ -1326,7 +1335,7 @@ bool ir_var_ty_is_integral(const struct ir_var_ty *var_ty);
 bool ir_var_ty_is_fp(const struct ir_var_ty *var_ty);
 bool ir_var_ty_is_aggregate(const struct ir_var_ty *var_ty);
 
-bool ir_var_ty_eq(struct ir_unit *iru, const struct ir_var_ty *l,
+bool ir_var_ty_eq(const struct ir_var_ty *l,
                   const struct ir_var_ty *r);
 
 struct ir_op *ir_spill_op(struct ir_func *irb, struct ir_op *op);

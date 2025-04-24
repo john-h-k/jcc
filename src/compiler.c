@@ -106,6 +106,35 @@ compiler_create(const struct compiler_create_args *args,
   return COMPILER_CREATE_RESULT_SUCCESS;
 }
 
+enum compiler_create_result
+compiler_create_for_ir(const struct compiler_ir_create_args *args,
+                       struct compiler **compiler) {
+  *compiler = nonnull_malloc(sizeof(**compiler));
+
+  (*compiler)->fs = args->fs;
+  // HACK:
+  (*compiler)->args = (struct compile_args){
+      .target = args->args.target,
+      .log_flags = args->args.log_flags,
+      .opts_level = args->args.opts_level,
+      .codegen_flags = args->args.codegen_flags,
+      .log_symbols = args->args.log_symbols,
+      .build_asm_file = args->args.build_asm_file,
+      .build_object_file = args->args.build_object_file,
+      .verbose = args->args.verbose,
+      .use_graphcol_regalloc = args->args.use_graphcol_regalloc,
+
+      // FIXME duplicated field? (in _args and _create_args)
+      .output = args->args.output,
+  };
+  (*compiler)->target = args->target;
+  (*compiler)->output = args->output;
+
+  arena_allocator_create("compiler", &(*compiler)->arena);
+
+  return COMPILER_CREATE_RESULT_SUCCESS;
+}
+
 static void debug_print_stage(struct compiler *compiler, struct ir_unit *ir,
                               const char *name) {
   slog("\n\n----------  %s  ----------\n", name);
@@ -776,7 +805,7 @@ compile_stage_build_object(struct compiler *compiler,
   const char *path;
   compiler_open_file(compiler->output, &file, &path);
 
-  struct build_object_args args = {.compile_args = &compiler->args,
+  struct build_object_args args = {.target = compiler->args.target,
                                    .output = file,
                                    .entries = emitted_unit->entries,
                                    .num_entries = emitted_unit->num_entries};
@@ -861,12 +890,20 @@ enum compile_result compile(struct compiler *compiler) {
 
   COMPILER_STAGE(IR, ir, target, &typechk_result, &ir);
 
+  return compile_ir(compiler, ir);
+}
+
+enum compile_result compile_ir(struct compiler *compiler, struct ir_unit *ir) {
+  debug_print_stage(compiler, ir, "compile_ir");
+
   COMPILER_STAGE(INLINE, inline, ir);
 
-  // lower ABI happens before opts, and handles transforming calls into their
-  // actual types (e.g large structs to pointers) we do this early because it
-  // helps with opts
-  COMPILER_STAGE(LOWER_ABI, lower_abi, ir);
+  if (!(compiler->args.codegen_flags & CODEGEN_FLAG_ABI_LOWERED)) {
+    // lower ABI happens before opts, and handles transforming calls into their
+    // actual types (e.g large structs to pointers) we do this early because it
+    // helps with opts
+    COMPILER_STAGE(LOWER_ABI, lower_abi, ir);
+  }
 
   if (compiler->args.opts_level != COMPILE_OPTS_LEVEL_0) {
     COMPILER_STAGE(OPTS, opts, ir);

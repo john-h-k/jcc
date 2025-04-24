@@ -17,7 +17,7 @@ typedef void(prettyprint_begin_visit_stmt)(struct ir_func *irb,
 typedef void(prettyprint_end_visit_stmt)(struct ir_func *irb,
                                          struct ir_stmt *stmt, void *metadata);
 
-typedef void(prettyprint_visit_op)(struct ir_func *irb, struct ir_op *op,
+typedef void(prettyprint_visit_op)(struct ir_op *op,
                                    void *metadata);
 
 struct prettyprint_callbacks {
@@ -55,7 +55,7 @@ typedef void(debug_print_op_callback)(FILE *file, struct ir_op *op,
 
 void debug_print_ir_reg(FILE *file, struct ir_reg reg);
 
-void debug_print_var_ty_string(FILE *file, struct ir_unit *iru,
+void debug_print_var_ty_string(FILE *file,
                                const struct ir_var_ty *var_ty);
 
 void debug_print_ir_graph(FILE *file, struct ir_unit *iru);
@@ -68,7 +68,7 @@ void debug_print_lcl(FILE *file, struct ir_lcl *lcl);
 void debug_print_glb(FILE *file, struct ir_glb *glb,
                      debug_print_op_callback *cb, void *cb_metadata);
 
-void debug_print_op(FILE *file, struct ir_func *irb, struct ir_op *op);
+void debug_print_op(FILE *file, struct ir_op *op);
 
 void debug_print_stmt(FILE *file, struct ir_func *irb, struct ir_stmt *stmt,
                       debug_print_op_callback *cb, void *cb_metadata);

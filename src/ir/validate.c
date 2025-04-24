@@ -101,7 +101,7 @@ static bool validate_var_ty_is_pointer(struct ir_validate_state *state,
   // for e.g array access indices
 
   struct ir_var_ty pointer_ty = ir_var_ty_for_pointer_size(state->unit);
-  if (ir_var_ty_eq(state->unit, var_ty, &pointer_ty)) {
+  if (ir_var_ty_eq(var_ty, &pointer_ty)) {
     return true;
   }
 
@@ -139,7 +139,7 @@ static void walk_op_ty_callback(struct ir_op **op, enum ir_op_use_ty use_ty,
       break;
     }
     VALIDATION_CHECK(
-        ir_var_ty_eq(state->unit, &(*op)->var_ty,
+        ir_var_ty_eq(&(*op)->var_ty,
                      &walk_state->consumer->var_ty),
         walk_state->consumer,
         "operand %zu with use type IR_OP_USE_TY_READ must have same type",
@@ -333,7 +333,7 @@ static void ir_validate_op(struct ir_validate_state *state,
       struct ir_phi_entry *entry = &op->phi.values[i];
 
       VALIDATION_CHECKZ(
-          ir_var_ty_eq(state->unit, &op->var_ty, &entry->value->var_ty), op,
+          ir_var_ty_eq(&op->var_ty, &entry->value->var_ty), op,
           "op entry had different type to op!");
 
       VALIDATION_CHECK(
@@ -435,7 +435,7 @@ static void ir_validate_op(struct ir_validate_state *state,
                         "store ty lcl must have lcl");
 
       VALIDATION_CHECK(
-          ir_var_ty_eq(state->unit, &op->store_bitfield.value->var_ty,
+          ir_var_ty_eq(&op->store_bitfield.value->var_ty,
                        &op->store_bitfield.lcl->var_ty),
           op, "lcl %zu must have same type", op->store_bitfield.lcl->id);
       break;
@@ -443,7 +443,7 @@ static void ir_validate_op(struct ir_validate_state *state,
       VALIDATION_CHECKZ(op->store_bitfield.glb, op,
                         "store ty glb must have glb");
       VALIDATION_CHECK(
-          ir_var_ty_eq(state->unit, &op->store_bitfield.value->var_ty,
+          ir_var_ty_eq(&op->store_bitfield.value->var_ty,
                        &op->store_bitfield.glb->var_ty),
           op, "glb %zu must have same type", op->store_bitfield.glb->id);
       break;
@@ -533,7 +533,7 @@ static void ir_validate_op(struct ir_validate_state *state,
     case IR_OP_LOAD_TY_LCL:
       VALIDATION_CHECKZ(op->load_bitfield.lcl, op, "load ty lcl must have lcl");
 
-      VALIDATION_CHECK(ir_var_ty_eq(state->unit, &op->var_ty,
+      VALIDATION_CHECK(ir_var_ty_eq(&op->var_ty,
                                     &op->load_bitfield.lcl->var_ty),
                        op, "lcl %zu must have same type",
                        op->load_bitfield.lcl->id);
@@ -541,7 +541,7 @@ static void ir_validate_op(struct ir_validate_state *state,
     case IR_OP_LOAD_TY_GLB:
       VALIDATION_CHECKZ(op->load_bitfield.glb, op, "load ty glb must have glb");
 
-      VALIDATION_CHECK(ir_var_ty_eq(state->unit, &op->var_ty,
+      VALIDATION_CHECK(ir_var_ty_eq(&op->var_ty,
                                     &op->load_bitfield.glb->var_ty),
                        op, "glb %zu must have same type",
                        op->load_bitfield.glb->id);
@@ -791,7 +791,7 @@ static void ir_validate_basicblock(struct ir_validate_state *state,
     stmt = stmt->succ;
   }
 
-  struct ir_op *last = basicblock->last->last;
+  struct ir_op *last = basicblock->last ? basicblock->last->last : NULL;
 
   switch (basicblock->ty) {
   case IR_BASICBLOCK_TY_RET:
@@ -845,7 +845,6 @@ static void ir_validate_func(struct ir_validate_state *state,
   }
 
   struct ir_func *func = glb->func;
-  struct ir_basicblock *basicblock = func->first;
 
   ir_rebuild_func_ids(func);
 
@@ -862,6 +861,7 @@ static void ir_validate_func(struct ir_validate_state *state,
   VALIDATION_CHECK(func->lcl_count == lcl_count, func,
                    "lcl_count=%zu but found %zu", func->lcl_count, lcl_count);
 
+  struct ir_basicblock *basicblock = func->first;
   size_t bb_count = 0;
   while (basicblock) {
     ir_validate_basicblock(state, func, basicblock);

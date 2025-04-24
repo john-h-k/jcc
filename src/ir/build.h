@@ -1,7 +1,6 @@
 #ifndef IR_BUILD_H
 #define IR_BUILD_H
 
-#include "../parse.h"
 #include "../typechk.h"
 #include "ir.h"
 

@@ -115,18 +115,18 @@ static const char *binary_op_string(enum ir_op_binary_op_ty ty) {
   }
 }
 
-static void debug_print_func_ty_string(FILE *file, struct ir_unit *iru,
+static void debug_print_func_ty_string(FILE *file,
                                        const struct ir_var_func_ty *func_ty) {
   fprintf(file, "(");
   for (size_t i = 0; i < func_ty->num_params; i++) {
-    debug_print_var_ty_string(file, iru, &func_ty->params[i]);
+    debug_print_var_ty_string(file, &func_ty->params[i]);
     if (i + 1 < func_ty->num_params) {
       fprintf(file, ", ");
     }
   }
   fprintf(file, ")");
   fprintf(file, " -> ");
-  debug_print_var_ty_string(file, iru, func_ty->ret_ty);
+  debug_print_var_ty_string(file, func_ty->ret_ty);
 }
 
 static void debug_print_param_info(FILE *file, UNUSED struct ir_unit *iru,
@@ -164,7 +164,7 @@ static void debug_print_param_info(FILE *file, UNUSED struct ir_unit *iru,
 void debug_print_func_info(FILE *file, struct ir_unit *iru,
                            const struct ir_func_info *func_info) {
   fprintf(file, "FUNC_INFO: ");
-  debug_print_func_ty_string(file, iru, &func_info->func_ty);
+  debug_print_func_ty_string(file, &func_info->func_ty);
   fprintf(file, "\n");
 
   if (func_info->call_info.num_params) {
@@ -184,7 +184,7 @@ void debug_print_func_info(FILE *file, struct ir_unit *iru,
   }
 }
 
-void debug_print_var_ty_string(FILE *file, struct ir_unit *iru,
+void debug_print_var_ty_string(FILE *file,
                                const struct ir_var_ty *var_ty) {
   switch (var_ty->ty) {
   case IR_VAR_TY_TY_NONE: {
@@ -201,21 +201,21 @@ void debug_print_var_ty_string(FILE *file, struct ir_unit *iru,
   }
   case IR_VAR_TY_TY_ARRAY: {
     fprintf(file, "ARRAY [ ");
-    debug_print_var_ty_string(file, iru, var_ty->array.underlying);
+    debug_print_var_ty_string(file, var_ty->array.underlying);
     fprintf(file, ", ");
     fprintf(file, "%zu", var_ty->array.num_elements);
     fprintf(file, " ]");
     return;
   }
   case IR_VAR_TY_TY_FUNC: {
-    debug_print_func_ty_string(file, iru, &var_ty->func);
+    debug_print_func_ty_string(file, &var_ty->func);
     return;
   }
   case IR_VAR_TY_TY_STRUCT: {
-    struct ir_var_ty_info info = ir_var_ty_info(iru, var_ty);
+    struct ir_var_ty_info info = ir_var_ty_info(NULL, var_ty);
     fprintf(file, "STRUCT (sz=%zu, align=%zu) [ ", info.size, info.alignment);
     for (size_t i = 0; i < var_ty->aggregate.num_fields; i++) {
-      debug_print_var_ty_string(file, iru, &var_ty->aggregate.fields[i]);
+      debug_print_var_ty_string(file, &var_ty->aggregate.fields[i]);
 
       if (i + 1 < var_ty->aggregate.num_fields) {
         fprintf(file, ", ");
@@ -225,10 +225,10 @@ void debug_print_var_ty_string(FILE *file, struct ir_unit *iru,
     break;
   }
   case IR_VAR_TY_TY_UNION: {
-    struct ir_var_ty_info info = ir_var_ty_info(iru, var_ty);
+    struct ir_var_ty_info info = ir_var_ty_info(NULL, var_ty);
     fprintf(file, "UNION (sz=%zu, align=%zu) [ ", info.size, info.alignment);
     for (size_t i = 0; i < var_ty->aggregate.num_fields; i++) {
-      debug_print_var_ty_string(file, iru, &var_ty->aggregate.fields[i]);
+      debug_print_var_ty_string(file, &var_ty->aggregate.fields[i]);
 
       if (i + 1 < var_ty->aggregate.num_fields) {
         fprintf(file, ", ");
@@ -316,9 +316,9 @@ void debug_print_ir_reg(FILE *file, struct ir_reg reg) {
   }
 }
 
-static void debug_lhs(FILE *file, struct ir_func *irb, struct ir_op *ir) {
+static void debug_lhs(FILE *file, struct ir_op *ir) {
   fprintf(file, "%%%zu (", ir->id);
-  debug_print_var_ty_string(file, irb ? irb->unit : NULL, &ir->var_ty);
+  debug_print_var_ty_string(file, &ir->var_ty);
   fprintf(file, ") = ");
 }
 
@@ -332,32 +332,32 @@ enum print_op_ctx {
   PRINT_OP_CTX_USE,
 };
 
-static void debug_print_op_with_ctx(FILE *file, struct ir_func *irb,
+static void debug_print_op_with_ctx(FILE *file,
                                     struct ir_op *op, enum print_op_ctx ctx);
 
-static void debug_print_op_use(FILE *file, struct ir_func *irb,
+static void debug_print_op_use(FILE *file,
                                struct ir_op *ir) {
   // DEBUG_ASSERT(ir->stmt,
   //              "op used by other op but had no stmt (likely detached)");
 
   if (ir->id == DETACHED_OP) {
     fprintf(file, "DETACHED ");
-    debug_print_op_with_ctx(file, irb, ir, PRINT_OP_CTX_USE);
+    debug_print_op_with_ctx(file, ir, PRINT_OP_CTX_USE);
   } else if (ir->flags & IR_OP_FLAG_CONTAINED) {
-    debug_print_op_with_ctx(file, irb, ir, PRINT_OP_CTX_USE);
+    debug_print_op_with_ctx(file, ir, PRINT_OP_CTX_USE);
   } else {
     fprintf(file, "%%%zu", ir->id);
   }
 }
 
-static void debug_print_op_with_ctx(FILE *file, struct ir_func *irb,
+static void debug_print_op_with_ctx(FILE *file,
                                     struct ir_op *op, enum print_op_ctx ctx) {
   if (ctx != PRINT_OP_CTX_USE && op->comment) {
     fprintf(file, "// %s\n", op->comment);
   }
 
   if (ctx != PRINT_OP_CTX_USE) {
-    debug_lhs(file, irb, op);
+    debug_lhs(file, op);
   }
 
   switch (op->ty) {
@@ -365,13 +365,13 @@ static void debug_print_op_with_ctx(FILE *file, struct ir_func *irb,
     BUG("unknown op!");
   case IR_OP_TY_VA_START:
     fprintf(file, "va_start ");
-    debug_print_op_use(file, irb, op->va_start.list_addr);
+    debug_print_op_use(file, op->va_start.list_addr);
     break;
   case IR_OP_TY_VA_ARG:
     fprintf(file, "va_arg ");
-    debug_print_var_ty_string(file, irb->unit, &op->va_arg.arg_ty);
+    debug_print_var_ty_string(file, &op->va_arg.arg_ty);
     fprintf(file, ", ");
-    debug_print_op_use(file, irb, op->va_arg.list_addr);
+    debug_print_op_use(file, op->va_arg.list_addr);
     break;
   case IR_OP_TY_UNDF:
     fprintf(file, "UNDF");
@@ -393,7 +393,7 @@ static void debug_print_op_with_ctx(FILE *file, struct ir_func *irb,
   case IR_OP_TY_CALL: {
     fprintf(file, "call ");
 
-    debug_print_op_use(file, irb, op->call.target);
+    debug_print_op_use(file, op->call.target);
     fprintf(file, " ( ");
     debug_call_arg_string(file, &op->call);
     fprintf(file, " )");
@@ -406,7 +406,7 @@ static void debug_print_op_with_ctx(FILE *file, struct ir_func *irb,
     break;
   case IR_OP_TY_MOV:
     if (op->mov.value) {
-      debug_print_op_use(file, irb, op->mov.value);
+      debug_print_op_use(file, op->mov.value);
       fprintf(file, " : (");
       debug_print_ir_reg(file, op->mov.value->reg);
       fprintf(file, " -> ");
@@ -427,17 +427,17 @@ static void debug_print_op_with_ctx(FILE *file, struct ir_func *irb,
     }
     break;
   case IR_OP_TY_BINARY_OP:
-    debug_print_op_use(file, irb, op->binary_op.lhs);
+    debug_print_op_use(file, op->binary_op.lhs);
     fprintf(file, " %s ", binary_op_string(op->binary_op.ty));
-    debug_print_op_use(file, irb, op->binary_op.rhs);
+    debug_print_op_use(file, op->binary_op.rhs);
     break;
   case IR_OP_TY_UNARY_OP:
     fprintf(file, "%s ", unary_op_string(op->unary_op.ty));
-    debug_print_op_use(file, irb, op->unary_op.value);
+    debug_print_op_use(file, op->unary_op.value);
     break;
   case IR_OP_TY_CAST_OP:
     fprintf(file, "%s ", cast_op_string(op->cast_op.ty));
-    debug_print_op_use(file, irb, op->cast_op.value);
+    debug_print_op_use(file, op->cast_op.value);
     break;
   case IR_OP_TY_STORE:
     switch (op->store.ty) {
@@ -459,9 +459,9 @@ static void debug_print_op_with_ctx(FILE *file, struct ir_func *irb,
       break;
     case IR_OP_STORE_TY_ADDR:
       fprintf(file, "store.addr [");
-      debug_print_op_use(file, irb, op->store.addr);
+      debug_print_op_use(file, op->store.addr);
       fprintf(file, "], ");
-      debug_print_op_use(file, irb, op->store.value);
+      debug_print_op_use(file, op->store.value);
       break;
     }
 
@@ -484,7 +484,7 @@ static void debug_print_op_with_ctx(FILE *file, struct ir_func *irb,
       break;
     case IR_OP_LOAD_TY_ADDR:
       fprintf(file, "load.addr [");
-      debug_print_op_use(file, irb, op->load.addr);
+      debug_print_op_use(file, op->load.addr);
       fprintf(file, "]");
       break;
     }
@@ -518,9 +518,9 @@ static void debug_print_op_with_ctx(FILE *file, struct ir_func *irb,
     case IR_OP_STORE_TY_ADDR:
       fprintf(file, "store.bitfield.addr (#%zu, #%zu) [", bitfield.offset,
               bitfield.width);
-      debug_print_op_use(file, irb, op->store_bitfield.addr);
+      debug_print_op_use(file, op->store_bitfield.addr);
       fprintf(file, "], ");
-      debug_print_op_use(file, irb, op->store_bitfield.value);
+      debug_print_op_use(file, op->store_bitfield.value);
       break;
     }
 
@@ -551,7 +551,7 @@ static void debug_print_op_with_ctx(FILE *file, struct ir_func *irb,
     case IR_OP_LOAD_TY_ADDR:
       fprintf(file, "load.bitfield.addr (#%zu, #%zu) [", bitfield.offset,
               bitfield.width);
-      debug_print_op_use(file, irb, op->load_bitfield.addr);
+      debug_print_op_use(file, op->load_bitfield.addr);
       fprintf(file, "]");
       break;
     }
@@ -560,10 +560,10 @@ static void debug_print_op_with_ctx(FILE *file, struct ir_func *irb,
   }
   case IR_OP_TY_ADDR_OFFSET:
     fprintf(file, "addr.off ");
-    debug_print_op_use(file, irb, op->addr_offset.base);
+    debug_print_op_use(file, op->addr_offset.base);
     if (op->addr_offset.index) {
       fprintf(file, " + ");
-      debug_print_op_use(file, irb, op->addr_offset.index);
+      debug_print_op_use(file, op->addr_offset.index);
 
       if (op->addr_offset.scale != 1) {
         fprintf(file, " * #%zu", op->addr_offset.scale);
@@ -620,7 +620,7 @@ static void debug_print_op_with_ctx(FILE *file, struct ir_func *irb,
   }
   case IR_OP_TY_BR_COND:
     fprintf(file, "br.cond ");
-    debug_print_op_use(file, irb, op->br_cond.cond);
+    debug_print_op_use(file, op->br_cond.cond);
     fprintf(file, ", TRUE(@%zu), FALSE(@%zu)",
             op->stmt->basicblock->split.true_target->id,
             op->stmt->basicblock->split.false_target->id);
@@ -644,7 +644,7 @@ static void debug_print_op_with_ctx(FILE *file, struct ir_func *irb,
   case IR_OP_TY_RET:
     if (op->ret.value) {
       fprintf(file, "return ");
-      debug_print_op_use(file, irb, op->ret.value);
+      debug_print_op_use(file, op->ret.value);
     } else {
       fprintf(file, "return");
     }
@@ -653,33 +653,33 @@ static void debug_print_op_with_ctx(FILE *file, struct ir_func *irb,
     fprintf(file, "bitfield.extract #(%zu, %zu), ",
             op->bitfield_extract.bitfield.offset,
             op->bitfield_extract.bitfield.width);
-    debug_print_op_use(file, irb, op->bitfield_extract.value);
+    debug_print_op_use(file, op->bitfield_extract.value);
     break;
   case IR_OP_TY_BITFIELD_INSERT:
     fprintf(file, "bitfield.insert #(%zu, %zu), ",
             op->bitfield_insert.bitfield.offset,
             op->bitfield_insert.bitfield.width);
-    debug_print_op_use(file, irb, op->bitfield_insert.target);
+    debug_print_op_use(file, op->bitfield_insert.target);
     fprintf(file, ", ");
-    debug_print_op_use(file, irb, op->bitfield_insert.value);
+    debug_print_op_use(file, op->bitfield_insert.value);
     break;
   case IR_OP_TY_MEM_SET:
     fprintf(file, "mem.set ");
-    debug_print_op_use(file, irb, op->mem_set.addr);
+    debug_print_op_use(file, op->mem_set.addr);
     fprintf(file, ", #%zu, #%d", op->mem_set.length, op->mem_set.value);
     break;
   case IR_OP_TY_MEM_COPY:
     fprintf(file, "mem.copy ");
-    debug_print_op_use(file, irb, op->mem_copy.dest);
+    debug_print_op_use(file, op->mem_copy.dest);
     fprintf(file, ", ");
-    debug_print_op_use(file, irb, op->mem_copy.source);
+    debug_print_op_use(file, op->mem_copy.source);
     fprintf(file, ", #%zu", op->mem_set.length);
     break;
   }
 }
 
-void debug_print_op(FILE *file, struct ir_func *irb, struct ir_op *op) {
-  debug_print_op_with_ctx(file, irb, op, PRINT_OP_CTX_TOP_LEVEL);
+void debug_print_op(FILE *file, struct ir_op *op) {
+  debug_print_op_with_ctx(file, op, PRINT_OP_CTX_TOP_LEVEL);
   fprintf(file, "\n");
 }
 
@@ -772,7 +772,7 @@ static void prettyprint_end_visit_basicblock_file(
   fprintf(fm->file, "\n");
 }
 
-static void prettyprint_visit_op_file(struct ir_func *irb, struct ir_op *op,
+static void prettyprint_visit_op_file(struct ir_op *op,
                                       void *metadata) {
   if (op->flags & IR_OP_FLAG_CONTAINED) {
     return;
@@ -788,7 +788,7 @@ static void prettyprint_visit_op_file(struct ir_func *irb, struct ir_op *op,
   fprintf(fm->file, "%0*zu: ", fm->ctr_pad, fm->ctr++);
 
   long pos = ftell(fm->file);
-  debug_print_op_with_ctx(fm->file, irb, op, PRINT_OP_CTX_TOP_LEVEL);
+  debug_print_op_with_ctx(fm->file, op, PRINT_OP_CTX_TOP_LEVEL);
 
   if (supports_pos && ftell(fm->file) == pos) {
     // no line was written
@@ -922,7 +922,7 @@ void debug_visit_stmt(struct ir_func *irb, struct ir_stmt *stmt,
   struct ir_op *op = stmt->first;
   while (op) {
     if (callbacks->visit_op) {
-      callbacks->visit_op(irb, op, metadata);
+      callbacks->visit_op(op, metadata);
     }
 
     op = op->succ;
@@ -1007,7 +1007,7 @@ void debug_print_ir_func(FILE *file, struct ir_func *irb,
                                                .cb_metadata = cb_metadata};
 
   fprintf(file, "FUNCTION: %s", irb->name);
-  debug_print_func_ty_string(file, irb->unit, &irb->func_ty);
+  debug_print_func_ty_string(file, &irb->func_ty);
   fprintf(file, "\n");
   fprintf(file, "    num_locals: %zu\n", irb->lcl_count);
   fprintf(file, "    total_locals_size: %zu\n", irb->total_locals_size);
@@ -1100,7 +1100,7 @@ static void debug_print_ir_var_value(FILE *file, struct ir_unit *iru,
       if (sub_value->ty != IR_VAR_VALUE_TY_VALUE_LIST) {
         fprintf(file, "; OFFSET=%zu", var_value->value_list.offsets[i]);
         fprintf(file, ", ");
-        debug_print_var_ty_string(file, iru, &sub_value->var_ty);
+        debug_print_var_ty_string(file, &sub_value->var_ty);
         fprintf(file, "\n");
       }
     }
@@ -1126,7 +1126,7 @@ void debug_print_ir_var(FILE *file, struct ir_var *var) {
 
   DEBUG_ASSERT(var->var_ty.ty != IR_VAR_TY_TY_NONE, "GLB with no type");
 
-  debug_print_var_ty_string(file, var->unit, &var->var_ty);
+  debug_print_var_ty_string(file, &var->var_ty);
   fprintf(file, " = ");
   debug_print_ir_var_value(file, var->unit, &var->value, true);
   fprintf(file, "\n\n");
@@ -1136,11 +1136,11 @@ struct print_ir_graph_metadata {
   FILE *file;
 };
 
-static void visit_op_for_graph(struct ir_func *irb, struct ir_op *op,
+static void visit_op_for_graph(struct ir_op *op,
                                void *metadata) {
   struct print_ir_graph_metadata *gm = metadata;
 
-  debug_print_op_with_ctx(gm->file, irb, op, PRINT_OP_CTX_TOP_LEVEL);
+  debug_print_op_with_ctx(gm->file, op, PRINT_OP_CTX_TOP_LEVEL);
 
   // `\l` prints left-justified
   fprintf(gm->file, "\\l");
@@ -1239,7 +1239,7 @@ void debug_print_lcl(FILE *file, struct ir_lcl *lcl) {
     break;
   }
 
-  debug_print_var_ty_string(file, lcl->func->unit, &lcl->var_ty);
+  debug_print_var_ty_string(file, &lcl->var_ty);
 
   if (lcl->flags) {
     fprintf(file, " [ ");
@@ -1373,17 +1373,14 @@ void debug_print_ir_object(FILE *file, const struct ir_object *object) {
   }
   case IR_OBJECT_TY_OP: {
     struct ir_stmt *stmt = object->op->stmt;
-    struct ir_func *func;
     if (stmt) {
-      func = stmt->basicblock->func;
       fprintf(file, "In func %s, basicblock @ %zu, stmt $ %zu: \n",
               stmt->basicblock->func->name, stmt->basicblock->id, stmt->id);
     } else {
-      func = NULL;
       fprintf(file, "No stmt, likely detached\n");
     }
 
-    debug_print_op(file, func, object->op);
+    debug_print_op(file, object->op);
     break;
   }
   }

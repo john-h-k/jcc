@@ -96,10 +96,9 @@ struct object_entry {
 };
 
 struct build_object_args {
-  const struct compile_args *compile_args;
-
   FILE *output;
 
+  enum compile_target target;
   const struct object_entry *entries;
   size_t num_entries;
 };

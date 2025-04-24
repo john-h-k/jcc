@@ -4,8 +4,7 @@
 #include "../util.h"
 #include "../vector.h"
 
-static bool try_get_hfa_info(struct ir_func *func,
-                             const struct ir_var_ty *var_ty,
+static bool try_get_hfa_info(const struct ir_var_ty *var_ty,
                              struct ir_var_ty *member_ty, size_t *num_members,
                              size_t *member_size) {
   if (var_ty->ty != IR_VAR_TY_TY_UNION && var_ty->ty != IR_VAR_TY_TY_STRUCT) {
@@ -31,7 +30,7 @@ static bool try_get_hfa_info(struct ir_func *func,
   }
 
   for (size_t i = 1; i < var_ty->aggregate.num_fields; i++) {
-    if (!ir_var_ty_eq(func->unit, member_ty, &var_ty->aggregate.fields[i])) {
+    if (!ir_var_ty_eq(member_ty, &var_ty->aggregate.fields[i])) {
       return false;
     }
   }
@@ -81,7 +80,7 @@ struct ir_func_info x64_lower_func_ty(struct ir_func *func,
     struct ir_var_ty member_ty;
     size_t num_hfa_members;
     size_t hfa_member_size;
-    if (try_get_hfa_info(func, func_ty.ret_ty, &member_ty, &num_hfa_members,
+    if (try_get_hfa_info(func_ty.ret_ty, &member_ty, &num_hfa_members,
                          &hfa_member_size)) {
       // nop
       *ret_info = (struct ir_param_info){
@@ -183,7 +182,7 @@ struct ir_func_info x64_lower_func_ty(struct ir_func *func,
 
       nsrn++;
       continue;
-    } else if (try_get_hfa_info(func, var_ty, &member_ty, &num_hfa_members,
+    } else if (try_get_hfa_info(var_ty, &member_ty, &num_hfa_members,
                                 &hfa_member_size)) {
       if (nsrn + num_hfa_members <= 8) {
         struct ir_param_info param_info = {
@@ -303,8 +302,7 @@ struct ir_func_info x64_lower_func_ty(struct ir_func *func,
   }
 
   struct ir_var_func_ty new_func_ty = {
-      .flags = func_ty.flags,
-      .ret_ty = aralloc(func->arena, sizeof(ret_ty))};
+      .flags = func_ty.flags, .ret_ty = aralloc(func->arena, sizeof(ret_ty))};
 
   *new_func_ty.ret_ty = ret_ty;
 

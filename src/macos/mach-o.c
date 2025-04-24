@@ -18,7 +18,7 @@ struct reloc_info {
   struct vector *data_relocs;
 };
 
-static void write_mach_header(FILE *file, const struct compile_args *args) {
+static void write_mach_header(FILE *file, const struct build_object_args *args) {
   struct mach_header_64 header;
   memset(&header, 0, sizeof(header));
 
@@ -403,7 +403,7 @@ static void write_segment_command(const struct build_object_args *args) {
   version.cmd = LC_BUILD_VERSION;
   version.cmdsize = sizeof(version);
   version.platform = PLATFORM_MACOS;
-  version.minos = ENCODE_MINOS(12, 0, 0);
+  version.minos = ENCODE_MINOS(11, 0, 0);
   version.sdk = ENCODE_SDK(0, 0, 0);
   version.ntools = 0;
 
@@ -624,6 +624,6 @@ static void write_segment_command(const struct build_object_args *args) {
 }
 
 void write_macho(const struct build_object_args *args) {
-  write_mach_header(args->output, args->compile_args);
+  write_mach_header(args->output, args);
   write_segment_command(args);
 }

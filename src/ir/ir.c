@@ -6,7 +6,7 @@
 #include "../util.h"
 #include "../vector.h"
 
-enum ir_var_primitive_ty ir_var_ty_pointer_primitive_ty(struct ir_unit *iru) {
+enum ir_var_primitive_ty ir_var_ty_pointer_primitive_ty(const struct ir_unit *iru) {
   switch (iru->target->lp_sz) {
   case TARGET_LP_SZ_LP32:
     return IR_VAR_PRIMITIVE_TY_I32;
@@ -245,7 +245,7 @@ bool ir_op_is_branch(enum ir_op_ty ty) {
   }
 }
 
-bool ir_var_ty_eq(struct ir_unit *iru, const struct ir_var_ty *l,
+bool ir_var_ty_eq(const struct ir_var_ty *l,
                   const struct ir_var_ty *r) {
   if (l == r) {
     return true;
@@ -266,16 +266,16 @@ bool ir_var_ty_eq(struct ir_unit *iru, const struct ir_var_ty *l,
     return true;
   case IR_VAR_TY_TY_ARRAY:
     return l->array.num_elements == r->array.num_elements &&
-           ir_var_ty_eq(iru, l->array.underlying, r->array.underlying);
+           ir_var_ty_eq(l->array.underlying, r->array.underlying);
   case IR_VAR_TY_TY_FUNC:
-    if (!ir_var_ty_eq(iru, l->func.ret_ty, r->func.ret_ty)) {
+    if (!ir_var_ty_eq(l->func.ret_ty, r->func.ret_ty)) {
       return false;
     }
     if (l->func.num_params != r->func.num_params) {
       return false;
     }
     for (size_t i = 0; i < l->func.num_params; i++) {
-      if (!ir_var_ty_eq(iru, &l->func.params[i], &r->func.params[i])) {
+      if (!ir_var_ty_eq(&l->func.params[i], &r->func.params[i])) {
         return false;
       }
     }
@@ -286,16 +286,10 @@ bool ir_var_ty_eq(struct ir_unit *iru, const struct ir_var_ty *l,
       return false;
     }
 
-    struct ir_var_ty_info l_info = ir_var_ty_info(iru, l);
-    struct ir_var_ty_info r_info = ir_var_ty_info(iru, r);
-
-    // currently we do not have custom alignment/size but it is possible
-    if (l_info.size != r_info.size || l_info.alignment != r_info.alignment) {
-      return false;
-    }
+    // FIXME: currently we do not have custom alignment/size but it is possible, and this does not respect it
 
     for (size_t i = 0; i < l->aggregate.num_fields; i++) {
-      if (!ir_var_ty_eq(iru, &l->aggregate.fields[i],
+      if (!ir_var_ty_eq(&l->aggregate.fields[i],
                         &r->aggregate.fields[i])) {
         return false;
       }
@@ -308,16 +302,10 @@ bool ir_var_ty_eq(struct ir_unit *iru, const struct ir_var_ty *l,
       return false;
     }
 
-    struct ir_var_ty_info l_info = ir_var_ty_info(iru, l);
-    struct ir_var_ty_info r_info = ir_var_ty_info(iru, r);
-
-    // currently we do not have custom alignment/size but it is possible
-    if (l_info.size != r_info.size || l_info.alignment != r_info.alignment) {
-      return false;
-    }
+    // FIXME: currently we do not have custom alignment/size but it is possible, and this does not respect it
 
     for (size_t i = 0; i < l->aggregate.num_fields; i++) {
-      if (!ir_var_ty_eq(iru, &l->aggregate.fields[i],
+      if (!ir_var_ty_eq(&l->aggregate.fields[i],
                         &r->aggregate.fields[i])) {
         return false;
       }
@@ -2232,7 +2220,7 @@ mk_op: {
 }
 }
 
-struct ir_var_ty ir_var_ty_make_array(struct ir_unit *iru,
+struct ir_var_ty ir_var_ty_make_array(const struct ir_unit *iru,
                                       const struct ir_var_ty *underlying,
                                       size_t num_elements) {
   struct ir_var_ty *copied = aralloc(iru->arena, sizeof(*copied));
@@ -2247,7 +2235,7 @@ struct ir_var_ty ir_var_ty_make_array(struct ir_unit *iru,
   return var_ty;
 }
 
-struct ir_var_ty ir_var_ty_for_pointer_size(struct ir_unit *iru) {
+struct ir_var_ty ir_var_ty_for_pointer_size(const struct ir_unit *iru) {
   // TODO: again, similar to parser:
   // either we need a pointer-sized int type or for `ir_func` to know the
   // native integer size
@@ -2309,6 +2297,13 @@ void ir_make_basicblock_split(struct ir_func *irb,
 
   ir_add_pred_to_basicblock(irb, true_target, basicblock);
   ir_add_pred_to_basicblock(irb, false_target, basicblock);
+}
+
+void ir_make_basicblock_ret(UNUSED struct ir_func *irb,
+                              struct ir_basicblock *basicblock) {
+  ir_remove_basicblock_successors(basicblock);
+  
+  basicblock->ty = IR_BASICBLOCK_TY_RET;
 }
 
 void ir_make_basicblock_merge(struct ir_func *irb,
@@ -2720,7 +2715,7 @@ struct ir_var_ty_flattened ir_var_ty_info_flat(struct ir_unit *iru,
                                       .num_fields = vector_length(fields)};
 }
 
-struct ir_var_ty_info ir_var_ty_info(struct ir_unit *iru,
+struct ir_var_ty_info ir_var_ty_info(const struct ir_unit *iru,
                                      const struct ir_var_ty *ty) {
   switch (ty->ty) {
   case IR_VAR_TY_TY_NONE:
@@ -2729,6 +2724,10 @@ struct ir_var_ty_info ir_var_ty_info(struct ir_unit *iru,
     BUG("IR_OP_VAR_TY_TY_VARIADIC has no size");
   case IR_VAR_TY_TY_FUNC:
   case IR_VAR_TY_TY_POINTER:
+    if (!iru) {
+      return (struct ir_var_ty_info){.size = IR_TY_INFO_SZ_PTR, .alignment = IR_TY_INFO_SZ_PTR};
+    }
+
     switch (iru->target->lp_sz) {
     case TARGET_LP_SZ_LP32:
       return (struct ir_var_ty_info){.size = 4, .alignment = 4};

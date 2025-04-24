@@ -396,7 +396,7 @@ static void lower_fp_cnst(struct ir_func *func, struct ir_op *op) {
   op->mov = (struct ir_op_mov){.value = int_mov};
 }
 
-static bool try_get_hfa_info(struct ir_func *func,
+static bool try_get_hfa_info(
                              const struct ir_var_ty *var_ty,
                              struct ir_var_ty *member_ty, size_t *num_members,
                              size_t *member_size) {
@@ -423,7 +423,7 @@ static bool try_get_hfa_info(struct ir_func *func,
   }
 
   for (size_t i = 1; i < var_ty->aggregate.num_fields; i++) {
-    if (!ir_var_ty_eq(func->unit, member_ty, &var_ty->aggregate.fields[i])) {
+    if (!ir_var_ty_eq(member_ty, &var_ty->aggregate.fields[i])) {
       return false;
     }
   }
@@ -470,7 +470,7 @@ struct ir_func_info aarch64_lower_func_ty(struct ir_func *func,
     struct ir_var_ty member_ty;
     size_t num_hfa_members;
     size_t hfa_member_size;
-    if (try_get_hfa_info(func, func_ty.ret_ty, &member_ty, &num_hfa_members,
+    if (try_get_hfa_info(func_ty.ret_ty, &member_ty, &num_hfa_members,
                          &hfa_member_size)) {
       // nop
       *ret_info = (struct ir_param_info){.ty = IR_PARAM_INFO_TY_REGISTER,
@@ -556,7 +556,7 @@ struct ir_func_info aarch64_lower_func_ty(struct ir_func *func,
     size_t num_hfa_members;
     size_t hfa_member_size;
     struct ir_var_ty member_ty;
-    bool is_hfa = try_get_hfa_info(func, var_ty, &member_ty, &num_hfa_members,
+    bool is_hfa = try_get_hfa_info(var_ty, &member_ty, &num_hfa_members,
                                    &hfa_member_size);
 
     if (info.size > 16 && !is_hfa) {
