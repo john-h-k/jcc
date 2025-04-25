@@ -895,6 +895,7 @@ enum compile_result compile(struct compiler *compiler) {
 
 enum compile_result compile_ir(struct compiler *compiler, struct ir_unit *ir) {
   debug_print_stage(compiler, ir, "compile_ir");
+  ir_validate(ir, IR_VALIDATE_FLAG_NONE);
 
   COMPILER_STAGE(INLINE, inline, ir);
 

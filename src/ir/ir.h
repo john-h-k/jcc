@@ -1303,7 +1303,9 @@ struct ir_var_ty_flattened {
 };
 
 // if called without a unit, pointer sizes cannot be resolved
-#define IR_TY_INFO_SZ_PTR ((size_t)-1)
+// #define IR_TY_INFO_SZ_PTR ((size_t)-1)
+// HACK: assume 8
+#define IR_TY_INFO_SZ_PTR ((size_t)8)
 
 struct ir_var_ty_flattened ir_var_ty_info_flat(struct ir_unit *iru,
                                                const struct ir_var_ty *ty);
@@ -1325,7 +1327,7 @@ struct ir_var_ty_info ir_var_ty_info_op(
 enum ir_var_primitive_ty ir_var_ty_pointer_primitive_ty(const struct ir_unit *iru);
 
 struct ir_var_ty ir_var_ty_for_pointer_size(const struct ir_unit *iru);
-struct ir_var_ty ir_var_ty_make_array(const struct ir_unit *iru,
+struct ir_var_ty ir_var_ty_mk_array(const struct ir_unit *iru,
                                       const struct ir_var_ty *underlying,
                                       size_t num_elements);
 

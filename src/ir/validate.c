@@ -21,6 +21,7 @@ struct ir_validate_state {
 };
 
 struct validate_op_order_metadata {
+  struct ir_func *func;
   struct ir_validate_state *state;
   struct ir_op *consumer;
 };
@@ -45,7 +46,7 @@ struct validate_op_order_metadata {
 #define VALIDATION_ERR(obj, fmt, ...)                                          \
   do {                                                                         \
     const char *msg =                                                          \
-        aralloc_snprintf(state->unit->arena, (fmt), __VA_ARGS__);          \
+        aralloc_snprintf(state->unit->arena, (fmt), __VA_ARGS__);              \
     struct ir_validate_error error = {.err = msg,                              \
                                       .object = IR_MK_OBJECT((obj))};          \
     vector_push_back((state)->errors, &error);                                 \
@@ -67,6 +68,35 @@ static void validate_op_order(struct ir_op **ir,
                               UNUSED enum ir_op_use_ty use_ty, void *metadata) {
   struct validate_op_order_metadata *data = metadata;
   struct ir_validate_state *state = data->state;
+
+
+  struct ir_func *func = NULL;
+  if (*ir) {
+    struct ir_stmt *stmt = (*ir)->stmt;
+
+    if (stmt) {
+      struct ir_basicblock *basicblock = stmt->basicblock;
+
+      if (basicblock) {
+        func = basicblock->func;
+      }
+    }
+  }
+
+  VALIDATION_CHECKZ(func, *ir, "consumed op has no func!");
+
+  if (!func) {
+    return;
+  }
+
+  if (func != data->func) {
+    VALIDATION_ERR(
+        *ir,
+        "consumed op attached to func '%s' but should be attached to '%s'",
+        func->name, data->func->name);
+
+    return;
+  }
 
   struct ir_op *consumer = data->consumer;
 
@@ -113,6 +143,7 @@ static bool validate_var_ty_is_pointer(struct ir_validate_state *state,
 }
 
 struct walk_op_metadata {
+  struct ir_func *func;
   struct ir_validate_state *state;
   struct ir_op *consumer;
 };
@@ -139,8 +170,7 @@ static void walk_op_ty_callback(struct ir_op **op, enum ir_op_use_ty use_ty,
       break;
     }
     VALIDATION_CHECK(
-        ir_var_ty_eq(&(*op)->var_ty,
-                     &walk_state->consumer->var_ty),
+        ir_var_ty_eq(&(*op)->var_ty, &walk_state->consumer->var_ty),
         walk_state->consumer,
         "operand %zu with use type IR_OP_USE_TY_READ must have same type",
         (*op)->id);
@@ -151,8 +181,11 @@ static void walk_op_ty_callback(struct ir_op **op, enum ir_op_use_ty use_ty,
 
 static void ir_validate_operands_same_ty(struct ir_validate_state *state,
                                          struct ir_op *op) {
+  struct ir_func *func = op->stmt->basicblock->func;
 
-  struct walk_op_metadata metadata = {.state = state, .consumer = op};
+  struct walk_op_metadata metadata = {
+    .func = func,
+    .state = state, .consumer = op};
 
   ir_walk_op_uses(op, walk_op_ty_callback, &metadata);
 }
@@ -293,7 +326,7 @@ static void ir_validate_binary_op(struct ir_validate_state *state,
 static void ir_validate_op(struct ir_validate_state *state,
                            struct ir_func *func, struct ir_stmt *stmt,
                            struct ir_op *op) {
-  struct validate_op_order_metadata metadata = {.state = state, .consumer = op};
+  struct validate_op_order_metadata metadata = {.func = func, .state = state, .consumer = op};
   ir_walk_op_uses(op, validate_op_order, &metadata);
 
   VALIDATION_CHECKZ(op->stmt, op, "op has no stmt");
@@ -332,9 +365,8 @@ static void ir_validate_op(struct ir_validate_state *state,
     for (size_t i = 0; i < op->phi.num_values; i++) {
       struct ir_phi_entry *entry = &op->phi.values[i];
 
-      VALIDATION_CHECKZ(
-          ir_var_ty_eq(&op->var_ty, &entry->value->var_ty), op,
-          "op entry had different type to op!");
+      VALIDATION_CHECKZ(ir_var_ty_eq(&op->var_ty, &entry->value->var_ty), op,
+                        "op entry had different type to op!");
 
       VALIDATION_CHECK(
           ir_basicblock_is_pred(op->stmt->basicblock, entry->basicblock), op,
@@ -434,18 +466,18 @@ static void ir_validate_op(struct ir_validate_state *state,
       VALIDATION_CHECKZ(op->store_bitfield.lcl, op,
                         "store ty lcl must have lcl");
 
-      VALIDATION_CHECK(
-          ir_var_ty_eq(&op->store_bitfield.value->var_ty,
-                       &op->store_bitfield.lcl->var_ty),
-          op, "lcl %zu must have same type", op->store_bitfield.lcl->id);
+      VALIDATION_CHECK(ir_var_ty_eq(&op->store_bitfield.value->var_ty,
+                                    &op->store_bitfield.lcl->var_ty),
+                       op, "lcl %zu must have same type",
+                       op->store_bitfield.lcl->id);
       break;
     case IR_OP_STORE_TY_GLB:
       VALIDATION_CHECKZ(op->store_bitfield.glb, op,
                         "store ty glb must have glb");
-      VALIDATION_CHECK(
-          ir_var_ty_eq(&op->store_bitfield.value->var_ty,
-                       &op->store_bitfield.glb->var_ty),
-          op, "glb %zu must have same type", op->store_bitfield.glb->id);
+      VALIDATION_CHECK(ir_var_ty_eq(&op->store_bitfield.value->var_ty,
+                                    &op->store_bitfield.glb->var_ty),
+                       op, "glb %zu must have same type",
+                       op->store_bitfield.glb->id);
       break;
     case IR_OP_STORE_TY_ADDR: {
       VALIDATION_CHECKZ(op->store_bitfield.addr, op,
@@ -533,18 +565,16 @@ static void ir_validate_op(struct ir_validate_state *state,
     case IR_OP_LOAD_TY_LCL:
       VALIDATION_CHECKZ(op->load_bitfield.lcl, op, "load ty lcl must have lcl");
 
-      VALIDATION_CHECK(ir_var_ty_eq(&op->var_ty,
-                                    &op->load_bitfield.lcl->var_ty),
-                       op, "lcl %zu must have same type",
-                       op->load_bitfield.lcl->id);
+      VALIDATION_CHECK(
+          ir_var_ty_eq(&op->var_ty, &op->load_bitfield.lcl->var_ty), op,
+          "lcl %zu must have same type", op->load_bitfield.lcl->id);
       break;
     case IR_OP_LOAD_TY_GLB:
       VALIDATION_CHECKZ(op->load_bitfield.glb, op, "load ty glb must have glb");
 
-      VALIDATION_CHECK(ir_var_ty_eq(&op->var_ty,
-                                    &op->load_bitfield.glb->var_ty),
-                       op, "glb %zu must have same type",
-                       op->load_bitfield.glb->id);
+      VALIDATION_CHECK(
+          ir_var_ty_eq(&op->var_ty, &op->load_bitfield.glb->var_ty), op,
+          "glb %zu must have same type", op->load_bitfield.glb->id);
       break;
     case IR_OP_LOAD_TY_ADDR: {
       VALIDATION_CHECKZ(op->load_bitfield.addr, op,
@@ -590,18 +620,22 @@ static void ir_validate_op(struct ir_validate_state *state,
     }
     break;
   case IR_OP_TY_BR:
+    VALIDATION_CHECKZ(!op->succ && !op->stmt->succ, op, "br op should be at end of bb");
     VALIDATION_CHECKZ(op->var_ty.ty == IR_VAR_TY_TY_NONE, op,
                       "br ops should not have a var ty");
     break;
   case IR_OP_TY_BR_COND:
+    VALIDATION_CHECKZ(!op->succ && !op->stmt->succ, op, "br.cond op should be at end of bb");
     VALIDATION_CHECKZ(op->var_ty.ty == IR_VAR_TY_TY_NONE, op,
                       "br.cond ops should not have a var ty");
     break;
   case IR_OP_TY_BR_SWITCH:
+    VALIDATION_CHECKZ(!op->succ && !op->stmt->succ, op, "br.switch op should be at end of bb");
     VALIDATION_CHECKZ(op->var_ty.ty == IR_VAR_TY_TY_NONE, op,
                       "br.switch ops should not have a var ty");
     break;
   case IR_OP_TY_RET:
+    VALIDATION_CHECKZ(!op->succ && !op->stmt->succ, op, "ret op should be at end of bb");
     // currently ret always returns none (do we want this?)
     // ir_validate_operands_same_ty(state, op);
     break;
@@ -692,6 +726,7 @@ static void ir_validate_basicblock(struct ir_validate_state *state,
                     "basicblock is detached!");
 
   VALIDATION_CHECKZ(basicblock->func, basicblock, "basicblock has no func!");
+
   if (!basicblock->func) {
     return;
   }
@@ -845,6 +880,11 @@ static void ir_validate_func(struct ir_validate_state *state,
   }
 
   struct ir_func *func = glb->func;
+
+  if (!func->basicblock_count || !func->stmt_count || !func->op_count) {
+    VALIDATION_ERRZ(
+        func, "func has no basicblocks, stmts, or ops. should be impossible?");
+  }
 
   ir_rebuild_func_ids(func);
 

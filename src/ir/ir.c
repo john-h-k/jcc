@@ -2220,7 +2220,7 @@ mk_op: {
 }
 }
 
-struct ir_var_ty ir_var_ty_make_array(const struct ir_unit *iru,
+struct ir_var_ty ir_var_ty_mk_array(const struct ir_unit *iru,
                                       const struct ir_var_ty *underlying,
                                       size_t num_elements) {
   struct ir_var_ty *copied = aralloc(iru->arena, sizeof(*copied));

@@ -332,7 +332,7 @@ ir_var_ty_for_td_var_ty_impl(struct ir_unit *iru,
     struct ir_var_ty underlying = ir_var_ty_for_td_var_ty_impl(
         iru, var_ty->array.underlying, allow_incomplete);
 
-    return ir_var_ty_make_array(iru, &underlying, var_ty->array.size);
+    return ir_var_ty_mk_array(iru, &underlying, var_ty->array.size);
   }
   }
 }
@@ -1560,7 +1560,7 @@ static struct ir_op *build_ir_for_var(struct ir_func_builder *irb,
   if (ustr_eq(var->identifier, MK_USTR("__func__"))) {
     if (!irb->func_name_cnst) {
       const char *value = irb->func->name;
-      struct ir_var_ty str_var_ty = ir_var_ty_make_array(
+      struct ir_var_ty str_var_ty = ir_var_ty_mk_array(
           irb->unit, &IR_VAR_TY_I8, strlen(irb->func->name) + 1);
       const char *name =
           mangle_static_name(&(struct ir_var_builder){.arena = irb->arena},

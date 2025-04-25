@@ -1317,6 +1317,8 @@ void debug_print_glb(FILE *file, struct ir_glb *glb,
   } else {
     if (glb->name) {
       fprintf(file, "%s\n", glb->name);
+      debug_print_var_ty_string(file, &glb->var_ty);
+      fprintf(file, "\n\n");
     }
   }
 }

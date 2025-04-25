@@ -513,7 +513,46 @@ static int jcc_driver_compiler(struct arena_allocator *arena, struct fs *fs,
                                const struct target *target, size_t num_sources,
                                const char **sources);
 
+static struct vector *get_env_args(int argc, char **argv) {
+  struct vector *buf = vector_create(sizeof(char));
+  struct vector *args = vector_create(sizeof(char *));
+  for (int i = 0; i < argc; i++) {
+    char *arg = argv[i];
+    vector_push_back(args, &arg);
+  }
+
+  const char *env = getenv("JCCFLAGS");
+
+  if (!env) {
+    return args;
+  }
+
+  // FIXME: this is really basic logic, doesn't respect escapes or stuff, just appends args to end
+  while (env) {
+    const char *next = strchr(env, ' ');
+
+    if (next) {
+      char *p = vector_extend(buf, env, (size_t)(next - env));
+      vector_push_back(buf, &(char){0});
+
+      vector_push_back(args, &p);
+      next++;
+    } else {
+      vector_push_back(args, &env);
+    }
+
+    env = next;
+  }
+
+  return args;
+}
+
 int jcc_main(int argc, char **argv) {
+  // TODO: fix leak
+  struct vector *args_with_env = get_env_args(argc, argv);
+  argc = (int)vector_length(args_with_env);
+  argv = (char **)vector_head(args_with_env);
+
   int exc = 0;
 
   profiler_init();
@@ -559,6 +598,7 @@ int jcc_main(int argc, char **argv) {
 exit:
   free_args(&args);
   arena_allocator_free(&arena);
+  vector_free(&args_with_env);
   return exc;
 }
 

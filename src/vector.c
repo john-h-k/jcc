@@ -111,9 +111,9 @@ void *vector_push_back(struct vector *v, const void *data) {
   return &v->data[(v->len - 1) * v->element_size];
 }
 
-void vector_extend(struct vector *v, const void *data, size_t num_elems) {
+void *vector_extend(struct vector *v, const void *data, size_t num_elems) {
   if (!num_elems) {
-    return;
+    return NULL;
   }
 
   if (v->len + num_elems > v->capacity) {
@@ -123,12 +123,14 @@ void vector_extend(struct vector *v, const void *data, size_t num_elems) {
   DEBUG_ASSERT(v->capacity >= v->len + num_elems,
                "vector did not expand properly");
 
+  void *end = &v->data[v->len * v->element_size];
   if (data) {
-    void *end = &v->data[v->len * v->element_size];
     memcpy(end, data, v->element_size * num_elems);
   }
 
   v->len += num_elems;
+
+  return end;
 }
 
 void vector_resize(struct vector *v, size_t size) {
