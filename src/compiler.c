@@ -118,6 +118,7 @@ compiler_create_for_ir(const struct compiler_ir_create_args *args,
       .log_flags = args->args.log_flags,
       .opts_level = args->args.opts_level,
       .codegen_flags = args->args.codegen_flags,
+      .demangle_sym = args->args.demangle_sym,
       .log_symbols = args->args.log_symbols,
       .build_asm_file = args->args.build_asm_file,
       .build_object_file = args->args.build_object_file,
@@ -137,6 +138,9 @@ compiler_create_for_ir(const struct compiler_ir_create_args *args,
 
 static void debug_print_stage(struct compiler *compiler, struct ir_unit *ir,
                               const char *name) {
+  const struct debug_print_ir_opts *opts =
+      DEBUG_PRINT_IR_OPTS_DEMANGLE(compiler->args.demangle_sym);
+
   slog("\n\n----------  %s  ----------\n", name);
 
   // TODO: we should also respect log symbols in parse/typechk, but less
@@ -146,13 +150,13 @@ static void debug_print_stage(struct compiler *compiler, struct ir_unit *ir,
 
     while (glb) {
       if (glb->name && hashtbl_lookup(compiler->args.log_symbols, &glb->name)) {
-        debug_print_glb(stderr, glb, NULL, NULL);
+        debug_print_glb(stderr, glb, opts);
       }
 
       glb = glb->succ;
     }
   } else {
-    debug_print_ir(stderr, ir, NULL, NULL);
+    debug_print_ir(stderr, ir, opts);
   }
 }
 

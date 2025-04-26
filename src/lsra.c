@@ -499,8 +499,7 @@ static struct interval_data register_alloc_pass(struct ir_func *irb,
       .active = aralloc(
           irb->arena, sizeof(size_t) * (info->num_fp_regs + info->num_gp_regs)),
       .num_active = 0,
-      .preferences =
-          aralloc(irb->arena, sizeof(struct ir_reg) * irb->op_count),
+      .preferences = aralloc(irb->arena, sizeof(struct ir_reg) * irb->op_count),
       .fp_reg_states = vector_create(sizeof(struct reg_state)),
       .gp_reg_states = vector_create(sizeof(struct reg_state)),
       .gp_reg_pool = vector_create(sizeof(size_t)),
@@ -543,7 +542,9 @@ static struct interval_data register_alloc_pass(struct ir_func *irb,
   ADD_REGS(info->num_fp_regs, 0, IR_REG_TY_FP, fp);
 
   if (log_enabled()) {
-    debug_print_ir_func(stderr, irb, print_ir_intervals, data.intervals);
+    debug_print_ir_func(
+        stderr, irb,
+        DEBUG_PRINT_IR_OPTS_CALLBACK(print_ir_intervals, data.intervals));
   }
 
   qsort(data.intervals, data.num_intervals, sizeof(*data.intervals),
@@ -864,7 +865,9 @@ void lsra_register_alloc(struct ir_func *irb, struct reg_info reg_info) {
         compare_interval_id);
 
   if (log_enabled()) {
-    debug_print_ir_func(stderr, irb, print_ir_intervals, data.intervals);
+    debug_print_ir_func(
+        stderr, irb,
+        DEBUG_PRINT_IR_OPTS_CALLBACK(print_ir_intervals, data.intervals));
   }
 
   // insert LOAD and STORE ops as needed
@@ -874,7 +877,8 @@ void lsra_register_alloc(struct ir_func *irb, struct reg_info reg_info) {
         compare_interval_id);
 
   if (log_enabled()) {
-    debug_print_ir_func(stderr, irb, print_ir_intervals, NULL);
+    debug_print_ir_func(stderr, irb,
+                        DEBUG_PRINT_IR_OPTS_CALLBACK(print_ir_intervals, NULL));
   }
 
   size_t num_nonvolatile_used = hashtbl_size(nonvolatile_registers_used);
@@ -882,7 +886,7 @@ void lsra_register_alloc(struct ir_func *irb, struct reg_info reg_info) {
   irb->reg_usage = (struct ir_reg_usage){
       .nonvolatile_used =
           aralloc(irb->arena, sizeof(*irb->reg_usage.nonvolatile_used) *
-                                      num_nonvolatile_used),
+                                  num_nonvolatile_used),
       .num_nonvolatile_used = num_nonvolatile_used};
 
   struct hashtbl_iter *iter = hashtbl_iter(nonvolatile_registers_used);

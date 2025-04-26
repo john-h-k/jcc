@@ -69,7 +69,6 @@ static void validate_op_order(struct ir_op **ir,
   struct validate_op_order_metadata *data = metadata;
   struct ir_validate_state *state = data->state;
 
-
   struct ir_func *func = NULL;
   if (*ir) {
     struct ir_stmt *stmt = (*ir)->stmt;
@@ -91,8 +90,7 @@ static void validate_op_order(struct ir_op **ir,
 
   if (func != data->func) {
     VALIDATION_ERR(
-        *ir,
-        "consumed op attached to func '%s' but should be attached to '%s'",
+        *ir, "consumed op attached to func '%s' but should be attached to '%s'",
         func->name, data->func->name);
 
     return;
@@ -184,8 +182,7 @@ static void ir_validate_operands_same_ty(struct ir_validate_state *state,
   struct ir_func *func = op->stmt->basicblock->func;
 
   struct walk_op_metadata metadata = {
-    .func = func,
-    .state = state, .consumer = op};
+      .func = func, .state = state, .consumer = op};
 
   ir_walk_op_uses(op, walk_op_ty_callback, &metadata);
 }
@@ -225,6 +222,16 @@ static void ir_validate_cast_op(struct ir_validate_state *state,
 
   struct ir_var_ty from = op->cast_op.value->var_ty;
   struct ir_var_ty to = op->var_ty;
+
+  if (from.ty == IR_VAR_TY_TY_NONE) {
+    VALIDATION_ERRZ(op, "cast op had NONE source ty");
+    return;
+  }
+
+  if (to.ty == IR_VAR_TY_TY_NONE) {
+    VALIDATION_ERRZ(op, "cast op had NONE dest ty");
+    return;
+  }
 
   struct ir_var_ty_info from_info =
       ir_var_ty_info(state->unit, &op->cast_op.value->var_ty);
@@ -326,7 +333,8 @@ static void ir_validate_binary_op(struct ir_validate_state *state,
 static void ir_validate_op(struct ir_validate_state *state,
                            struct ir_func *func, struct ir_stmt *stmt,
                            struct ir_op *op) {
-  struct validate_op_order_metadata metadata = {.func = func, .state = state, .consumer = op};
+  struct validate_op_order_metadata metadata = {
+      .func = func, .state = state, .consumer = op};
   ir_walk_op_uses(op, validate_op_order, &metadata);
 
   VALIDATION_CHECKZ(op->stmt, op, "op has no stmt");
@@ -353,6 +361,12 @@ static void ir_validate_op(struct ir_validate_state *state,
   switch (op->ty) {
   case IR_OP_TY_UNKNOWN:
     BUG("should not have unknown ops");
+  case IR_OP_TY_SELECT:
+    // TODO: validate cond is valid cond ty (int/ptr)
+    VALIDATION_CHECKZ(
+        ir_var_ty_eq(&op->select.true_op->var_ty, &op->select.false_op->var_ty),
+        op, "select operands had different types");
+    break;
   case IR_OP_TY_VA_START:
     break;
   case IR_OP_TY_VA_ARG:
@@ -620,22 +634,26 @@ static void ir_validate_op(struct ir_validate_state *state,
     }
     break;
   case IR_OP_TY_BR:
-    VALIDATION_CHECKZ(!op->succ && !op->stmt->succ, op, "br op should be at end of bb");
+    VALIDATION_CHECKZ(!op->succ && !op->stmt->succ, op,
+                      "br op should be at end of bb");
     VALIDATION_CHECKZ(op->var_ty.ty == IR_VAR_TY_TY_NONE, op,
                       "br ops should not have a var ty");
     break;
   case IR_OP_TY_BR_COND:
-    VALIDATION_CHECKZ(!op->succ && !op->stmt->succ, op, "br.cond op should be at end of bb");
+    VALIDATION_CHECKZ(!op->succ && !op->stmt->succ, op,
+                      "br.cond op should be at end of bb");
     VALIDATION_CHECKZ(op->var_ty.ty == IR_VAR_TY_TY_NONE, op,
                       "br.cond ops should not have a var ty");
     break;
   case IR_OP_TY_BR_SWITCH:
-    VALIDATION_CHECKZ(!op->succ && !op->stmt->succ, op, "br.switch op should be at end of bb");
+    VALIDATION_CHECKZ(!op->succ && !op->stmt->succ, op,
+                      "br.switch op should be at end of bb");
     VALIDATION_CHECKZ(op->var_ty.ty == IR_VAR_TY_TY_NONE, op,
                       "br.switch ops should not have a var ty");
     break;
   case IR_OP_TY_RET:
-    VALIDATION_CHECKZ(!op->succ && !op->stmt->succ, op, "ret op should be at end of bb");
+    VALIDATION_CHECKZ(!op->succ && !op->stmt->succ, op,
+                      "ret op should be at end of bb");
     // currently ret always returns none (do we want this?)
     // ir_validate_operands_same_ty(state, op);
     break;
@@ -951,7 +969,8 @@ void ir_validate(struct ir_unit *iru, enum ir_validate_flags flags) {
       struct ir_validate_error *error = vector_get(state.errors, i);
 
       fprintf(stderr, "Validation error: %s\n", error->err);
-      debug_print_ir_object(stderr, &error->object);
+      debug_print_ir_object(stderr, &error->object,
+                            DEBUG_PRINT_IR_OPTS_DEFAULT);
 
       fprintf(stderr, "\n\n\n");
     }

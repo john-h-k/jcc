@@ -1082,14 +1082,39 @@ static void codegen_addr_op(struct cg_state *state,
   }
 }
 
+static void codegen_select_op(struct cg_state *state,
+                              struct cg_basicblock *basicblock,
+                              struct ir_op *op) {
+  struct aarch64_reg dest = codegen_reg(op);
+  struct aarch64_reg cond = codegen_reg(op->select.cond);
+  struct aarch64_reg true_op = codegen_reg(op->select.true_op);
+  struct aarch64_reg false_op = codegen_reg(op->select.false_op);
+
+  struct cg_instr *cmp = cg_alloc_instr(state->func, basicblock);
+  cmp->aarch64->ty = AARCH64_INSTR_TY_SUBS;
+  cmp->aarch64->subs = (struct aarch64_addsub_reg){
+      .dest = zero_reg_for_ty(cond.ty),
+      .lhs = cond,
+      .rhs = zero_reg_for_ty(cond.ty),
+  };
+
+  struct cg_instr *instr = cg_alloc_instr(state->func, basicblock);
+  instr->aarch64->ty = AARCH64_INSTR_TY_CSEL;
+  instr->aarch64->csel =
+      (struct aarch64_conditional_select){.dest = dest,
+                                          .cond = AARCH64_COND_NE,
+                                          .true_source = true_op,
+                                          .false_source = false_op};
+}
+
 static void codegen_br_cond_op(struct cg_state *state,
                                struct cg_basicblock *basicblock,
                                struct ir_op *op) {
   struct cg_instr *instr = cg_alloc_instr(state->func, basicblock);
 
   // AArch64 requires turning `br.cond <true> <false>` into 2 instructions
-  // we represent this as just the `true` part of the `br.cond`, and then a `br`
-  // after branching to the false target
+  // we represent this as just the `true` part of the `br.cond`, and then a
+  // `br` after branching to the false target
 
   struct ir_basicblock *true_target = op->stmt->basicblock->split.true_target;
   struct ir_basicblock *false_target = op->stmt->basicblock->split.false_target;
@@ -1289,7 +1314,8 @@ static void codegen_unary_op(struct cg_state *state,
     };
     return;
   case IR_OP_UNARY_OP_TY_LOGICAL_NOT:
-    BUG("logical not should never reach emitter, should be converted in lower");
+    BUG("logical not should never reach emitter, should be converted in "
+        "lower");
   }
 }
 
@@ -1376,10 +1402,6 @@ static void codegen_binary_op(struct cg_state *state,
   case IR_OP_BINARY_OP_TY_ULTEQ:
   case IR_OP_BINARY_OP_TY_SLTEQ:
     CONTAINED_OP(addsub, SUBS, subs);
-    if (instr->aarch64->ty == AARCH64_INSTR_TY_SUBS_IMM &&
-        instr->aarch64->addsub_imm.imm == SIZE_MAX) {
-      printf("op %zu\n", op->id);
-    }
     break;
   case IR_OP_BINARY_OP_TY_LSHIFT:
     if (rhs_op->flags & IR_OP_FLAG_CONTAINED) {
@@ -1701,8 +1723,8 @@ static void codegen_cast_op(struct cg_state *state,
   struct aarch64_reg dest = codegen_reg(op);
   struct aarch64_reg source = codegen_reg(op->cast_op.value);
 
-  // NOTE: for the integer casts (sext/zext/trunc) we promote the source reg to
-  // the same type as the dest reg (mixed regs make no sense in an integer
+  // NOTE: for the integer casts (sext/zext/trunc) we promote the source reg
+  // to the same type as the dest reg (mixed regs make no sense in an integer
   // instruction)
 
   switch (op->cast_op.ty) {
@@ -1999,6 +2021,10 @@ static void codegen_op(struct cg_state *state, struct cg_basicblock *basicblock,
     codegen_addr_offset_op(state, basicblock, op);
     break;
   }
+  case IR_OP_TY_SELECT: {
+    codegen_select_op(state, basicblock, op);
+    break;
+  }
   default: {
     TODO("unsupported IR OP '%u'", op->ty);
   }
@@ -2045,7 +2071,8 @@ static void codegen_prologue(struct cg_state *state) {
 
   // TODO: implement red zone. requires _subtracting_ from `sp` instead of
   // adding for all local addressing bool leaf =
-  //     !(stack_size > LEAF_STACK_SIZE || ir->flags & IR_FUNC_FLAG_MAKES_CALL);
+  //     !(stack_size > LEAF_STACK_SIZE || ir->flags &
+  //     IR_FUNC_FLAG_MAKES_CALL);
   bool leaf = !(stack_size || ir->flags & IR_FUNC_FLAG_MAKES_CALL);
 
   struct aarch64_prologue_info info = {.prologue_generated = !leaf,

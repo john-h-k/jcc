@@ -141,6 +141,12 @@ struct compile_file {
 
 void compiler_open_file(struct compile_file file, FILE **f, const char **path);
 
+// FIXME: re-declaration of this typedef
+// if we include prettyprint.h it causes sym conflicts with rv32i/codegen.c
+// which includes this file indirectly
+typedef const char *(*demangle_sym)(struct arena_allocator *arena,
+                                    const char *sym);
+
 struct compile_args {
   enum compile_c_standard c_standard;
   enum compile_target target;
@@ -148,6 +154,7 @@ struct compile_args {
   enum compile_opts_level opts_level;
   enum codegen_flags codegen_flags;
 
+  demangle_sym demangle_sym;
   struct hashtbl *log_symbols;
 
   bool print_diagnostics;
@@ -189,6 +196,7 @@ struct compile_ir_args {
   enum compile_opts_level opts_level;
   enum codegen_flags codegen_flags;
 
+  demangle_sym demangle_sym;
   struct hashtbl *log_symbols;
 
   bool build_asm_file;
@@ -247,8 +255,7 @@ struct compiler_ir_create_args {
 
 enum compiler_create_result
 compiler_create_for_ir(const struct compiler_ir_create_args *args,
-                struct compiler **compiler);
-
+                       struct compiler **compiler);
 
 enum compile_result compile(struct compiler *compiler);
 

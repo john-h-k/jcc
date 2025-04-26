@@ -6,7 +6,8 @@
 #include "../util.h"
 #include "../vector.h"
 
-enum ir_var_primitive_ty ir_var_ty_pointer_primitive_ty(const struct ir_unit *iru) {
+enum ir_var_primitive_ty
+ir_var_ty_pointer_primitive_ty(const struct ir_unit *iru) {
   switch (iru->target->lp_sz) {
   case TARGET_LP_SZ_LP32:
     return IR_VAR_PRIMITIVE_TY_I32;
@@ -154,6 +155,7 @@ bool ir_op_has_side_effects(const struct ir_op *op) {
   case IR_OP_TY_ADDR:
   case IR_OP_TY_ADDR_OFFSET:
   case IR_OP_TY_GATHER:
+  case IR_OP_TY_SELECT:
   case IR_OP_TY_BINARY_OP:
   case IR_OP_TY_UNARY_OP:
     return false;
@@ -183,6 +185,7 @@ bool ir_op_produces_value(const struct ir_op *op) {
   case IR_OP_TY_UNDF:
   case IR_OP_TY_MOV:
   case IR_OP_TY_CNST:
+  case IR_OP_TY_SELECT:
   case IR_OP_TY_BINARY_OP:
   case IR_OP_TY_UNARY_OP:
   case IR_OP_TY_CAST_OP:
@@ -222,6 +225,7 @@ bool ir_op_is_branch(enum ir_op_ty ty) {
   // calls are NOT branches, because while they do leave, they guarantee return
   case IR_OP_TY_CALL:
   case IR_OP_TY_UNDF:
+  case IR_OP_TY_SELECT:
   case IR_OP_TY_PHI:
   case IR_OP_TY_GATHER:
   case IR_OP_TY_MOV:
@@ -245,8 +249,7 @@ bool ir_op_is_branch(enum ir_op_ty ty) {
   }
 }
 
-bool ir_var_ty_eq(const struct ir_var_ty *l,
-                  const struct ir_var_ty *r) {
+bool ir_var_ty_eq(const struct ir_var_ty *l, const struct ir_var_ty *r) {
   if (l == r) {
     return true;
   }
@@ -286,11 +289,11 @@ bool ir_var_ty_eq(const struct ir_var_ty *l,
       return false;
     }
 
-    // FIXME: currently we do not have custom alignment/size but it is possible, and this does not respect it
+    // FIXME: currently we do not have custom alignment/size but it is possible,
+    // and this does not respect it
 
     for (size_t i = 0; i < l->aggregate.num_fields; i++) {
-      if (!ir_var_ty_eq(&l->aggregate.fields[i],
-                        &r->aggregate.fields[i])) {
+      if (!ir_var_ty_eq(&l->aggregate.fields[i], &r->aggregate.fields[i])) {
         return false;
       }
     }
@@ -302,11 +305,11 @@ bool ir_var_ty_eq(const struct ir_var_ty *l,
       return false;
     }
 
-    // FIXME: currently we do not have custom alignment/size but it is possible, and this does not respect it
+    // FIXME: currently we do not have custom alignment/size but it is possible,
+    // and this does not respect it
 
     for (size_t i = 0; i < l->aggregate.num_fields; i++) {
-      if (!ir_var_ty_eq(&l->aggregate.fields[i],
-                        &r->aggregate.fields[i])) {
+      if (!ir_var_ty_eq(&l->aggregate.fields[i], &r->aggregate.fields[i])) {
         return false;
       }
     }
@@ -324,6 +327,11 @@ void ir_walk_op_uses(struct ir_op *op, ir_walk_op_uses_callback *cb,
   case IR_OP_TY_UNKNOWN:
     BUG("unknown op!");
   case IR_OP_TY_UNDF:
+    break;
+  case IR_OP_TY_SELECT:
+    cb(&op->select.cond, IR_OP_USE_TY_READ, cb_metadata);
+    cb(&op->select.true_op, IR_OP_USE_TY_READ, cb_metadata);
+    cb(&op->select.false_op, IR_OP_USE_TY_READ, cb_metadata);
     break;
   case IR_OP_TY_VA_ARG:
     cb(&op->va_arg.list_addr, IR_OP_USE_TY_DEREF, cb_metadata);
@@ -455,6 +463,11 @@ void ir_walk_op(struct ir_op *op, ir_walk_op_callback *cb, void *cb_metadata) {
   case IR_OP_TY_UNKNOWN:
     BUG("unknown op!");
   case IR_OP_TY_UNDF:
+    break;
+  case IR_OP_TY_SELECT:
+    ir_walk_op(op->select.cond, cb, cb_metadata);
+    ir_walk_op(op->select.true_op, cb, cb_metadata);
+    ir_walk_op(op->select.false_op, cb, cb_metadata);
     break;
   case IR_OP_TY_VA_ARG:
     ir_walk_op(op->va_arg.list_addr, cb, cb_metadata);
@@ -682,8 +695,8 @@ void ir_initialise_op(struct ir_op *op, size_t id, enum ir_op_ty ty,
   op->comment = NULL;
 }
 
-static void remove_pred(struct ir_basicblock *basicblock,
-                        struct ir_basicblock *pred) {
+void ir_basicblock_remove_pred(struct ir_basicblock *basicblock,
+                               struct ir_basicblock *pred) {
   if (!basicblock) {
     return;
   }
@@ -708,22 +721,24 @@ void ir_remove_basicblock_successors(struct ir_basicblock *basicblock) {
     break;
 
   case IR_BASICBLOCK_TY_SPLIT:
-    remove_pred(basicblock->split.false_target, basicblock);
-    remove_pred(basicblock->split.true_target, basicblock);
+    ir_basicblock_remove_pred(basicblock->split.false_target, basicblock);
+    ir_basicblock_remove_pred(basicblock->split.true_target, basicblock);
     break;
 
   case IR_BASICBLOCK_TY_SWITCH:
     for (size_t i = 0; i < basicblock->switch_case.num_cases; i++) {
-      remove_pred(basicblock->switch_case.cases[i].target, basicblock);
+      ir_basicblock_remove_pred(basicblock->switch_case.cases[i].target,
+                                basicblock);
     }
 
     if (basicblock->switch_case.default_target) {
-      remove_pred(basicblock->switch_case.default_target, basicblock);
+      ir_basicblock_remove_pred(basicblock->switch_case.default_target,
+                                basicblock);
     }
     break;
 
   case IR_BASICBLOCK_TY_MERGE:
-    remove_pred(basicblock->merge.target, basicblock);
+    ir_basicblock_remove_pred(basicblock->merge.target, basicblock);
     break;
   }
 }
@@ -1824,8 +1839,7 @@ ir_insert_before_basicblock(struct ir_func *irb,
                             struct ir_basicblock *insert_before) {
   DEBUG_ASSERT(insert_before, "invalid insertion point!");
 
-  struct ir_basicblock *basicblock =
-      aralloc(irb->arena, sizeof(*basicblock));
+  struct ir_basicblock *basicblock = aralloc(irb->arena, sizeof(*basicblock));
 
   ir_initialise_basicblock(basicblock, irb->next_basicblock_id++);
 
@@ -1839,8 +1853,7 @@ ir_insert_after_basicblock(struct ir_func *irb,
                            struct ir_basicblock *insert_after) {
   DEBUG_ASSERT(insert_after, "invalid insertion point!");
 
-  struct ir_basicblock *basicblock =
-      aralloc(irb->arena, sizeof(*basicblock));
+  struct ir_basicblock *basicblock = aralloc(irb->arena, sizeof(*basicblock));
 
   ir_initialise_basicblock(basicblock, irb->next_basicblock_id++);
 
@@ -1905,8 +1918,7 @@ void ir_swap_ops(struct ir_func *irb, struct ir_op *left, struct ir_op *right) {
 }
 
 struct ir_basicblock *ir_alloc_basicblock(struct ir_func *irb) {
-  struct ir_basicblock *basicblock =
-      aralloc(irb->arena, sizeof(*basicblock));
+  struct ir_basicblock *basicblock = aralloc(irb->arena, sizeof(*basicblock));
 
   if (!irb->first) {
     irb->first = basicblock;
@@ -2221,8 +2233,8 @@ mk_op: {
 }
 
 struct ir_var_ty ir_var_ty_mk_array(const struct ir_unit *iru,
-                                      const struct ir_var_ty *underlying,
-                                      size_t num_elements) {
+                                    const struct ir_var_ty *underlying,
+                                    size_t num_elements) {
   struct ir_var_ty *copied = aralloc(iru->arena, sizeof(*copied));
 
   *copied = *underlying;
@@ -2280,9 +2292,27 @@ void ir_add_pred_to_basicblock(struct ir_func *irb,
   basicblock->num_preds++;
   basicblock->preds =
       arrealloc(irb->arena, basicblock->preds,
-                    sizeof(struct ir_basicblock *) * basicblock->num_preds);
+                sizeof(struct ir_basicblock *) * basicblock->num_preds);
 
   basicblock->preds[basicblock->num_preds - 1] = pred;
+}
+
+void ir_make_basicblock_ret(UNUSED struct ir_func *irb,
+                            struct ir_basicblock *basicblock) {
+  ir_remove_basicblock_successors(basicblock);
+
+  basicblock->ty = IR_BASICBLOCK_TY_RET;
+}
+
+void ir_make_basicblock_merge(struct ir_func *irb,
+                              struct ir_basicblock *basicblock,
+                              struct ir_basicblock *target) {
+  ir_remove_basicblock_successors(basicblock);
+
+  basicblock->ty = IR_BASICBLOCK_TY_MERGE;
+  basicblock->merge = (struct ir_basicblock_merge){.target = target};
+
+  ir_add_pred_to_basicblock(irb, target, basicblock);
 }
 
 void ir_make_basicblock_split(struct ir_func *irb,
@@ -2299,24 +2329,6 @@ void ir_make_basicblock_split(struct ir_func *irb,
   ir_add_pred_to_basicblock(irb, false_target, basicblock);
 }
 
-void ir_make_basicblock_ret(UNUSED struct ir_func *irb,
-                              struct ir_basicblock *basicblock) {
-  ir_remove_basicblock_successors(basicblock);
-  
-  basicblock->ty = IR_BASICBLOCK_TY_RET;
-}
-
-void ir_make_basicblock_merge(struct ir_func *irb,
-                              struct ir_basicblock *basicblock,
-                              struct ir_basicblock *target) {
-  ir_remove_basicblock_successors(basicblock);
-
-  basicblock->ty = IR_BASICBLOCK_TY_MERGE;
-  basicblock->merge = (struct ir_basicblock_merge){.target = target};
-
-  ir_add_pred_to_basicblock(irb, target, basicblock);
-}
-
 void ir_make_basicblock_switch(struct ir_func *irb,
                                struct ir_basicblock *basicblock,
                                size_t num_cases, struct ir_split_case *cases,
@@ -2326,7 +2338,7 @@ void ir_make_basicblock_switch(struct ir_func *irb,
   basicblock->ty = IR_BASICBLOCK_TY_SWITCH;
   basicblock->switch_case = (struct ir_basicblock_switch){
       .cases = aralloc(irb->arena,
-                           sizeof(*basicblock->switch_case.cases) * num_cases),
+                       sizeof(*basicblock->switch_case.cases) * num_cases),
       .num_cases = num_cases,
       .default_target = default_target};
 
@@ -2516,6 +2528,7 @@ struct ir_glb *ir_add_global(struct ir_unit *iru, enum ir_glb_ty ty,
   iru->num_globals++;
   *glb = (struct ir_glb){
       .id = pred ? pred->id + 1 : 0,
+      .unit = iru,
       .succ = NULL,
       .pred = pred,
       .ty = ty,
@@ -2725,7 +2738,8 @@ struct ir_var_ty_info ir_var_ty_info(const struct ir_unit *iru,
   case IR_VAR_TY_TY_FUNC:
   case IR_VAR_TY_TY_POINTER:
     if (!iru) {
-      return (struct ir_var_ty_info){.size = IR_TY_INFO_SZ_PTR, .alignment = IR_TY_INFO_SZ_PTR};
+      return (struct ir_var_ty_info){.size = IR_TY_INFO_SZ_PTR,
+                                     .alignment = IR_TY_INFO_SZ_PTR};
     }
 
     switch (iru->target->lp_sz) {
@@ -2990,8 +3004,8 @@ struct ir_op_use_map ir_build_op_uses_map(struct ir_func *func) {
           aralloc(func->arena, sizeof(*uses.op_use_datas) * func->op_count),
 
       .num_lcl_use_datas = func->lcl_count,
-      .lcl_use_datas = aralloc(func->arena, sizeof(*uses.lcl_use_datas) *
-                                                    func->lcl_count),
+      .lcl_use_datas =
+          aralloc(func->arena, sizeof(*uses.lcl_use_datas) * func->lcl_count),
   };
 
   for (size_t i = 0; i < func->op_count; i++) {
@@ -3016,8 +3030,7 @@ struct ir_op_use_map ir_build_op_uses_map(struct ir_func *func) {
     uses.lcl_use_datas[i] = (struct ir_lcl_usage){
         .lcl = use_data->lcl,
         .num_consumers = vector_length(use_data->uses),
-        .consumers =
-            aralloc(func->arena, vector_byte_size(use_data->uses))};
+        .consumers = aralloc(func->arena, vector_byte_size(use_data->uses))};
 
     vector_copy_to(use_data->uses, uses.lcl_use_datas[i].consumers);
     vector_free(&use_data->uses);
@@ -3295,14 +3308,12 @@ static struct ir_idoms compute_idoms(struct ir_func *func) {
   struct ir_basicblock **idoms = aralloc(
       func->arena, func->basicblock_count * sizeof(struct ir_basicblock *));
 
-  size_t *rpo =
-      aralloc(func->arena, func->basicblock_count * sizeof(size_t));
+  size_t *rpo = aralloc(func->arena, func->basicblock_count * sizeof(size_t));
 
   struct ir_basicblock **rpo_order = aralloc(
       func->arena, func->basicblock_count * sizeof(struct ir_basicblock *));
 
-  bool *visited =
-      aralloc(func->arena, func->basicblock_count * sizeof(bool));
+  bool *visited = aralloc(func->arena, func->basicblock_count * sizeof(bool));
   memset(visited, false, func->basicblock_count * sizeof(bool));
 
   size_t count = 0;
@@ -3423,13 +3434,13 @@ static void compute_df_recursive(struct ir_basicblock *basicblock,
 
 struct ir_dominance_frontier
 ir_compute_dominance_frontier(struct ir_func *func) {
-  struct vector **domf = aralloc(func->arena, func->basicblock_count *
-                                                      sizeof(struct vector *));
+  struct vector **domf =
+      aralloc(func->arena, func->basicblock_count * sizeof(struct vector *));
 
-  struct vector **dom_trees = aralloc(
-      func->arena, func->basicblock_count * sizeof(struct vector *));
-  struct vector **children = aralloc(
-      func->arena, func->basicblock_count * sizeof(struct vector *));
+  struct vector **dom_trees =
+      aralloc(func->arena, func->basicblock_count * sizeof(struct vector *));
+  struct vector **children =
+      aralloc(func->arena, func->basicblock_count * sizeof(struct vector *));
 
   struct ir_idoms idoms = compute_idoms(func);
 

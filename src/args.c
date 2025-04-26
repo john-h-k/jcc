@@ -228,6 +228,42 @@ static void bad_value(struct arg *arg, ustr_t lookup_str, const char *value) {
   printf("\n");
 }
 
+// TODO: use this
+UNUSED static struct vector *get_env_args(int argc, char **argv) {
+  struct vector *buf = vector_create(sizeof(char));
+  struct vector *args = vector_create(sizeof(char *));
+  for (int i = 0; i < argc; i++) {
+    char *arg = argv[i];
+    vector_push_back(args, &arg);
+  }
+
+  const char *env = getenv("JCCFLAGS");
+
+  if (!env) {
+    return args;
+  }
+
+  // FIXME: this is really basic logic, doesn't respect escapes or stuff, just
+  // appends args to end
+  while (env) {
+    const char *next = strchr(env, ' ');
+
+    if (next) {
+      char *p = vector_extend(buf, env, (size_t)(next - env));
+      vector_push_back(buf, &(char){0});
+
+      vector_push_back(args, &p);
+      next++;
+    } else {
+      vector_push_back(args, &env);
+    }
+
+    env = next;
+  }
+
+  return args;
+}
+
 enum parse_args_result parse_args(int argc, char **argv,
                                   struct parsed_args *parsed) {
   for (int i = 0; i < argc; i++) {

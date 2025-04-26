@@ -216,7 +216,9 @@ static void build_interf_graph(struct graphcol_state *state,
     ir_spill_op(state->irb, data->intervals[spilled_var].op);
   }
 
-  debug_print_ir_func(stderr, state->irb, print_ir_intervals, data->intervals);
+  debug_print_ir_func(
+      stderr, state->irb,
+      DEBUG_PRINT_IR_OPTS_CALLBACK(print_ir_intervals, data->intervals));
 }
 
 // uses graph-coloring technique to allocate registers - relies on SSA form!

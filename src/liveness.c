@@ -32,8 +32,10 @@ static void validate_intervals_cb(struct ir_op **op,
       if (entry.value == *op) {
         if (interval->start > entry.basicblock->last->last->id ||
             interval->end < entry.basicblock->last->last->id) {
-          debug_print_ir_func(stderr, data->func, print_ir_intervals,
-                              data->intervals.intervals);
+          debug_print_ir_func(
+              stderr, data->func,
+              DEBUG_PRINT_IR_OPTS_CALLBACK(print_ir_intervals,
+                                           data->intervals.intervals));
           // buggy
           // BUG("op %zu is a phi with interval (%zu, %zu) but used by op %zu "
           //     "(expected it to live to end of pred block, op %zu)",
@@ -48,8 +50,9 @@ static void validate_intervals_cb(struct ir_op **op,
   } else if (interval->start > data->consumer->id ||
              interval->end < data->consumer->id) {
 
-    debug_print_ir_func(stderr, data->func, print_ir_intervals,
-                        data->intervals.intervals);
+    debug_print_ir_func(stderr, data->func,
+                        DEBUG_PRINT_IR_OPTS_CALLBACK(
+                            print_ir_intervals, data->intervals.intervals));
     BUG("op %zu interval (%zu, %zu) but used by op %zu", (*op)->id,
         interval->start, interval->end, data->consumer->id);
   }
@@ -258,8 +261,7 @@ struct interval_data construct_intervals(struct ir_func *irb) {
   struct ir_dominance_frontier df = ir_compute_dominance_frontier(irb);
 
   struct interval_data data;
-  data.intervals =
-      aralloc(irb->arena, sizeof(*data.intervals) * irb->op_count);
+  data.intervals = aralloc(irb->arena, sizeof(*data.intervals) * irb->op_count);
   data.num_intervals = 0;
 
   bool seen_cross_bb = false;

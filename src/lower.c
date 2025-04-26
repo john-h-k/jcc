@@ -282,19 +282,28 @@ static void lower_br_switch(struct ir_func *func, struct ir_op *op) {
 
   size_t num_cases = bb_switch->num_cases;
   struct ir_split_case *split_cases = bb_switch->cases;
+
+  // do this pass once to remove existing preds
+  // we do it before in case of duplicate targets e.g
+  //
+  //   05: %5 (<none>) = br.switch %4, [
+  //     # 0 -> @2
+  //     # 1 -> @2
+  //     # 2 -> @2
+  //     DEFAULT -> @1
+  //   ]
+  //
+  // when the second branch is generated, it will remove @2 from preds _again_
+  // even thought is is now correctly a pred
+
   for (size_t i = 0; i < num_cases; i++) {
     struct ir_split_case *split_case = &split_cases[i];
 
-    for (size_t j = 0; j < split_case->target->num_preds; j++) {
-      if (split_case->target->preds[j] == bb) {
-        // remove pred
-        memmove(&split_case->target->preds[j],
-                &split_case->target->preds[j + 1],
-                (split_case->target->num_preds - j - 1) *
-                    sizeof(struct ir_basicblock *));
-        split_case->target->num_preds--;
-      }
-    }
+    ir_basicblock_remove_pred(split_case->target, bb);
+  }
+
+  for (size_t i = 0; i < num_cases; i++) {
+    struct ir_split_case *split_case = &split_cases[i];
 
     struct ir_stmt *cmp_stmt = ir_alloc_stmt(func, prev_bb);
     struct ir_op *cnst = ir_alloc_op(func, cmp_stmt);
@@ -319,26 +328,20 @@ static void lower_br_switch(struct ir_func *func, struct ir_op *op) {
           ir_insert_after_basicblock(func, prev_bb);
 
       propogate_switch_phis(func, bb, prev_bb, split_case->target);
+
       ir_make_basicblock_split(func, prev_bb, split_case->target, next_cond);
 
       prev_bb = next_cond;
     } else {
       struct ir_basicblock *default_target = bb_switch->default_target;
 
-      for (size_t j = 0; j < default_target->num_preds; j++) {
-        if (bb_switch->default_target->preds[j] == bb) {
-          // remove pred
-          memmove(&default_target->preds[j], &default_target->preds[j + 1],
-                  (default_target->num_preds - j - 1) *
-                      sizeof(struct ir_basicblock *));
-          default_target->num_preds--;
-        }
-      }
+      ir_basicblock_remove_pred(default_target, bb);
 
       propogate_switch_phis(func, bb, prev_bb, split_case->target);
-      propogate_switch_phis(func, bb, prev_bb, bb_switch->default_target);
+      propogate_switch_phis(func, bb, prev_bb, default_target);
+
       ir_make_basicblock_split(func, prev_bb, split_case->target,
-                               bb_switch->default_target);
+                               default_target);
     }
   }
 }
@@ -458,8 +461,7 @@ static void lower_mem_set(struct ir_func *func, struct ir_op *op) {
   };
 
   size_t num_args = 3;
-  struct ir_op **args =
-      aralloc(func->arena, sizeof(struct ir_op *) * num_args);
+  struct ir_op **args = aralloc(func->arena, sizeof(struct ir_op *) * num_args);
 
   args[0] = addr;
   args[1] = value_cnst;
@@ -568,8 +570,7 @@ static void lower_mem_copy(struct ir_func *func, struct ir_op *op) {
   };
 
   size_t num_args = 3;
-  struct ir_op **args =
-      aralloc(func->arena, sizeof(struct ir_op *) * num_args);
+  struct ir_op **args = aralloc(func->arena, sizeof(struct ir_op *) * num_args);
 
   args[0] = dest;
   args[1] = source;
@@ -876,8 +877,8 @@ static void lower_params(struct ir_func *func) {
                                                    op->ret.value->var_ty);
         gather->gather = (struct ir_op_gather){
             .num_values = num_reg,
-            .values = aralloc(func->arena,
-                                  sizeof(*gather->gather.values) * num_reg)};
+            .values =
+                aralloc(func->arena, sizeof(*gather->gather.values) * num_reg)};
 
         struct ir_op *last = gather;
 
@@ -1696,6 +1697,7 @@ void lower(struct ir_unit *unit) {
             case IR_OP_TY_UNKNOWN:
               BUG("unknown op!");
             case IR_OP_TY_UNDF:
+            case IR_OP_TY_SELECT:
             case IR_OP_TY_CNST:
             case IR_OP_TY_VA_START:
             case IR_OP_TY_VA_ARG:

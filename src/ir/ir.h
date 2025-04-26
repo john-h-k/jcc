@@ -27,6 +27,8 @@ enum ir_op_ty {
   IR_OP_TY_UNARY_OP,
   IR_OP_TY_CAST_OP,
 
+  IR_OP_TY_SELECT,
+
   IR_OP_TY_STORE,
   IR_OP_TY_LOAD,
   IR_OP_TY_STORE_BITFIELD,
@@ -67,6 +69,12 @@ struct ir_gather_value {
 struct ir_op_gather {
   struct ir_gather_value *values;
   size_t num_values;
+};
+
+struct ir_op_select {
+  struct ir_op *cond;
+  struct ir_op *true_op;
+  struct ir_op *false_op;
 };
 
 struct ir_op_mov {
@@ -596,6 +604,7 @@ struct ir_op {
     struct ir_op_unary_op unary_op;
     struct ir_op_cast_op cast_op;
     struct ir_op_ret ret;
+    struct ir_op_select select;
     struct ir_op_mem_set mem_set;
     struct ir_op_mem_copy mem_copy;
     struct ir_op_store store;
@@ -819,6 +828,8 @@ enum ir_linkage { IR_LINKAGE_NONE, IR_LINKAGE_INTERNAL, IR_LINKAGE_EXTERNAL };
 
 struct ir_glb {
   size_t id;
+
+  struct ir_unit *unit;
 
   enum ir_glb_ty ty;
   enum ir_glb_def_ty def_ty;
@@ -1176,8 +1187,10 @@ struct ir_basicblock *
 ir_insert_basicblocks_after_op(struct ir_func *irb, struct ir_op *insert_after,
                                struct ir_basicblock *first);
 
-// we should probably make this implicitly called by below functions
 void ir_remove_basicblock_successors(struct ir_basicblock *basicblock);
+
+void ir_basicblock_remove_pred(struct ir_basicblock *basicblock,
+                               struct ir_basicblock *pred);
 
 void ir_make_basicblock_split(struct ir_func *irb,
                               struct ir_basicblock *basicblock,
@@ -1185,7 +1198,7 @@ void ir_make_basicblock_split(struct ir_func *irb,
                               struct ir_basicblock *false_target);
 
 void ir_make_basicblock_ret(struct ir_func *irb,
-                              struct ir_basicblock *basicblock);
+                            struct ir_basicblock *basicblock);
 
 void ir_make_basicblock_merge(struct ir_func *irb,
                               struct ir_basicblock *basicblock,
@@ -1321,15 +1334,15 @@ struct ir_var_ty_info {
 struct ir_var_ty_info ir_var_ty_info(const struct ir_unit *iru,
                                      const struct ir_var_ty *ty);
 
-struct ir_var_ty_info ir_var_ty_info_op(
-                                     const struct ir_var_ty *ty);
+struct ir_var_ty_info ir_var_ty_info_op(const struct ir_var_ty *ty);
 
-enum ir_var_primitive_ty ir_var_ty_pointer_primitive_ty(const struct ir_unit *iru);
+enum ir_var_primitive_ty
+ir_var_ty_pointer_primitive_ty(const struct ir_unit *iru);
 
 struct ir_var_ty ir_var_ty_for_pointer_size(const struct ir_unit *iru);
 struct ir_var_ty ir_var_ty_mk_array(const struct ir_unit *iru,
-                                      const struct ir_var_ty *underlying,
-                                      size_t num_elements);
+                                    const struct ir_var_ty *underlying,
+                                    size_t num_elements);
 
 bool ir_var_ty_is_primitive(const struct ir_var_ty *var_ty,
                             enum ir_var_primitive_ty primitive);
@@ -1337,8 +1350,7 @@ bool ir_var_ty_is_integral(const struct ir_var_ty *var_ty);
 bool ir_var_ty_is_fp(const struct ir_var_ty *var_ty);
 bool ir_var_ty_is_aggregate(const struct ir_var_ty *var_ty);
 
-bool ir_var_ty_eq(const struct ir_var_ty *l,
-                  const struct ir_var_ty *r);
+bool ir_var_ty_eq(const struct ir_var_ty *l, const struct ir_var_ty *r);
 
 struct ir_op *ir_spill_op(struct ir_func *irb, struct ir_op *op);
 

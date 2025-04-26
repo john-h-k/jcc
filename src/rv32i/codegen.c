@@ -1,11 +1,7 @@
 #include "codegen.h"
 
 #include "../alloc.h"
-#include "../bit_twiddle.h"
-#include "../bitset.h"
 #include "../log.h"
-#include "../rv32i.h"
-#include "../vector.h"
 
 #define NOP_ALIAS                                                              \
   (struct rv32i_instr) {                                                       \
@@ -1372,8 +1368,7 @@ static void codegen_call_op(struct cg_state *state,
       instr->rv32i->jal = (struct rv32i_jal){
           .target = RV32I_SYMBOL_TARGET(entry), .ret_addr = RET_PTR_REG};
 
-      instr->reloc =
-          aralloc(state->func->unit->arena, sizeof(*instr->reloc));
+      instr->reloc = aralloc(state->func->unit->arena, sizeof(*instr->reloc));
       *instr->reloc = (struct relocation){
           .ty = RELOCATION_TY_CALL,
           .symbol_index = op->call.target->addr.glb->id,
@@ -1387,8 +1382,7 @@ static void codegen_call_op(struct cg_state *state,
       auipc->rv32i->ty = RV32I_INSTR_TY_AUIPC;
       auipc->rv32i->auipc = (struct rv32i_u){.dest = RET_PTR_REG, .imm = 0};
 
-      auipc->reloc =
-          aralloc(state->func->unit->arena, sizeof(*auipc->reloc));
+      auipc->reloc = aralloc(state->func->unit->arena, sizeof(*auipc->reloc));
       *auipc->reloc = (struct relocation){
           .ty = RELOCATION_TY_CALL,
           .symbol_index = op->call.target->addr.glb->id,

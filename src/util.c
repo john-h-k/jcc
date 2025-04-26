@@ -41,6 +41,40 @@ void util_debug_assert(bool b, const char *cond, const char *func,
 
 #define TRACE_SZ 32
 
+#if OS_APPLE
+
+#include <dlfcn.h>
+#include <execinfo.h>
+#include <mach-o/dyld.h>
+
+void debug_print_stack_trace(void) {
+  void *trace[TRACE_SZ];
+  int n = backtrace(trace, TRACE_SZ);
+  char **sym = backtrace_symbols(trace, n);
+
+  fprintf(stderr, "\nSTACK TRACE (%d frames):\n", n);
+
+  for (int i = 0; i < n; i++) {
+    Dl_info info = {0};
+    if (dladdr(trace[i], &info) && info.dli_fname) {
+      uintptr_t slide = (uintptr_t)info.dli_fbase;
+
+      char cmd[512];
+      snprintf(cmd, sizeof(cmd), "atos -o \"%s\" -l %p %p",
+
+               info.dli_fname, (void *)slide, trace[i]);
+#undef system
+      if (system(cmd) == -1) {
+        fprintf(stderr, "    (atos failed: %s)\n", strerror(errno));
+      }
+    } else {
+      fprintf(stderr, " [%2d] %p  %s\n", i, trace[i], sym[i]);
+    }
+  }
+}
+
+#else
+
 void debug_print_stack_trace(void) {
   // TODO: on macOS use `atos` as `addr2line` does not exist
 
@@ -82,11 +116,14 @@ void debug_print_stack_trace(void) {
              "addr2line -C -i -f -p -s -a -e /proc/%d/exe +%p", getpid(),
              relative_addr);
 
-    // if (system_f(command) == -1) {
-    //   fprintf(stderr, "  (failed to run addr2line: %s)\n", strerror(errno));
-    // }
+#undef system
+    if (system(command) == -1) {
+      fprintf(stderr, "  (failed to run addr2line: %s)\n", strerror(errno));
+    }
   }
 }
+#endif
+
 #endif
 
 #define PRINT_STR(get_ch, write_str, ret, fn_prefix, literal_prefix)           \

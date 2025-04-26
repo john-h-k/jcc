@@ -184,8 +184,7 @@ void debug_print_func_info(FILE *file, struct ir_unit *iru,
   }
 }
 
-void debug_print_var_ty_string(FILE *file,
-                               const struct ir_var_ty *var_ty) {
+void debug_print_var_ty_string(FILE *file, const struct ir_var_ty *var_ty) {
   switch (var_ty->ty) {
   case IR_VAR_TY_TY_NONE: {
     fprintf(file, "<none>");
@@ -332,26 +331,55 @@ enum print_op_ctx {
   PRINT_OP_CTX_USE,
 };
 
-static void debug_print_op_with_ctx(FILE *file,
-                                    struct ir_op *op, enum print_op_ctx ctx);
+static void debug_print_op_with_ctx(FILE *file, struct ir_op *op,
+                                    const struct debug_print_ir_opts *opts,
+                                    enum print_op_ctx ctx);
 
-static void debug_print_op_use(FILE *file,
-                               struct ir_op *ir) {
+static void debug_print_op_use(FILE *file, struct ir_op *op,
+                               const struct debug_print_ir_opts *opts) {
   // DEBUG_ASSERT(ir->stmt,
   //              "op used by other op but had no stmt (likely detached)");
 
-  if (ir->id == DETACHED_OP) {
+  if (op->id == DETACHED_OP) {
     fprintf(file, "DETACHED ");
-    debug_print_op_with_ctx(file, ir, PRINT_OP_CTX_USE);
-  } else if (ir->flags & IR_OP_FLAG_CONTAINED) {
-    debug_print_op_with_ctx(file, ir, PRINT_OP_CTX_USE);
+    debug_print_op_with_ctx(file, op, opts, PRINT_OP_CTX_USE);
+  } else if (op->flags & IR_OP_FLAG_CONTAINED) {
+    debug_print_op_with_ctx(file, op, opts, PRINT_OP_CTX_USE);
   } else {
-    fprintf(file, "%%%zu", ir->id);
+    fprintf(file, "%%%zu", op->id);
   }
 }
 
-static void debug_print_op_with_ctx(FILE *file,
-                                    struct ir_op *op, enum print_op_ctx ctx) {
+static void debug_print_glb_name(FILE *file, struct arena_allocator *arena,
+                                 struct ir_glb *glb,
+                                 const struct debug_print_ir_opts *opts) {
+  if (glb->name) {
+    const char *name = glb->name;
+
+    if (opts->demangle_sym) {
+      name = opts->demangle_sym(arena, glb->name);
+    }
+
+    fprintf(file, "%s", name);
+  }
+}
+
+static void
+debug_print_glb_name_comment(FILE *file, struct arena_allocator *arena,
+                             struct ir_glb *glb,
+                             const struct debug_print_ir_opts *opts) {
+  if (!glb->name) {
+    return;
+  }
+
+  fprintf(file, " ; \"");
+  debug_print_glb_name(file, arena, glb, opts);
+  fprintf(file, "\"");
+}
+
+static void debug_print_op_with_ctx(FILE *file, struct ir_op *op,
+                                    const struct debug_print_ir_opts *opts,
+                                    enum print_op_ctx ctx) {
   if (ctx != PRINT_OP_CTX_USE && op->comment) {
     fprintf(file, "// %s\n", op->comment);
   }
@@ -363,15 +391,23 @@ static void debug_print_op_with_ctx(FILE *file,
   switch (op->ty) {
   case IR_OP_TY_UNKNOWN:
     BUG("unknown op!");
+  case IR_OP_TY_SELECT:
+    fprintf(file, "select ");
+    debug_print_op_use(file, op->select.cond, opts);
+    fprintf(file, ", ");
+    debug_print_op_use(file, op->select.true_op, opts);
+    fprintf(file, ", ");
+    debug_print_op_use(file, op->select.false_op, opts);
+    break;
   case IR_OP_TY_VA_START:
     fprintf(file, "va_start ");
-    debug_print_op_use(file, op->va_start.list_addr);
+    debug_print_op_use(file, op->va_start.list_addr, opts);
     break;
   case IR_OP_TY_VA_ARG:
     fprintf(file, "va_arg ");
     debug_print_var_ty_string(file, &op->va_arg.arg_ty);
     fprintf(file, ", ");
-    debug_print_op_use(file, op->va_arg.list_addr);
+    debug_print_op_use(file, op->va_arg.list_addr, opts);
     break;
   case IR_OP_TY_UNDF:
     fprintf(file, "UNDF");
@@ -393,7 +429,7 @@ static void debug_print_op_with_ctx(FILE *file,
   case IR_OP_TY_CALL: {
     fprintf(file, "call ");
 
-    debug_print_op_use(file, op->call.target);
+    debug_print_op_use(file, op->call.target, opts);
     fprintf(file, " ( ");
     debug_call_arg_string(file, &op->call);
     fprintf(file, " )");
@@ -406,7 +442,7 @@ static void debug_print_op_with_ctx(FILE *file,
     break;
   case IR_OP_TY_MOV:
     if (op->mov.value) {
-      debug_print_op_use(file, op->mov.value);
+      debug_print_op_use(file, op->mov.value, opts);
       fprintf(file, " : (");
       debug_print_ir_reg(file, op->mov.value->reg);
       fprintf(file, " -> ");
@@ -427,17 +463,17 @@ static void debug_print_op_with_ctx(FILE *file,
     }
     break;
   case IR_OP_TY_BINARY_OP:
-    debug_print_op_use(file, op->binary_op.lhs);
+    debug_print_op_use(file, op->binary_op.lhs, opts);
     fprintf(file, " %s ", binary_op_string(op->binary_op.ty));
-    debug_print_op_use(file, op->binary_op.rhs);
+    debug_print_op_use(file, op->binary_op.rhs, opts);
     break;
   case IR_OP_TY_UNARY_OP:
     fprintf(file, "%s ", unary_op_string(op->unary_op.ty));
-    debug_print_op_use(file, op->unary_op.value);
+    debug_print_op_use(file, op->unary_op.value, opts);
     break;
   case IR_OP_TY_CAST_OP:
     fprintf(file, "%s ", cast_op_string(op->cast_op.ty));
-    debug_print_op_use(file, op->cast_op.value);
+    debug_print_op_use(file, op->cast_op.value, opts);
     break;
   case IR_OP_TY_STORE:
     switch (op->store.ty) {
@@ -453,15 +489,17 @@ static void debug_print_op_with_ctx(FILE *file,
       if (op->load.glb) {
         fprintf(file, "store.glb GLB(%zu), %%%zu", op->store.glb->id,
                 op->store.value->id);
+        debug_print_glb_name_comment(file, op->stmt->basicblock->func->arena,
+                                     op->addr.glb, opts);
       } else {
         fprintf(file, "store.glb GLB(UNASSIGNED), %%%zu", op->store.value->id);
       }
       break;
     case IR_OP_STORE_TY_ADDR:
       fprintf(file, "store.addr [");
-      debug_print_op_use(file, op->store.addr);
+      debug_print_op_use(file, op->store.addr, opts);
       fprintf(file, "], ");
-      debug_print_op_use(file, op->store.value);
+      debug_print_op_use(file, op->store.value, opts);
       break;
     }
 
@@ -478,13 +516,15 @@ static void debug_print_op_with_ctx(FILE *file,
     case IR_OP_LOAD_TY_GLB:
       if (op->load.glb) {
         fprintf(file, "load.glb GLB(%zu)", op->load.glb->id);
+        debug_print_glb_name_comment(file, op->stmt->basicblock->func->arena,
+                                     op->addr.glb, opts);
       } else {
         fprintf(file, "load.glb GLB(UNASSIGNED)");
       }
       break;
     case IR_OP_LOAD_TY_ADDR:
       fprintf(file, "load.addr [");
-      debug_print_op_use(file, op->load.addr);
+      debug_print_op_use(file, op->load.addr, opts);
       fprintf(file, "]");
       break;
     }
@@ -510,6 +550,8 @@ static void debug_print_op_with_ctx(FILE *file,
         fprintf(file, "store.bitfield.glb (#%zu, #%zu) GLB(%zu), %%%zu",
                 bitfield.offset, bitfield.width, op->store_bitfield.glb->id,
                 op->store_bitfield.value->id);
+        debug_print_glb_name_comment(file, op->stmt->basicblock->func->arena,
+                                     op->addr.glb, opts);
       } else {
         fprintf(file, "store.bitfield.glb (#%zu, #%zu) GLB(UNASSIGNED), %%%zu",
                 bitfield.offset, bitfield.width, op->store_bitfield.value->id);
@@ -518,9 +560,9 @@ static void debug_print_op_with_ctx(FILE *file,
     case IR_OP_STORE_TY_ADDR:
       fprintf(file, "store.bitfield.addr (#%zu, #%zu) [", bitfield.offset,
               bitfield.width);
-      debug_print_op_use(file, op->store_bitfield.addr);
+      debug_print_op_use(file, op->store_bitfield.addr, opts);
       fprintf(file, "], ");
-      debug_print_op_use(file, op->store_bitfield.value);
+      debug_print_op_use(file, op->store_bitfield.value, opts);
       break;
     }
 
@@ -543,6 +585,8 @@ static void debug_print_op_with_ctx(FILE *file,
       if (op->load_bitfield.glb) {
         fprintf(file, "load.bitfield.glb (#%zu, #%zu) GLB(%zu)",
                 bitfield.offset, bitfield.width, op->load_bitfield.glb->id);
+        debug_print_glb_name_comment(file, op->stmt->basicblock->func->arena,
+                                     op->addr.glb, opts);
       } else {
         fprintf(file, "load.bitfield.glb (#%zu, #%zu) GLB(UNASSIGNED)",
                 bitfield.offset, bitfield.width);
@@ -551,7 +595,7 @@ static void debug_print_op_with_ctx(FILE *file,
     case IR_OP_LOAD_TY_ADDR:
       fprintf(file, "load.bitfield.addr (#%zu, #%zu) [", bitfield.offset,
               bitfield.width);
-      debug_print_op_use(file, op->load_bitfield.addr);
+      debug_print_op_use(file, op->load_bitfield.addr, opts);
       fprintf(file, "]");
       break;
     }
@@ -560,10 +604,10 @@ static void debug_print_op_with_ctx(FILE *file,
   }
   case IR_OP_TY_ADDR_OFFSET:
     fprintf(file, "addr.off ");
-    debug_print_op_use(file, op->addr_offset.base);
+    debug_print_op_use(file, op->addr_offset.base, opts);
     if (op->addr_offset.index) {
       fprintf(file, " + ");
-      debug_print_op_use(file, op->addr_offset.index);
+      debug_print_op_use(file, op->addr_offset.index, opts);
 
       if (op->addr_offset.scale != 1) {
         fprintf(file, " * #%zu", op->addr_offset.scale);
@@ -597,13 +641,12 @@ static void debug_print_op_with_ctx(FILE *file,
       break;
     case IR_OP_ADDR_TY_GLB:
       if (ctx == PRINT_OP_CTX_USE) {
-        fprintf(file, "%s", op->addr.glb->name);
+        debug_print_glb_name(file, op->stmt->basicblock->func->arena,
+                             op->addr.glb, opts);
       } else {
         fprintf(file, "addr GLB(%zu)", op->addr.glb->id);
-
-        if (op->addr.glb->name) {
-          fprintf(file, " ; \"%s\"", op->addr.glb->name);
-        }
+        debug_print_glb_name_comment(file, op->stmt->basicblock->func->arena,
+                                     op->addr.glb, opts);
       }
       break;
     }
@@ -620,7 +663,7 @@ static void debug_print_op_with_ctx(FILE *file,
   }
   case IR_OP_TY_BR_COND:
     fprintf(file, "br.cond ");
-    debug_print_op_use(file, op->br_cond.cond);
+    debug_print_op_use(file, op->br_cond.cond, opts);
     fprintf(file, ", TRUE(@%zu), FALSE(@%zu)",
             op->stmt->basicblock->split.true_target->id,
             op->stmt->basicblock->split.false_target->id);
@@ -644,7 +687,7 @@ static void debug_print_op_with_ctx(FILE *file,
   case IR_OP_TY_RET:
     if (op->ret.value) {
       fprintf(file, "return ");
-      debug_print_op_use(file, op->ret.value);
+      debug_print_op_use(file, op->ret.value, opts);
     } else {
       fprintf(file, "return");
     }
@@ -653,33 +696,34 @@ static void debug_print_op_with_ctx(FILE *file,
     fprintf(file, "bitfield.extract #(%zu, %zu), ",
             op->bitfield_extract.bitfield.offset,
             op->bitfield_extract.bitfield.width);
-    debug_print_op_use(file, op->bitfield_extract.value);
+    debug_print_op_use(file, op->bitfield_extract.value, opts);
     break;
   case IR_OP_TY_BITFIELD_INSERT:
     fprintf(file, "bitfield.insert #(%zu, %zu), ",
             op->bitfield_insert.bitfield.offset,
             op->bitfield_insert.bitfield.width);
-    debug_print_op_use(file, op->bitfield_insert.target);
+    debug_print_op_use(file, op->bitfield_insert.target, opts);
     fprintf(file, ", ");
-    debug_print_op_use(file, op->bitfield_insert.value);
+    debug_print_op_use(file, op->bitfield_insert.value, opts);
     break;
   case IR_OP_TY_MEM_SET:
     fprintf(file, "mem.set ");
-    debug_print_op_use(file, op->mem_set.addr);
+    debug_print_op_use(file, op->mem_set.addr, opts);
     fprintf(file, ", #%zu, #%d", op->mem_set.length, op->mem_set.value);
     break;
   case IR_OP_TY_MEM_COPY:
     fprintf(file, "mem.copy ");
-    debug_print_op_use(file, op->mem_copy.dest);
+    debug_print_op_use(file, op->mem_copy.dest, opts);
     fprintf(file, ", ");
-    debug_print_op_use(file, op->mem_copy.source);
+    debug_print_op_use(file, op->mem_copy.source, opts);
     fprintf(file, ", #%zu", op->mem_set.length);
     break;
   }
 }
 
-void debug_print_op(FILE *file, struct ir_op *op) {
-  debug_print_op_with_ctx(file, op, PRINT_OP_CTX_TOP_LEVEL);
+void debug_print_op(FILE *file, struct ir_op *op,
+                    const struct debug_print_ir_opts *opts) {
+  debug_print_op_with_ctx(file, op, opts, PRINT_OP_CTX_TOP_LEVEL);
   fprintf(file, "\n");
 }
 
@@ -687,13 +731,11 @@ struct prettyprint_file_metadata {
   FILE *file;
   int ctr_pad;
   size_t ctr;
-  debug_print_op_callback *cb;
-  void *cb_metadata;
 };
 
-static void prettyprint_begin_visit_stmt_file(UNUSED_ARG(struct ir_func *irb),
-                                              struct ir_stmt *stmt,
-                                              void *metadata) {
+static void prettyprint_begin_visit_stmt_file(
+    UNUSED_ARG(struct ir_func *irb), struct ir_stmt *stmt,
+    UNUSED const struct debug_print_ir_opts *opts, void *metadata) {
   struct prettyprint_file_metadata *fm = metadata;
 
   if (stmt->comment) {
@@ -722,10 +764,9 @@ static void prettyprint_begin_visit_stmt_file(UNUSED_ARG(struct ir_func *irb),
   fprintf(fm->file, "$ %03zu\n", stmt->id);
 }
 
-static void
-prettyprint_begin_visit_basicblock_file(UNUSED_ARG(struct ir_func *irb),
-                                        struct ir_basicblock *basicblock,
-                                        void *metadata) {
+static void prettyprint_begin_visit_basicblock_file(
+    UNUSED_ARG(struct ir_func *irb), struct ir_basicblock *basicblock,
+    UNUSED const struct debug_print_ir_opts *opts, void *metadata) {
   struct prettyprint_file_metadata *fm = metadata;
 
   fprintf(fm->file, "\n\n");
@@ -766,13 +807,15 @@ prettyprint_begin_visit_basicblock_file(UNUSED_ARG(struct ir_func *irb),
 
 static void prettyprint_end_visit_basicblock_file(
     UNUSED_ARG(struct ir_func *irb),
-    UNUSED_ARG(struct ir_basicblock *basicblock), void *metadata) {
+    UNUSED_ARG(struct ir_basicblock *basicblock),
+    UNUSED const struct debug_print_ir_opts *opts, void *metadata) {
   struct prettyprint_file_metadata *fm = metadata;
 
   fprintf(fm->file, "\n");
 }
 
 static void prettyprint_visit_op_file(struct ir_op *op,
+                                      const struct debug_print_ir_opts *opts,
                                       void *metadata) {
   if (op->flags & IR_OP_FLAG_CONTAINED) {
     return;
@@ -788,7 +831,7 @@ static void prettyprint_visit_op_file(struct ir_op *op,
   fprintf(fm->file, "%0*zu: ", fm->ctr_pad, fm->ctr++);
 
   long pos = ftell(fm->file);
-  debug_print_op_with_ctx(fm->file, op, PRINT_OP_CTX_TOP_LEVEL);
+  debug_print_op_with_ctx(fm->file, op, opts, PRINT_OP_CTX_TOP_LEVEL);
 
   if (supports_pos && ftell(fm->file) == pos) {
     // no line was written
@@ -843,9 +886,9 @@ static void prettyprint_visit_op_file(struct ir_op *op,
     fprintf(fm->file, "%*s", 20, "");
   }
 
-  if (fm->cb) {
+  if (opts->cb) {
     fprintf(fm->file, " | ");
-    fm->cb(fm->file, op, fm->cb_metadata);
+    opts->cb(fm->file, op, opts->cb_metadata);
   }
 
   fprintf(fm->file, " | ");
@@ -913,53 +956,55 @@ const struct prettyprint_callbacks FILE_WRITER_CALLBACKS = {
 };
 
 void debug_visit_stmt(struct ir_func *irb, struct ir_stmt *stmt,
+                      const struct debug_print_ir_opts *opts,
                       const struct prettyprint_callbacks *callbacks,
                       void *metadata) {
   if (callbacks->begin_visit_stmt) {
-    callbacks->begin_visit_stmt(irb, stmt, metadata);
+    callbacks->begin_visit_stmt(irb, stmt, opts, metadata);
   }
 
   struct ir_op *op = stmt->first;
   while (op) {
     if (callbacks->visit_op) {
-      callbacks->visit_op(op, metadata);
+      callbacks->visit_op(op, opts, metadata);
     }
 
     op = op->succ;
   }
 
   if (callbacks->end_visit_stmt) {
-    callbacks->end_visit_stmt(irb, stmt, metadata);
+    callbacks->end_visit_stmt(irb, stmt, opts, metadata);
   }
 }
 
 void debug_visit_basicblock(struct ir_func *irb,
                             struct ir_basicblock *basicblock,
+                            const struct debug_print_ir_opts *opts,
                             const struct prettyprint_callbacks *callbacks,
                             void *metadata) {
   if (callbacks->begin_visit_basicblock) {
-    callbacks->begin_visit_basicblock(irb, basicblock, metadata);
+    callbacks->begin_visit_basicblock(irb, basicblock, opts, metadata);
   }
 
   struct ir_stmt *stmt = basicblock->first;
   while (stmt) {
-    debug_visit_stmt(irb, stmt, callbacks, metadata);
+    debug_visit_stmt(irb, stmt, opts, callbacks, metadata);
 
     stmt = stmt->succ;
   }
 
   if (callbacks->end_visit_basicblock) {
-    callbacks->end_visit_basicblock(irb, basicblock, metadata);
+    callbacks->end_visit_basicblock(irb, basicblock, opts, metadata);
   }
 }
 
-void debug_visit_ir(struct ir_func *irb,
+void debug_visit_ir(struct ir_func *irb, const struct debug_print_ir_opts *opts,
                     const struct prettyprint_callbacks *callbacks,
                     void *metadata) {
   struct ir_basicblock *basicblock = irb->first;
 
   while (basicblock) {
-    debug_visit_basicblock(irb, basicblock, callbacks, metadata);
+    debug_visit_basicblock(irb, basicblock, opts, callbacks, metadata);
 
     basicblock = basicblock->succ;
   }
@@ -967,48 +1012,46 @@ void debug_visit_ir(struct ir_func *irb,
 
 void debug_print_basicblock(FILE *file, struct ir_func *irb,
                             struct ir_basicblock *basicblock,
-                            debug_print_op_callback *cb, void *cb_metadata) {
+                            const struct debug_print_ir_opts *opts) {
   int ctr_pad = irb ? (int)num_digits(irb->op_count) : 20;
   size_t ctr = 0;
 
-  struct prettyprint_file_metadata metadata = {.file = file,
-                                               .ctr_pad = ctr_pad,
-                                               .ctr = ctr,
-                                               .cb = cb,
-                                               .cb_metadata = cb_metadata};
+  struct prettyprint_file_metadata metadata = {
+      .file = file, .ctr_pad = ctr_pad, .ctr = ctr};
 
-  debug_visit_basicblock(irb, basicblock, &FILE_WRITER_CALLBACKS, &metadata);
+  debug_visit_basicblock(irb, basicblock, opts, &FILE_WRITER_CALLBACKS,
+                         &metadata);
 }
 
 void debug_print_stmt(FILE *file, struct ir_func *irb, struct ir_stmt *stmt,
-                      debug_print_op_callback *cb, void *cb_metadata) {
+                      const struct debug_print_ir_opts *opts) {
 
   int ctr_pad = (int)num_digits(irb->op_count);
   size_t ctr = 0;
 
-  struct prettyprint_file_metadata metadata = {.file = file,
-                                               .ctr_pad = ctr_pad,
-                                               .ctr = ctr,
-                                               .cb = cb,
-                                               .cb_metadata = cb_metadata};
+  struct prettyprint_file_metadata metadata = {
+      .file = file, .ctr_pad = ctr_pad, .ctr = ctr};
 
-  debug_visit_stmt(irb, stmt, &FILE_WRITER_CALLBACKS, &metadata);
+  debug_visit_stmt(irb, stmt, opts, &FILE_WRITER_CALLBACKS, &metadata);
 }
 
 void debug_print_ir_func(FILE *file, struct ir_func *irb,
-                         debug_print_op_callback *cb, void *cb_metadata) {
+                         const struct debug_print_ir_opts *opts) {
   int ctr_pad = (int)num_digits(irb->op_count);
   size_t ctr = 0;
 
-  struct prettyprint_file_metadata metadata = {.file = file,
-                                               .ctr_pad = ctr_pad,
-                                               .ctr = ctr,
-                                               .cb = cb,
-                                               .cb_metadata = cb_metadata};
+  struct prettyprint_file_metadata metadata = {
+      .file = file, .ctr_pad = ctr_pad, .ctr = ctr};
 
   fprintf(file, "FUNCTION: %s", irb->name);
   debug_print_func_ty_string(file, &irb->func_ty);
-  fprintf(file, "\n");
+
+  if (opts->demangle_sym) {
+    const char *demangled = opts->demangle_sym(irb->arena, irb->name);
+    fprintf(file, "\n    (demangled: %s)", demangled);
+  }
+
+  fprintf(file, "\n\n");
   fprintf(file, "    num_locals: %zu\n", irb->lcl_count);
   fprintf(file, "    total_locals_size: %zu\n", irb->total_locals_size);
   fprintf(file, "    caller_stack_needed: %zu", irb->caller_stack_needed);
@@ -1034,14 +1077,14 @@ void debug_print_ir_func(FILE *file, struct ir_func *irb,
     fprintf(file, "LOCALS: {\n");
     struct ir_lcl *lcl = irb->first_lcl;
     while (lcl) {
-      debug_print_lcl(file, lcl);
+      debug_print_lcl(file, lcl, opts);
 
       lcl = lcl->succ;
     }
     fprintf(file, "}");
   }
 
-  debug_visit_ir(irb, &FILE_WRITER_CALLBACKS, &metadata);
+  debug_visit_ir(irb, opts, &FILE_WRITER_CALLBACKS, &metadata);
 }
 
 static void debug_print_ir_var_value(FILE *file, struct ir_unit *iru,
@@ -1059,8 +1102,8 @@ static void debug_print_ir_var_value(FILE *file, struct ir_unit *iru,
       fprint_str(file, var_value->str_value.value, var_value->str_value.len);
     } else if (ch_ty.ty == IR_VAR_TY_TY_PRIMITIVE &&
                ch_ty.primitive == IR_VAR_PRIMITIVE_TY_I32) {
-      // it has now been given its real size (in chars), so pass byte length to
-      // wstr
+      // it has now been given its real size (in chars), so pass byte length
+      // to wstr
       // FIXME: we should have `wstr` take # of chars and parse/typechk should
       // hold the right number of chars, not byte length
       fprint_wstr(file, var_value->str_value.value,
@@ -1137,10 +1180,11 @@ struct print_ir_graph_metadata {
 };
 
 static void visit_op_for_graph(struct ir_op *op,
+                               const struct debug_print_ir_opts *opts,
                                void *metadata) {
   struct print_ir_graph_metadata *gm = metadata;
 
-  debug_print_op_with_ctx(gm->file, op, PRINT_OP_CTX_TOP_LEVEL);
+  debug_print_op_with_ctx(gm->file, op, opts, PRINT_OP_CTX_TOP_LEVEL);
 
   // `\l` prints left-justified
   fprintf(gm->file, "\\l");
@@ -1148,6 +1192,7 @@ static void visit_op_for_graph(struct ir_op *op,
 
 static struct graph_vertex *
 get_basicblock_vertex(struct ir_func *irb, struct ir_basicblock *basicblock,
+                      const struct debug_print_ir_opts *opts,
                       struct graphwriter *gwr) {
   if (!basicblock->metadata) {
     size_t digits = num_digits(irb->basicblock_count);
@@ -1177,7 +1222,7 @@ get_basicblock_vertex(struct ir_func *irb, struct ir_basicblock *basicblock,
     };
 
     fprintf(metadata.file, "BB @ %03zu\n\n", basicblock->id);
-    debug_visit_basicblock(irb, basicblock, &callbacks, &metadata);
+    debug_visit_basicblock(irb, basicblock, opts, &callbacks, &metadata);
 
     end_vertex_attr(basicblock->metadata);
   }
@@ -1185,7 +1230,8 @@ get_basicblock_vertex(struct ir_func *irb, struct ir_basicblock *basicblock,
   return basicblock->metadata;
 }
 
-static void debug_print_ir_func_graph(FILE *file, struct ir_func *irb) {
+static void debug_print_ir_func_graph(FILE *file, struct ir_func *irb,
+                                      const struct debug_print_ir_opts *opts) {
   ir_clear_metadata(irb);
 
   struct graphwriter *gwr = graphwriter_create(irb->arena, GRAPH_TY_DIRECTED,
@@ -1194,11 +1240,12 @@ static void debug_print_ir_func_graph(FILE *file, struct ir_func *irb) {
   struct ir_basicblock *basicblock = irb->first;
   while (basicblock) {
     struct graph_vertex *basicblock_vertex =
-        get_basicblock_vertex(irb, basicblock, gwr);
+        get_basicblock_vertex(irb, basicblock, opts, gwr);
 
     for (size_t i = 0; i < basicblock->num_preds; i++) {
       struct ir_basicblock *pred = basicblock->preds[i];
-      struct graph_vertex *pred_vertex = get_basicblock_vertex(irb, pred, gwr);
+      struct graph_vertex *pred_vertex =
+          get_basicblock_vertex(irb, pred, opts, gwr);
 
       edge(gwr, pred_vertex, basicblock_vertex);
     }
@@ -1213,14 +1260,16 @@ void debug_print_ir_graph(FILE *file, struct ir_unit *iru) {
   struct ir_glb *glb = iru->first_global;
   while (glb) {
     if (glb->def_ty == IR_GLB_DEF_TY_DEFINED && glb->ty == IR_GLB_TY_FUNC) {
-      debug_print_ir_func_graph(file, glb->func);
+      // TODO: support opts in graphwriter
+      debug_print_ir_func_graph(file, glb->func, DEBUG_PRINT_IR_OPTS_DEFAULT);
     }
 
     glb = glb->succ;
   }
 }
 
-void debug_print_lcl(FILE *file, struct ir_lcl *lcl) {
+void debug_print_lcl(FILE *file, struct ir_lcl *lcl,
+                     UNUSED const struct debug_print_ir_opts *opts) {
   fprintf(file, "  ");
 
   switch (lcl->alloc_ty) {
@@ -1266,7 +1315,7 @@ void debug_print_lcl(FILE *file, struct ir_lcl *lcl) {
 }
 
 void debug_print_glb(FILE *file, struct ir_glb *glb,
-                     debug_print_op_callback *cb, void *cb_metadata) {
+                     const struct debug_print_ir_opts *opts) {
   fprintf(file, "GLB(%zu) [", glb->id);
 
   switch (glb->linkage) {
@@ -1304,46 +1353,48 @@ void debug_print_glb(FILE *file, struct ir_glb *glb,
 
   if (glb->def_ty == IR_GLB_DEF_TY_DEFINED) {
     switch (glb->ty) {
-    case IR_GLB_TY_DATA:
+
       // TODO: should either have name in `var` or remove it from `func` for
       // consistency
-      fprintf(file, "%s ", glb->name);
-      debug_print_ir_var(file, glb->var);
+    case IR_GLB_TY_DATA:
+      debug_print_glb_name(file, glb->unit->arena, glb, opts);
       break;
     case IR_GLB_TY_FUNC:
-      debug_print_ir_func(file, glb->func, cb, cb_metadata);
+      debug_print_ir_func(file, glb->func, opts);
       break;
     }
   } else {
     if (glb->name) {
-      fprintf(file, "%s\n", glb->name);
+      debug_print_glb_name(file, glb->unit->arena, glb, opts);
       debug_print_var_ty_string(file, &glb->var_ty);
-      fprintf(file, "\n\n");
     }
+
+    fprintf(file, "\n\n");
   }
 }
 
 void debug_print_ir(FILE *file, struct ir_unit *iru,
-                    debug_print_op_callback *cb, void *cb_metadata) {
+                    const struct debug_print_ir_opts *opts) {
   struct ir_glb *glb = iru->first_global;
   while (glb) {
-    debug_print_glb(file, glb, cb, cb_metadata);
+    debug_print_glb(file, glb, opts);
 
     glb = glb->succ;
   }
 }
 
-void debug_print_ir_object(FILE *file, const struct ir_object *object) {
+void debug_print_ir_object(FILE *file, const struct ir_object *object,
+                           const struct debug_print_ir_opts *opts) {
   switch (object->ty) {
   case IR_OBJECT_TY_GLB:
-    debug_print_glb(file, object->glb, NULL, NULL);
+    debug_print_glb(file, object->glb, opts);
     break;
   case IR_OBJECT_TY_LCL:
     fprintf(file, "In func %s: \n", object->lcl->func->name);
-    debug_print_lcl(file, object->lcl);
+    debug_print_lcl(file, object->lcl, opts);
     break;
   case IR_OBJECT_TY_FUNC:
-    debug_print_ir_func(file, object->func, NULL, NULL);
+    debug_print_ir_func(file, object->func, opts);
     break;
   case IR_OBJECT_TY_VAR:
     debug_print_ir_var(file, object->var);
@@ -1355,7 +1406,7 @@ void debug_print_ir_object(FILE *file, const struct ir_object *object) {
     } else {
       fprintf(file, "No func, likely detached\n");
     }
-    debug_print_basicblock(file, func, object->basicblock, NULL, NULL);
+    debug_print_basicblock(file, func, object->basicblock, opts);
     break;
   }
   case IR_OBJECT_TY_STMT: {
@@ -1370,7 +1421,7 @@ void debug_print_ir_object(FILE *file, const struct ir_object *object) {
       fprintf(file, "No basicblock, likely detached\n");
     }
 
-    debug_print_stmt(file, func, object->stmt, NULL, NULL);
+    debug_print_stmt(file, func, object->stmt, opts);
     break;
   }
   case IR_OBJECT_TY_OP: {
@@ -1382,7 +1433,7 @@ void debug_print_ir_object(FILE *file, const struct ir_object *object) {
       fprintf(file, "No stmt, likely detached\n");
     }
 
-    debug_print_op(file, object->op);
+    debug_print_op(file, object->op, opts);
     break;
   }
   }
