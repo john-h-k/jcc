@@ -1088,7 +1088,8 @@ void debug_print_ir_func(FILE *file, struct ir_func *irb,
 }
 
 static void debug_print_ir_var_value(FILE *file, struct ir_unit *iru,
-                                     struct ir_var_value *var_value, bool top) {
+                                     struct ir_var_value *var_value, bool top,
+                                     size_t offset) {
   switch (var_value->ty) {
   case IR_VAR_VALUE_TY_STR: {
     struct ir_var_ty var_ty = var_value->var_ty;
@@ -1132,16 +1133,18 @@ static void debug_print_ir_var_value(FILE *file, struct ir_unit *iru,
     if (top) {
       fprintf(file, "{\n");
     }
+
     for (size_t i = 0; i < var_value->value_list.num_values; i++) {
       if (top || i) {
         fprintf(file, "  ");
       }
       struct ir_var_value *sub_value = &var_value->value_list.values[i];
 
-      debug_print_ir_var_value(file, iru, sub_value, false);
+      size_t list_offset = offset + var_value->value_list.offsets[i];
+      debug_print_ir_var_value(file, iru, sub_value, false, list_offset);
 
       if (sub_value->ty != IR_VAR_VALUE_TY_VALUE_LIST) {
-        fprintf(file, "; OFFSET=%zu", var_value->value_list.offsets[i]);
+        fprintf(file, "; OFFSET=%zu", list_offset);
         fprintf(file, ", ");
         debug_print_var_ty_string(file, &sub_value->var_ty);
         fprintf(file, "\n");
@@ -1171,7 +1174,7 @@ void debug_print_ir_var(FILE *file, struct ir_var *var) {
 
   debug_print_var_ty_string(file, &var->var_ty);
   fprintf(file, " = ");
-  debug_print_ir_var_value(file, var->unit, &var->value, true);
+  debug_print_ir_var_value(file, var->unit, &var->value, true, 0);
   fprintf(file, "\n\n");
 }
 
@@ -1353,11 +1356,11 @@ void debug_print_glb(FILE *file, struct ir_glb *glb,
 
   if (glb->def_ty == IR_GLB_DEF_TY_DEFINED) {
     switch (glb->ty) {
-
       // TODO: should either have name in `var` or remove it from `func` for
       // consistency
     case IR_GLB_TY_DATA:
       debug_print_glb_name(file, glb->unit->arena, glb, opts);
+      debug_print_ir_var(file, glb->var);
       break;
     case IR_GLB_TY_FUNC:
       debug_print_ir_func(file, glb->func, opts);
@@ -1368,9 +1371,8 @@ void debug_print_glb(FILE *file, struct ir_glb *glb,
       debug_print_glb_name(file, glb->unit->arena, glb, opts);
       debug_print_var_ty_string(file, &glb->var_ty);
     }
-
-    fprintf(file, "\n\n");
   }
+  fprintf(file, "\n\n");
 }
 
 void debug_print_ir(FILE *file, struct ir_unit *iru,

@@ -2,6 +2,7 @@
 
 #include "alloc.h"
 #include "ir/ir.h"
+#include "ir/prettyprint.h"
 #include "target.h"
 #include "util.h"
 #include "vector.h"
@@ -455,8 +456,8 @@ struct cg_unit *codegen(struct ir_unit *unit, enum codegen_flags flags) {
       .target = unit->target,
       .instr_size = info.instr_sz,
       .num_entries = unit->num_globals,
-      .entries = aralloc(unit->arena,
-                             unit->num_globals * sizeof(struct cg_entry))};
+      .entries =
+          aralloc(unit->arena, unit->num_globals * sizeof(struct cg_entry))};
 
   arena_allocator_create("codegen", &codegen_unit->arena);
 
