@@ -1435,6 +1435,7 @@ void debug_print_ir_object(FILE *file, const struct ir_object *object,
       fprintf(file, "No stmt, likely detached\n");
     }
 
+    debug_print_ir_func(file, stmt->basicblock->func, opts);
     debug_print_op(file, object->op, opts);
     break;
   }
