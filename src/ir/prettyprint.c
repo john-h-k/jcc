@@ -360,6 +360,7 @@ static void debug_print_glb_name(FILE *file, struct arena_allocator *arena,
       name = opts->demangle_sym(arena, glb->name);
     }
 
+    DEBUG_ASSERT(name, "wtf");
     fprintf(file, "%s", name);
   }
 }
