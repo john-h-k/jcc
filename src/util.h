@@ -81,8 +81,7 @@ typedef unsigned _BitInt(128) uint128_t;
 #endif
 #endif
 
-#if (ASAN || MSAN || TSAN || UBSAN) &&                                         \
-    __has_include(<sanitizer/common_interface_defs.h>)
+#if __has_include(<sanitizer/common_interface_defs.h>)
 #define SANITIZER_PRINT_STACK_TRACE
 #include <sanitizer/common_interface_defs.h> // __sanitizer_print_stack_trace
 #endif
