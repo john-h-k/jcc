@@ -1103,12 +1103,7 @@ static void debug_print_ir_var_value(FILE *file, struct ir_unit *iru,
       fprint_str(file, var_value->str_value.value, var_value->str_value.len);
     } else if (ch_ty.ty == IR_VAR_TY_TY_PRIMITIVE &&
                ch_ty.primitive == IR_VAR_PRIMITIVE_TY_I32) {
-      // it has now been given its real size (in chars), so pass byte length
-      // to wstr
-      // FIXME: we should have `wstr` take # of chars and parse/typechk should
-      // hold the right number of chars, not byte length
-      fprint_wstr(file, var_value->str_value.value,
-                  var_value->str_value.len * 4);
+      fprint_wstr(file, var_value->str_value.value, var_value->str_value.len);
     } else {
       BUG("don't know how to print str (expected I8 or I32 array)");
     }

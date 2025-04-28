@@ -97,6 +97,7 @@ static void arena_asan_error(const char *report) {
         void *base = alloc->base;
         void *end = alloc->end;
 
+        // FIXME: should do it per-arena to get better errors
         if (addr >= base && addr <= end) {
           fprintf(stderr,
                   PR_RED PR_BOLD "\nError occurred in arena '%s'\n\n" PR_RESET,
