@@ -363,7 +363,11 @@ static void debug_print_glb_name(FILE *file, struct arena_allocator *arena,
     if (!name) {
       fprintf(stderr, "wtf\n");
     }
-    fprintf(file, "PTR(%p)\n %s\n", (const void *)name, name);
+    size_t len = strlen(name);
+    for (size_t i = 0; i < len; i++) {
+      fputc(name[i], file);
+    }
+    // fprintf(file, "PTR(%p)\n %s\n", (const void *)name, name);
     fflush(file);
   }
 }
