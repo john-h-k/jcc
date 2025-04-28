@@ -1,9 +1,17 @@
 #include "util.h"
 
 #include <ctype.h>
+#include <errno.h>
 #include <limits.h>
 #include <stdint.h>
 #include <wctype.h>
+
+// FIXME: posix non-portable
+void fprintf_errno(FILE *file, int val) {
+  char buf[256];
+  strerror_r(val, buf, sizeof(buf));
+  fprintf(file, "errno=%s\n", buf);
+}
 
 NORETURN void unreachable(void) {
   fprintf(stderr, "`unreachable` hit, program exiting");

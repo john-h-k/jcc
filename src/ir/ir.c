@@ -5,6 +5,7 @@
 #include "../target.h"
 #include "../util.h"
 #include "../vector.h"
+#include "prettyprint.h"
 
 enum ir_var_primitive_ty
 ir_var_ty_pointer_primitive_ty(const struct ir_unit *iru) {
@@ -837,16 +838,18 @@ void ir_detach_op(struct ir_func *irb, struct ir_op *op) {
 
   irb->op_count--;
 
-  op->id = DETACHED_LCL;
+  op->id = DETACHED_OP;
 
   // fix links on either side of op
   if (op->pred) {
+    DEBUG_ASSERT(op->pred->succ == op, "broken link");
     op->pred->succ = op->succ;
   } else {
     op->stmt->first = op->succ;
   }
 
   if (op->succ) {
+    DEBUG_ASSERT(op->succ->pred == op, "broken link");
     op->succ->pred = op->pred;
   } else {
     op->stmt->last = op->pred;
@@ -1427,6 +1430,9 @@ void ir_rebuild_func_ids(struct ir_func *irb) {
 
     basicblock = basicblock->succ;
   }
+
+  DEBUG_ASSERT(irb->next_op_id == irb->op_count, "op_count %zu but next id %zu",
+               irb->op_count, irb->next_op_id);
 }
 
 void ir_attach_op(struct ir_func *irb, struct ir_op *op, struct ir_stmt *stmt,
@@ -2923,7 +2929,7 @@ struct ir_op_use_map ir_build_op_uses_map(struct ir_func *func) {
     size_t i = 0;
     struct ir_op *op;
     while (ir_func_iter_next(&iter, &op)) {
-      DEBUG_ASSERT(op->id == i, "ids unordered");
+      DEBUG_ASSERT(op->id == i && i < func->op_count, "ids unordered");
 
       // because walk_op_uses can be out of order we need to create the
       // vectors in advance
@@ -3552,6 +3558,7 @@ void ir_alloc_locals(struct ir_func *func) {
 }
 
 void ir_simplify_phis(struct ir_func *func) {
+  return;
   // FIXME: phi gen is shit, we should do it better
   bool improved = true;
 

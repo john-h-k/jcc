@@ -180,6 +180,7 @@ static bool opts_cnst_fold_unary_op(struct ir_func *func, struct ir_op *op) {
 }
 
 static bool opts_cnst_fold_cast_op(struct ir_func *func, struct ir_op *op) {
+  struct ir_var_ty from_var_ty = op->cast_op.value->var_ty;
   struct ir_var_ty var_ty = op->var_ty;
   enum ir_op_cast_op_ty ty = op->cast_op.ty;
   struct ir_op *value = opts_follow_movs(op->cast_op.value);
@@ -196,6 +197,32 @@ static bool opts_cnst_fold_cast_op(struct ir_func *func, struct ir_op *op) {
   unsigned long long new_cnst;
   switch (ty) {
   case IR_OP_CAST_OP_TY_SEXT:
+    DEBUG_ASSERT(from_var_ty.ty == IR_VAR_TY_TY_PRIMITIVE,
+                 "expected primitive");
+    switch (from_var_ty.primitive) {
+    case IR_VAR_PRIMITIVE_TY_I1:
+      BUG("sext i1 makes no sense");
+    case IR_VAR_PRIMITIVE_TY_I8:
+      cnst = (unsigned long long)(signed long long)(int8_t)cnst;
+      break;
+    case IR_VAR_PRIMITIVE_TY_I16:
+      cnst = (unsigned long long)(signed long long)(int16_t)cnst;
+      break;
+    case IR_VAR_PRIMITIVE_TY_I32:
+      cnst = (unsigned long long)(signed long long)(int32_t)cnst;
+      break;
+    case IR_VAR_PRIMITIVE_TY_I64:
+      cnst = (unsigned long long)(signed long long)(int64_t)cnst;
+      break;
+    default:
+      unreachable();
+    }
+
+    new_cnst = round_integral(func, cnst, op->var_ty);
+    ir_mk_integral_constant(func->unit, op, op->var_ty.primitive, new_cnst);
+    op->var_ty = var_ty;
+
+    return true;
   case IR_OP_CAST_OP_TY_ZEXT:
   case IR_OP_CAST_OP_TY_TRUNC:
     new_cnst = round_integral(func, cnst, op->var_ty);

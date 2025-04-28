@@ -445,6 +445,7 @@ static void signal_handle(UNUSED int signal) {
 
 void jcc_init(void) {
   signal(SIGTRAP, signal_handle);
+  signal(SIGABRT, signal_handle);
 
   // we want to use the user's locale i think?
   // TODO: remove this

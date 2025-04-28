@@ -1,6 +1,8 @@
 #include "inline.h"
 
 #include "../hashtbl.h"
+#include "../ir/prettyprint.h"
+#include "../ir/validate.h"
 #include "../log.h"
 #include "../vector.h"
 #include "opts.h"
@@ -17,12 +19,19 @@ enum opts_inline_stage {
 struct opts_inline_info {
   // `struct ir_func * : enum opts_inline_stage`
   struct hashtbl *inlined;
+  struct vector *detach;
 };
 
 static bool opts_can_inline(struct ir_func *func, struct ir_func *candidate,
                             struct opts_inline_info *info) {
   if (func == candidate) {
     debug("cannot inline %s into %s due to recursion", candidate->name,
+          func->name);
+    return false;
+  }
+
+  if (candidate->flags & IR_FUNC_FLAG_USES_VA_ARGS) {
+    debug("cannot inline %s into %s due to va_args", candidate->name,
           func->name);
     return false;
   }
@@ -43,6 +52,7 @@ static bool opts_can_inline(struct ir_func *func, struct ir_func *candidate,
 #define INLINE_COMBINE_FUNC_SZ 512
 #define INLINE_COMBINE_CAND_SZ 64
 // temp disabled due to phi spills being broken
+// #define INLINE_CAND_SZ 512
 #define INLINE_CAND_SZ 1
 
 static bool opts_should_inline(struct ir_func *func,
@@ -175,6 +185,9 @@ static struct ir_op *ir_clone_op(struct ir_func *func, const struct ir_op *op,
     CLONE_OP(ADDR_OFFSET, addr_offset);
     CLONE_OP(BR_COND, br_cond);
     CLONE_OP(BR_SWITCH, br_switch);
+    CLONE_OP(SELECT, select);
+    CLONE_OP(VA_START, va_start);
+    CLONE_OP(VA_ARG, va_arg);
     CLONE_OP(RET, ret);
   case IR_OP_TY_CALL:
     copy->call = op->call;
@@ -185,9 +198,9 @@ static struct ir_op *ir_clone_op(struct ir_func *func, const struct ir_op *op,
   case IR_OP_TY_PHI:
     copy->phi = (struct ir_op_phi){
         .num_values = op->phi.num_values,
-        .values = aralloc_init(
-            func->arena, op->phi.num_values * sizeof(op->phi.values[0]),
-            op->phi.values)};
+        .values = aralloc_init(func->arena,
+                               op->phi.num_values * sizeof(op->phi.values[0]),
+                               op->phi.values)};
 
     // fix up the bb links
     for (size_t i = 0; i < copy->phi.num_values; i++) {
@@ -247,6 +260,8 @@ static struct ir_op *ir_clone_op(struct ir_func *func, const struct ir_op *op,
   case IR_OP_TY_STORE_BITFIELD:
     copy->store_bitfield.ty = op->store_bitfield.ty;
     copy->store_bitfield.value = op->store_bitfield.value;
+    copy->store_bitfield.bitfield = op->store_bitfield.bitfield;
+
     switch (op->store_bitfield.ty) {
     case IR_OP_STORE_TY_LCL:
       copy->store_bitfield.lcl =
@@ -262,6 +277,8 @@ static struct ir_op *ir_clone_op(struct ir_func *func, const struct ir_op *op,
     break;
   case IR_OP_TY_LOAD_BITFIELD:
     copy->load_bitfield.ty = op->load_bitfield.ty;
+    copy->load_bitfield.bitfield = op->load_bitfield.bitfield;
+
     switch (op->load_bitfield.ty) {
     case IR_OP_LOAD_TY_LCL:
       copy->load_bitfield.lcl =
@@ -275,7 +292,9 @@ static struct ir_op *ir_clone_op(struct ir_func *func, const struct ir_op *op,
       break;
     }
     break;
-  default:
+  case IR_OP_TY_UNKNOWN:
+  case IR_OP_TY_UNDF:
+  case IR_OP_TY_BR:
     break;
   }
 
@@ -331,8 +350,8 @@ ir_clone_basicblock(struct ir_func *func,
   }
 
   copy->num_preds = basicblock->num_preds;
-  copy->preds = aralloc(func->arena,
-                            sizeof(struct ir_basicblock *) * copy->num_preds);
+  copy->preds =
+      aralloc(func->arena, sizeof(struct ir_basicblock *) * copy->num_preds);
   for (size_t i = 0; i < copy->num_preds; i++) {
     copy->preds[i] = ir_clone_basicblock(func, basicblock->preds[i], cloned);
   }
@@ -357,9 +376,8 @@ ir_clone_basicblock(struct ir_func *func,
   case IR_BASICBLOCK_TY_SWITCH:
     copy->switch_case = (struct ir_basicblock_switch){
         .num_cases = basicblock->switch_case.num_cases,
-        .cases =
-            aralloc(func->arena, sizeof(*copy->switch_case.cases) *
-                                         basicblock->switch_case.num_cases),
+        .cases = aralloc(func->arena, sizeof(*copy->switch_case.cases) *
+                                          basicblock->switch_case.num_cases),
         .default_target = ir_clone_basicblock(
             func, basicblock->switch_case.default_target, cloned),
     };
@@ -489,6 +507,10 @@ static bool opts_inline_op(struct ir_func *func, struct ir_op *call,
   if (params->flags & IR_STMT_FLAG_PARAM) {
     struct ir_op *param_op = params->first;
     for (size_t i = 0; i < call->call.num_args; i++) {
+      if (!param_op) {
+        break;
+      }
+
       switch (param_op->ty) {
       case IR_OP_TY_MOV:
         param_op->ty = IR_OP_TY_MOV;
@@ -531,7 +553,7 @@ static bool opts_inline_op(struct ir_func *func, struct ir_op *call,
     call->ty = IR_OP_TY_MOV;
     call->mov = (struct ir_op_mov){
         .value = ((struct ir_phi_entry *)vector_head(returns))->value};
-  } else {
+  } else if (num_rets >= 1) {
     struct ir_op *phi =
         ir_insert_phi(func, call->stmt->basicblock, call->var_ty);
     phi->ty = IR_OP_TY_PHI;
@@ -543,6 +565,8 @@ static bool opts_inline_op(struct ir_func *func, struct ir_op *call,
 
     call->ty = IR_OP_TY_MOV;
     call->mov = (struct ir_op_mov){.value = phi};
+  } else {
+    vector_push_back(info->detach, &call);
   }
 
   // final stage
@@ -589,6 +613,9 @@ static bool opts_inline_op(struct ir_func *func, struct ir_op *call,
 static void opts_inline_func(struct ir_func *func, void *data) {
   struct opts_inline_info *info = data;
 
+  // marker so that nested func calls only detach their ops
+  vector_push_back(info->detach, &(struct ir_op *){NULL});
+
   enum opts_inline_stage inlining = OPTS_INLINE_STAGE_INLINING;
   hashtbl_lookup_or_insert(info->inlined, &func, &inlining);
 
@@ -601,10 +628,22 @@ static void opts_inline_func(struct ir_func *func, void *data) {
 
     opts_inline_op(func, op, data);
   }
+
+  while (vector_length(info->detach)) {
+    struct ir_op *detach = *(struct ir_op **)vector_pop(info->detach);
+    if (!detach) {
+      break;
+    }
+
+    ir_detach_op(func, detach);
+  }
+
+  ir_validate(func->unit, IR_VALIDATE_FLAG_NONE);
 }
 
 void opts_inline(struct ir_unit *unit) {
   struct opts_inline_info inline_info = {
+      .detach = vector_create_in_arena(sizeof(struct ir_op *), unit->arena),
       .inlined = hashtbl_create(sizeof(struct ir_func *),
                                 sizeof(enum opts_inline_stage), NULL, NULL)};
 

@@ -261,8 +261,8 @@ ir_var_ty_for_td_var_ty_impl(struct ir_unit *iru,
     case TD_TY_AGGREGATE_TY_STRUCT:
       ty.ty = IR_VAR_TY_TY_STRUCT;
       ty.aggregate.num_fields = aggregate.num_fields;
-      ty.aggregate.fields = aralloc(
-          iru->arena, sizeof(struct ir_var_ty) * ty.aggregate.num_fields);
+      ty.aggregate.fields = aralloc(iru->arena, sizeof(struct ir_var_ty) *
+                                                    ty.aggregate.num_fields);
 
       for (size_t i = 0; i < ty.aggregate.num_fields; i++) {
         // handle nested types
@@ -274,8 +274,8 @@ ir_var_ty_for_td_var_ty_impl(struct ir_unit *iru,
     case TD_TY_AGGREGATE_TY_UNION:
       ty.ty = IR_VAR_TY_TY_UNION;
       ty.aggregate.num_fields = aggregate.num_fields;
-      ty.aggregate.fields = aralloc(
-          iru->arena, sizeof(struct ir_var_ty) * ty.aggregate.num_fields);
+      ty.aggregate.fields = aralloc(iru->arena, sizeof(struct ir_var_ty) *
+                                                    ty.aggregate.num_fields);
 
       for (size_t i = 0; i < ty.aggregate.num_fields; i++) {
         // handle nested types
@@ -1821,8 +1821,8 @@ static struct ir_op *build_ir_for_call(struct ir_func_builder *irb,
   struct ir_op **args =
       aralloc(irb->arena, sizeof(struct ir_op *) * call->arg_list.num_args);
 
-  struct ir_var_ty *arg_var_tys = aralloc(
-      irb->arena, sizeof(struct ir_var_ty) * call->arg_list.num_args);
+  struct ir_var_ty *arg_var_tys =
+      aralloc(irb->arena, sizeof(struct ir_var_ty) * call->arg_list.num_args);
 
   size_t num_non_variadic_args = call->target->var_ty.func.num_params;
 
@@ -3691,8 +3691,8 @@ static void gen_var_phis(struct ir_func_builder *irb,
 
     phi->phi = (struct ir_op_phi){
         .num_values = basicblock->num_preds,
-        .values = aralloc(irb->arena, sizeof(*phi->phi.values) *
-                                              basicblock->num_preds)};
+        .values = aralloc(irb->arena,
+                          sizeof(*phi->phi.values) * basicblock->num_preds)};
     *build->entry =
         (struct ir_phi_entry){.basicblock = basicblock, .value = phi};
 
@@ -3723,8 +3723,8 @@ static void find_phi_exprs(struct ir_func_builder *irb, struct ir_op *phi) {
 
   struct ir_basicblock *basicblock = phi->stmt->basicblock;
 
-  struct ir_op **basicblock_ops_for_var = aralloc(
-      irb->arena, sizeof(struct ir_op *) * irb->func->basicblock_count);
+  struct ir_op **basicblock_ops_for_var =
+      aralloc(irb->arena, sizeof(struct ir_op *) * irb->func->basicblock_count);
   memset(basicblock_ops_for_var, 0,
          sizeof(struct ir_op *) * irb->func->basicblock_count);
   basicblock_ops_for_var[basicblock->id] = phi;
@@ -3732,7 +3732,7 @@ static void find_phi_exprs(struct ir_func_builder *irb, struct ir_op *phi) {
   phi->phi = (struct ir_op_phi){
       .num_values = basicblock->num_preds,
       .values = aralloc(irb->arena,
-                            sizeof(*phi->phi.values) * basicblock->num_preds)};
+                        sizeof(*phi->phi.values) * basicblock->num_preds)};
 
   struct vector *phi_builds = vector_create(sizeof(struct ir_build_phi_build));
 
@@ -4739,10 +4739,10 @@ build_ir_for_var_value_init_list(struct ir_var_builder *irb,
 
   struct ir_var_value_list value_list = {
       .num_values = layout.num_inits,
-      .values = aralloc(irb->arena,
-                            sizeof(*value_list.values) * layout.num_inits),
-      .offsets = aralloc(irb->arena,
-                             sizeof(*value_list.offsets) * layout.num_inits),
+      .values =
+          aralloc(irb->arena, sizeof(*value_list.values) * layout.num_inits),
+      .offsets =
+          aralloc(irb->arena, sizeof(*value_list.offsets) * layout.num_inits),
   };
 
   for (size_t i = 0; i < layout.num_inits; i++) {

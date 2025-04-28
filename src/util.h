@@ -338,6 +338,15 @@ static inline void debug_print_stack_trace(void) {}
     EXIT_FAIL(-2);                                                             \
   } while (0)
 
+#define BUG_PERROR(val, ...)                                                   \
+  do {                                                                         \
+    MACRO_FMTPRINT(stderr, "`BUG` hit, program exiting:  ", __VA_ARGS__);      \
+    fprintf_errno(stderr, (val));                                              \
+    EXIT_FAIL(-2);                                                             \
+  } while (0)
+
+void fprintf_errno(FILE *file, int val);
+
 #if NDEBUG
 #define DEBUG_ASSERT(b, ...) (void)(b)
 #else

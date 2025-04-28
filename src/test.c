@@ -479,11 +479,11 @@ static void run_test(struct jcc_worker_args *args, const struct jcc_test *test,
   struct jcc_test_info info = get_test_info(args, test);
 
   if (info.skip) {
-    add_test_result(
-        args, &(struct jcc_test_result){
-                  .status = TEST_STATUS_SKIP,
-                  .file = test->file,
-                  .msg = aralloc_ustrconv(args->arena, info.skip_msg)});
+    add_test_result(args,
+                    &(struct jcc_test_result){
+                        .status = TEST_STATUS_SKIP,
+                        .file = test->file,
+                        .msg = aralloc_ustrconv(args->arena, info.skip_msg)});
     return;
   }
 
@@ -509,6 +509,10 @@ static void run_test(struct jcc_worker_args *args, const struct jcc_test *test,
     ustr_t *flag = vector_get(info.flags, i);
     char *buf = aralloc_ustrconv(args->arena, *flag);
     vector_push_back(comp_args, &buf);
+  }
+
+  for (size_t i = 0; i < args->opts.num_args; i++) {
+    vector_push_back(comp_args, &args->opts.args[i]);
   }
 
   const char *out = "-o";
@@ -571,7 +575,7 @@ static void run_test(struct jcc_worker_args *args, const struct jcc_test *test,
   }
 
   /* Run produced executable */
-  char run_cmd[256];
+  char run_cmd[512];
   snprintf(run_cmd, sizeof(run_cmd), "%s", output_file);
   struct syscmd *cmd = syscmd_create(args->arena, run_cmd);
 
@@ -760,8 +764,7 @@ int main(int argc, char **argv) {
   struct timestmp start = get_timestamp();
 
   thrd_t *threads = aralloc(arena, opts.jobs * sizeof(*threads));
-  struct arena_allocator **arenas =
-      aralloc(arena, opts.jobs * sizeof(*arenas));
+  struct arena_allocator **arenas = aralloc(arena, opts.jobs * sizeof(*arenas));
 
   struct jcc_tests_status status = {
       .results = vector_create_in_arena(sizeof(struct jcc_test_result), arena),

@@ -505,9 +505,11 @@ compile_stage_ir(struct compiler *compiler, const struct target *target,
                  struct typechk_result *typechk_result, struct ir_unit **ir) {
   enum ir_build_flags flags = IR_BUILD_FLAG_NONE;
 
-  if (compiler->args.opts_level == COMPILE_OPTS_LEVEL_0) {
-    flags |= IR_BUILD_FLAG_SPILL_ALL;
-  }
+  // non-spill logic broken so always spill
+  flags |= IR_BUILD_FLAG_SPILL_ALL;
+  // if (compiler->args.opts_level == COMPILE_OPTS_LEVEL_0) {
+  //   flags |= IR_BUILD_FLAG_SPILL_ALL;
+  // }
 
   *ir = build_ir_for_translationunit(target, compiler->typechk, compiler->arena,
                                      &typechk_result->translation_unit, flags);
@@ -527,7 +529,7 @@ compile_stage_ir(struct compiler *compiler, const struct target *target,
 
 static enum compile_result compile_stage_inline(struct compiler *compiler,
                                                 struct ir_unit *ir) {
-  if (compiler->args.opts_level < COMPILE_OPTS_LEVEL_2) {
+  if (compiler->args.opts_level < COMPILE_OPTS_LEVEL_1) {
     return COMPILE_RESULT_SUCCESS;
   }
 
@@ -904,6 +906,10 @@ enum compile_result compile_ir(struct compiler *compiler, struct ir_unit *ir) {
     if (COMPILER_LOG_ENABLED(compiler, COMPILE_LOG_FLAGS_IR)) {
       enable_log();
       BEGIN_STAGE("IR");
+    }
+
+    if (log_enabled()) {
+      debug_print_stage(compiler, ir, "ir");
     }
   }
 

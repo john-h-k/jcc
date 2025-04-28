@@ -209,11 +209,9 @@ int syscmd_exec(struct syscmd *restrict *syscmd) {
   int ret;
   if ((ret = posix_spawnp(&pid, s->process, &actions, NULL, args, environ)) !=
       0) {
-    perror("spawnp:");
     fprintf(stderr, "spawnp '");
     syscmd_write_cmd(s, stderr);
-    perror("': ");
-    BUG("spawnp failed!");
+    BUG_PERROR(ret, "spawnp failed!");
   }
 
   if (s->stdin_val) {
@@ -247,7 +245,7 @@ int syscmd_exec(struct syscmd *restrict *syscmd) {
   posix_spawn_file_actions_destroy(&actions);
 
   *syscmd = NULL;
-  return WEXITSTATUS(status);
+  return WIFEXITED(status) ? WEXITSTATUS(status) : 1;
 }
 
 #else
