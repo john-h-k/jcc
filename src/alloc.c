@@ -62,45 +62,52 @@ static void asan_metadata_init(void) {
 }
 
 static void arena_asan_error(const char *report) {
-  MTX_LOCK(&LOCK, {
-    // DEBUG_ASSERT(__asan_report_present(), "wot");
-    // void *addr = __asan_get_report_address();
+  if (!report) {
+    return;
+  }
 
-    // HACK: `__asan_get_report_address` doesn't seem to work? so parse string
-    // lol
-    const char *addr_str = strstr(report, "on address ");
-    unsigned long long addr_val = 0;
-
-    if (addr_str) {
-      addr_str += strlen("on address ");
+  do {
+    if (!(mtx_lock((&LOCK)) == thrd_success)) {
+      invariant_assert_fail("lock failed");
     }
-
-    const char *addr_end = strchr(addr_str, ' ');
-    if (!addr_end ||
-        !try_parse_integer(addr_str, addr_end - addr_str, &addr_val)) {
-      return;
+  } while (0);
+  {{const char *addr_str = strstr(report, "on address ");
+  unsigned long long addr_val = 0;
+  if (addr_str) {
+    addr_str += strlen("on address ");
+  }
+  const char *addr_end = strchr(addr_str, ' ');
+  if (!addr_end ||
+      !try_parse_integer(addr_str, addr_end - addr_str, &addr_val)) {
+    return;
+  }
+  void *addr = (void *)addr_val;
+  size_t num_allocators = vector_length(ALLOCATORS);
+  if (!ALLOCATORS || !addr) {
+    return;
+  }
+  for (size_t i = 0; i < num_allocators; i++) {
+    struct allocator_info *alloc = vector_get(ALLOCATORS, i);
+    void *base = alloc->base;
+    void *end = alloc->end;
+    if (addr >= base && addr <= end) {
+      fprintf(__stderrp,
+              "\x1B[31m"
+              "\033[1m"
+              "\nError occurred in arena '%s'\n\n"
+              "\x1B[0m",
+              alloc->name);
     }
-
-    void *addr = (void *)addr_val;
-
-    size_t num_allocators = vector_length(ALLOCATORS);
-    if (!ALLOCATORS || !addr) {
-      return;
-    }
-
-    for (size_t i = 0; i < num_allocators; i++) {
-      struct allocator_info *alloc = vector_get(ALLOCATORS, i);
-
-      void *base = alloc->base;
-      void *end = alloc->end;
-
-      if (addr >= base && addr <= end) {
-        fprintf(stderr,
-                PR_RED PR_BOLD "\nError occurred in arena '%s'\n\n" PR_RESET,
-                alloc->name);
-      }
-    }
-  });
+  }
+}
+}
+;
+do {
+  if (!(mtx_unlock((&LOCK)) == thrd_success)) {
+    invariant_assert_fail("unlock failed");
+  }
+} while (0);
+;
 }
 #endif
 
@@ -167,7 +174,7 @@ void arena_allocator_free(struct arena_allocator **allocator) {
 bool try_alloc_in_arena(struct arena *arena, size_t size, void **allocation);
 
 void *aralloc_strndup(struct arena_allocator *allocator, const char *str,
-                          size_t len) {
+                      size_t len) {
   len = MIN(len, strlen(str));
 
   char *cp = aralloc(allocator, len + 1);
@@ -211,8 +218,8 @@ char *aralloc_ustrconv(struct arena_allocator *allocator, ustr_t str) {
 }
 
 PRINTF_ARGS(1)
-char *aralloc_snprintf(struct arena_allocator *allocator,
-                           const char *format, ...) {
+char *aralloc_snprintf(struct arena_allocator *allocator, const char *format,
+                       ...) {
   if (!format || !format[0]) {
     return aralloc_strdup(allocator, "");
   }
@@ -268,7 +275,7 @@ void *arrealloc(struct arena_allocator *allocator, void *ptr, size_t size) {
 }
 
 void *aralloc_init(struct arena_allocator *allocator, size_t size,
-                       const void *data) {
+                   const void *data) {
   void *p = aralloc(allocator, size);
 
   if (p && data) {
