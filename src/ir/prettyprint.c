@@ -361,6 +361,7 @@ static void debug_print_glb_name(FILE *file, struct arena_allocator *arena,
     }
 
     fprintf(file, "%p", (const void *)name);
+    fflush(file);
     fprintf(file, "%s", name);
   }
 }
