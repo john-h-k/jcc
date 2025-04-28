@@ -4,6 +4,8 @@ JCC is designed to be a pure C11 (no dependencies) C11/C18/C23 compiler.
 
 <sup><sub>No dependencies = no dependencies outside of libc and some basic OS calls needed to e.g read directories</sub></sup>
 
+* For the work-in-progress rustc backend, see [rustc_codegen_jcc](https://github.com/john-h-k/rustc_codegen_jcc)
+
 ## CI Status
 
 | OS     | AArch64 (Arm64)                                                                                          | x64                                                                                                      | RISC-V (32)                                                                                              |
