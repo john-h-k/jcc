@@ -471,7 +471,7 @@ _test() {
 }
 
 test() {
-    _test -j 1 "$@"
+    _test "$@"
 }
 
 test-all() {

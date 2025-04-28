@@ -31,7 +31,7 @@ void syscmd_set_stderr(struct syscmd *syscmd, enum syscmd_buf_flags flags,
 
 void syscmd_set_stdin(struct syscmd *syscmd, ustr_t value);
 
-void syscmd_write_cmd(struct syscmd *cmd, FILE *file);
+void syscmd_write_cmd(const struct syscmd *restrict cmd, FILE *file);
 
 int syscmd_exec(struct syscmd *restrict *syscmd);
 

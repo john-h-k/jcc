@@ -90,7 +90,7 @@ void syscmd_set_stderr(struct syscmd *syscmd, enum syscmd_buf_flags flags,
   syscmd->stderr_buf = buf;
 }
 
-void syscmd_write_cmd(struct syscmd *cmd, FILE *file) {
+void syscmd_write_cmd(const struct syscmd *restrict cmd, FILE *file) {
   size_t num_args = vector_length(cmd->args);
   for (size_t i = 0; i < num_args; i++) {
     const char **arg = vector_get(cmd->args, i);
@@ -209,7 +209,11 @@ int syscmd_exec(struct syscmd *restrict *syscmd) {
   int ret;
   if ((ret = posix_spawnp(&pid, s->process, &actions, NULL, args, environ)) !=
       0) {
-    BUG("spawnp failed %s", strerror(ret));
+    perror("spawnp:");
+    fprintf(stderr, "spawnp '");
+    syscmd_write_cmd(s, stderr);
+    perror("': ");
+    BUG("spawnp failed!");
   }
 
   if (s->stdin_val) {
