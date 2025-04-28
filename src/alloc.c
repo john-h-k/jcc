@@ -66,48 +66,45 @@ static void arena_asan_error(const char *report) {
     return;
   }
 
-  do {
-    if (!(mtx_lock((&LOCK)) == thrd_success)) {
-      invariant_assert_fail("lock failed");
+  MTX_LOCK(&LOCK, {
+    // DEBUG_ASSERT(__asan_report_present(), "wot");
+    // void *addr = __asan_get_report_address();
+
+    // HACK: `__asan_get_report_address` doesn't seem to work? so parse string
+    // lol
+    const char *addr_str = strstr(report, "on address ");
+    unsigned long long addr_val = 0;
+
+    if (addr_str) {
+      addr_str += strlen("on address ");
+
+      const char *addr_end = strchr(addr_str, ' ');
+      if (!addr_end ||
+          !try_parse_integer(addr_str, addr_end - addr_str, &addr_val)) {
+        return;
+      }
+
+      void *addr = (void *)addr_val;
+
+      size_t num_allocators = vector_length(ALLOCATORS);
+      if (!ALLOCATORS || !addr) {
+        return;
+      }
+
+      for (size_t i = 0; i < num_allocators; i++) {
+        struct allocator_info *alloc = vector_get(ALLOCATORS, i);
+
+        void *base = alloc->base;
+        void *end = alloc->end;
+
+        if (addr >= base && addr <= end) {
+          fprintf(stderr,
+                  PR_RED PR_BOLD "\nError occurred in arena '%s'\n\n" PR_RESET,
+                  alloc->name);
+        }
+      }
     }
-  } while (0);
-  {{const char *addr_str = strstr(report, "on address ");
-  unsigned long long addr_val = 0;
-  if (addr_str) {
-    addr_str += strlen("on address ");
-  }
-  const char *addr_end = strchr(addr_str, ' ');
-  if (!addr_end ||
-      !try_parse_integer(addr_str, addr_end - addr_str, &addr_val)) {
-    return;
-  }
-  void *addr = (void *)addr_val;
-  size_t num_allocators = vector_length(ALLOCATORS);
-  if (!ALLOCATORS || !addr) {
-    return;
-  }
-  for (size_t i = 0; i < num_allocators; i++) {
-    struct allocator_info *alloc = vector_get(ALLOCATORS, i);
-    void *base = alloc->base;
-    void *end = alloc->end;
-    if (addr >= base && addr <= end) {
-      fprintf(stderr,
-              "\x1B[31m"
-              "\033[1m"
-              "\nError occurred in arena '%s'\n\n"
-              "\x1B[0m",
-              alloc->name);
-    }
-  }
-}
-}
-;
-do {
-  if (!(mtx_unlock((&LOCK)) == thrd_success)) {
-    invariant_assert_fail("unlock failed");
-  }
-} while (0);
-;
+  });
 }
 #endif
 
