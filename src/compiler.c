@@ -892,14 +892,20 @@ enum compile_result compile(struct compiler *compiler) {
   const struct target *target = compiler->target;
   struct ir_unit *ir;
 
-  COMPILER_STAGE(IR, ir, target, &typechk_result, &ir);
+  COMPILER_STAGE_NO_LOG(IR, ir, target, &typechk_result, &ir);
 
   return compile_ir(compiler, ir);
 }
 
 enum compile_result compile_ir(struct compiler *compiler, struct ir_unit *ir) {
-  debug_print_stage(compiler, ir, "compile_ir");
-  ir_validate(ir, IR_VALIDATE_FLAG_NONE);
+  {
+    disable_log();
+
+    if (COMPILER_LOG_ENABLED(compiler, COMPILE_LOG_FLAGS_IR)) {
+      enable_log();
+      BEGIN_STAGE("IR");
+    }
+  }
 
   COMPILER_STAGE(INLINE, inline, ir);
 
