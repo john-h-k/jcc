@@ -91,7 +91,7 @@ static void arena_asan_error(const char *report) {
     void *base = alloc->base;
     void *end = alloc->end;
     if (addr >= base && addr <= end) {
-      fprintf(__stderrp,
+      fprintf(stderr,
               "\x1B[31m"
               "\033[1m"
               "\nError occurred in arena '%s'\n\n"
