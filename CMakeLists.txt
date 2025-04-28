@@ -162,7 +162,7 @@ endforeach()
 # eep/object.c
 # eep/disasm.c
 
-# TODO: use hwaddress if possible, and allow using threadsanitizer instead of addresssanitizer (plus if hwaddress supported use hwaddress + thread)
+# TODO: use hwaddress if possible instead of addresssanitizer (plus if hwaddress supported use hwaddress + thread)
 
 set(SANITIZER_TYPE "none" CACHE STRING "Sanitizer type")
 set_property(CACHE SANITIZER_TYPE PROPERTY STRINGS none address memory thread)
