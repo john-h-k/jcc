@@ -170,7 +170,7 @@ void arena_allocator_free(struct arena_allocator **allocator) {
 
 bool try_alloc_in_arena(struct arena *arena, size_t size, void **allocation);
 
-void *aralloc_strndup(struct arena_allocator *allocator, const char *str,
+char *aralloc_strndup(struct arena_allocator *allocator, const char *str,
                       size_t len) {
   len = MIN(len, strlen(str));
 
@@ -181,7 +181,8 @@ void *aralloc_strndup(struct arena_allocator *allocator, const char *str,
   return cp;
 }
 
-void *aralloc_strdup(struct arena_allocator *allocator, const char *str) {
+char *aralloc_strdup(struct arena_allocator *allocator, const char *str) {
+  // FIXME: this shouldn't assume null termination
   size_t len = strlen(str);
 
   char *cp = aralloc(allocator, len + 1);

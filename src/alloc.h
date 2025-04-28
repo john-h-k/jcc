@@ -14,21 +14,21 @@ void arena_allocator_free(struct arena_allocator **allocator);
 void *aralloc(struct arena_allocator *allocator, size_t size);
 
 void *aralloc_init(struct arena_allocator *allocator, size_t size,
-                       const void *data);
+                   const void *data);
 
 /* Alloc space necessary for `str` (including null-terminator), then copy it
    into that space. Returns the start of the new allocation */
-void *aralloc_strndup(struct arena_allocator *allocator, const char *str,
-                          size_t len);
-void *aralloc_strdup(struct arena_allocator *allocator, const char *str);
+char *aralloc_strndup(struct arena_allocator *allocator, const char *str,
+                      size_t len);
+char *aralloc_strdup(struct arena_allocator *allocator, const char *str);
 
 ustr_t aralloc_ustrdup(struct arena_allocator *allocator, ustr_t str);
 
 char *aralloc_ustrconv(struct arena_allocator *allocator, ustr_t str);
 
 PRINTF_ARGS(1)
-char *aralloc_snprintf(struct arena_allocator *allocator,
-                           const char *format, ...);
+char *aralloc_snprintf(struct arena_allocator *allocator, const char *format,
+                       ...);
 
 /* Try and expand the allocation at `ptr` to `size`.
      - If `ptr` is `NULL`, acts the same as calling `arena_alloc(allocator,
