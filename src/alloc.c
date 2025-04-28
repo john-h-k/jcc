@@ -321,6 +321,9 @@ static void *arena_alloc_in_new(struct arena_allocator *allocator,
       "allocating into new arena should be infallible (%zu bytes requested)",
       aligned);
 
+#ifdef ASAN
+  __asan_update_allocation_context(allocation);
+#endif
   return allocation;
 }
 
@@ -340,6 +343,9 @@ void *aralloc(struct arena_allocator *allocator, size_t size) {
 
     void *allocation;
     if (LIKELY(try_alloc_in_arena(arena, aligned, &allocation))) {
+#ifdef ASAN
+      __asan_update_allocation_context(allocation);
+#endif
       return allocation;
     }
   }
