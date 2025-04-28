@@ -360,18 +360,7 @@ static void debug_print_glb_name(FILE *file, struct arena_allocator *arena,
       name = opts->demangle_sym(arena, glb->name);
     }
 
-    if (!name) {
-      fprintf(stderr, "wtf\n");
-    }
-    fprintf(stderr, "P=%p\n", (const void *)name);
-    fflush(file);
-    fflush(file);
-    size_t len = strlen(name);
-    for (size_t i = 0; i < len; i++) {
-      fputc(name[i], file);
-    }
-    // fprintf(file, "PTR(%p)\n %s\n", (const void *)name, name);
-    fflush(file);
+    fprintf(file, "%s", name);
   }
 }
 
@@ -497,11 +486,11 @@ static void debug_print_op_with_ctx(FILE *file, struct ir_op *op,
       }
       break;
     case IR_OP_STORE_TY_GLB:
-      if (op->load.glb) {
+      if (op->store.glb) {
         fprintf(file, "store.glb GLB(%zu), %%%zu", op->store.glb->id,
                 op->store.value->id);
         debug_print_glb_name_comment(file, op->stmt->basicblock->func->arena,
-                                     op->addr.glb, opts);
+                                     op->store.glb, opts);
       } else {
         fprintf(file, "store.glb GLB(UNASSIGNED), %%%zu", op->store.value->id);
       }
@@ -528,7 +517,7 @@ static void debug_print_op_with_ctx(FILE *file, struct ir_op *op,
       if (op->load.glb) {
         fprintf(file, "load.glb GLB(%zu)", op->load.glb->id);
         debug_print_glb_name_comment(file, op->stmt->basicblock->func->arena,
-                                     op->addr.glb, opts);
+                                     op->load.glb, opts);
       } else {
         fprintf(file, "load.glb GLB(UNASSIGNED)");
       }
@@ -562,7 +551,7 @@ static void debug_print_op_with_ctx(FILE *file, struct ir_op *op,
                 bitfield.offset, bitfield.width, op->store_bitfield.glb->id,
                 op->store_bitfield.value->id);
         debug_print_glb_name_comment(file, op->stmt->basicblock->func->arena,
-                                     op->addr.glb, opts);
+                                     op->store_bitfield.glb, opts);
       } else {
         fprintf(file, "store.bitfield.glb (#%zu, #%zu) GLB(UNASSIGNED), %%%zu",
                 bitfield.offset, bitfield.width, op->store_bitfield.value->id);
@@ -597,7 +586,7 @@ static void debug_print_op_with_ctx(FILE *file, struct ir_op *op,
         fprintf(file, "load.bitfield.glb (#%zu, #%zu) GLB(%zu)",
                 bitfield.offset, bitfield.width, op->load_bitfield.glb->id);
         debug_print_glb_name_comment(file, op->stmt->basicblock->func->arena,
-                                     op->addr.glb, opts);
+                                     op->load_bitfield.glb, opts);
       } else {
         fprintf(file, "load.bitfield.glb (#%zu, #%zu) GLB(UNASSIGNED)",
                 bitfield.offset, bitfield.width);
