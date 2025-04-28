@@ -49,6 +49,7 @@ Working with RISC-V requires installing a RISC-V linker.
 3. Linking on musl-based distros. This is relatively simple and should work soon
 4. Digraphs (plan to add) and trigraphs (plan to add but only with an explicit argument, as with most compilers)
 5. `setjmp`/`longjmp`
+6. Some small C23 features (`nullptr_t`, which I will get round to soon, `static` in compound literals, `u8` strings, and the inbuilt attributes)
 
 ## Requirements
 
