@@ -597,15 +597,17 @@ static void run_test(struct jcc_worker_args *args, const struct jcc_test *test,
   }
 
   // Run produced executable
+  struct syscmd *cmd;
+
   char run_cmd[512];
+  snprintf(run_cmd, sizeof(run_cmd), "%s", output_file);
 
   if (args->runner) {
-    snprintf(run_cmd, sizeof(run_cmd), "%s %s", args->runner, output_file);
+    cmd = syscmd_create(args->arena, args->runner);
+    syscmd_add_arg(cmd, run_cmd);
   } else {
-    snprintf(run_cmd, sizeof(run_cmd), "%s", output_file);
+    cmd = syscmd_create(args->arena, run_cmd);
   }
-
-  struct syscmd *cmd = syscmd_create(args->arena, run_cmd);
 
   if (info.stdin_val.str) {
     syscmd_set_stdin(cmd, info.stdin_val);
