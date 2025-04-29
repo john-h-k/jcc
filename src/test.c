@@ -287,7 +287,8 @@ static struct jcc_comp_info run_compilation(const struct jcc_worker_args *args,
       // use non-success codes here
       return (struct jcc_comp_info){.exc = 1, .stderr_buf = stderr_buf};
     case SYSCMD_EXEC_RESULT_TIMEOUT:
-      return (struct jcc_comp_info){.exc = 1, .stderr_buf = stderr_buf};
+      return (struct jcc_comp_info){.exc = 1,
+                                    .stderr_buf = "compilation timed out"};
     }
 
   } else {
