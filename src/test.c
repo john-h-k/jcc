@@ -251,6 +251,7 @@ struct jcc_tests_status {
 struct jcc_worker_args {
   atomic_bool *die;
   atomic_size_t *num_completed;
+  const char *runner;
   struct jobq *jobq;
   struct arena_allocator *arena;
   struct jcc_tests_status *results;
@@ -595,9 +596,15 @@ static void run_test(struct jcc_worker_args *args, const struct jcc_test *test,
     return;
   }
 
-  /* Run produced executable */
+  // Run produced executable
   char run_cmd[512];
-  snprintf(run_cmd, sizeof(run_cmd), "%s", output_file);
+
+  if (args->runner) {
+    snprintf(run_cmd, sizeof(run_cmd), "%s %s", args->runner, output_file);
+  } else {
+    snprintf(run_cmd, sizeof(run_cmd), "%s", output_file);
+  }
+
   struct syscmd *cmd = syscmd_create(args->arena, run_cmd);
 
   if (info.stdin_val.str) {
@@ -808,6 +815,13 @@ int main(int argc, char **argv) {
     return 1;
   }
 
+  // TODO: take as flag or env var or whatever
+  const char *runner = NULL;
+  if (!ustr_eq(opts.arch, MK_USTR("rv32i"))) {
+    fprintf(stderr, "Using riscy test runner...");
+    runner = "riscy";
+  }
+
   struct vector *tests = vector_create_in_arena(sizeof(struct jcc_test), arena);
   discover_tests(arena, tests, opts.paths, opts.num_paths);
 
@@ -867,6 +881,7 @@ int main(int argc, char **argv) {
     arenas[i] = worker_arena;
 
     struct jcc_worker_args worker = {.die = &die,
+                                     .runner = runner,
                                      .num_completed = &num_completed,
                                      .jobq = jobq,
                                      .results = &status,
