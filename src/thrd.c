@@ -147,4 +147,12 @@ int thrd_join(thrd_t thr, int *res) {
   return thrd_success;
 }
 
+#if __STDC_VERSION__ >= 202311L
+[[noreturn]] void thrd_exit(int res) {
+#else
+_Noreturn void thrd_exit(int res) {
+#endif
+  pthread_exit((void *)(intptr_t)res);
+}
+
 #endif

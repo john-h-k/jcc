@@ -106,6 +106,9 @@ static void remove_critical_edges(struct ir_func *irb) {
     // implicitly
     ir_order_basicblocks(irb);
   }
+
+  // TODO: remove this, as BB merging should mean we never gen single op phis
+  ir_transform_single_op_phis(irb);
 }
 
 static void lower_call_registers(struct ir_func *func, struct ir_op *op);

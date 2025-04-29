@@ -70,6 +70,12 @@ enum {
 int thrd_create(thrd_t *thr, thrd_start_t func, void *arg);
 int thrd_join(thrd_t thr, int *res);
 
+#if __STDC_VERSION__ >= 202311L
+[[noreturn]] void thrd_exit(int res);
+#else
+_Noreturn void thrd_exit(int res);
+#endif
+
 #else
 
 #error "No thread library supported"

@@ -1,6 +1,8 @@
 #include "cnst_branches.h"
 
 #include "../hashtbl.h"
+#include "../ir/prettyprint.h"
+#include "../ir/validate.h"
 #include "../vector.h"
 #include "opts.h"
 
@@ -25,16 +27,19 @@ static struct ir_op *opts_follow_movs(struct ir_op *op) {
   return op;
 }
 
-static void opts_cnst_branches_func_end(UNUSED struct ir_func *func,
-                                        void *data) {
+static void opts_cnst_branches_func_end(struct ir_func *func, void *data) {
   struct phi_info *info = data;
 
-  struct hashtbl_iter *iter = hashtbl_iter(info->bb_to_entry);
-  struct hashtbl_entry entry;
-  while (hashtbl_iter_next(iter, &entry)) {
-    struct vector **vector = entry.data;
-    vector_free(vector);
+  {
+    struct hashtbl_iter *iter = hashtbl_iter(info->bb_to_entry);
+    struct hashtbl_entry entry;
+    while (hashtbl_iter_next(iter, &entry)) {
+      struct vector **vector = entry.data;
+      vector_free(vector);
+    }
   }
+
+  ir_transform_single_op_phis(func);
 
   // TODO: reuse hashtbl (have clear method)
   hashtbl_free(&info->bb_to_entry);

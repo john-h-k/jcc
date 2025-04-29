@@ -10,5 +10,7 @@ enum FLAG_ENUM ir_validate_flags {
 };
 
 void ir_validate(struct ir_unit *iru, enum ir_validate_flags flags);
+void ir_validate_object(struct ir_unit *unit, struct ir_object object,
+                        enum ir_validate_flags flags);
 
 #endif

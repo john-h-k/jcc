@@ -12,6 +12,7 @@
 #include <errno.h>
 #include <regex.h>
 #include <stdarg.h>
+#include <stdatomic.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -247,6 +248,7 @@ struct jcc_tests_status {
 };
 
 struct jcc_worker_args {
+  atomic_bool *die;
   struct jobq *jobq;
   struct arena_allocator *arena;
   struct jcc_tests_status *results;
@@ -618,12 +620,18 @@ static void run_test(struct jcc_worker_args *args, const struct jcc_test *test,
                                                   .file = test->file});
 }
 
+_Thread_local static bool is_worker = false;
+
+enum worker_result { WORKER_RESULT_SUCCESS = 0, WORKER_RESULT_KILLED = 1 };
+
 static int test_worker(void *arg) {
+  is_worker = true;
+
   struct jcc_worker_args *args = arg;
 
   struct jcc_test job;
   size_t id;
-  while (jobq_try_pop(args->jobq, &id, &job)) {
+  while (!atomic_load(args->die) && jobq_try_pop(args->jobq, &id, &job)) {
     job.id = id;
 
     for (size_t i = 0; i < args->opts.num_arg_groups; i++) {
@@ -631,7 +639,7 @@ static int test_worker(void *arg) {
     }
   }
 
-  return 0;
+  return args->die ? WORKER_RESULT_KILLED : WORKER_RESULT_SUCCESS;
 }
 
 static bool parse_args(struct arena_allocator *arena, int argc, char *argv[],
@@ -721,6 +729,19 @@ static bool parse_args(struct arena_allocator *arena, int argc, char *argv[],
 
 static int void_strcmp(const void *l, const void *r) { return strcmp(l, r); }
 
+// set on sigtrap
+// indicates test threads should exit
+static atomic_bool die = false;
+
+static void sigint_handle(UNUSED int sig) {
+  bool old = atomic_exchange(&die, true);
+
+  if (old) {
+    // multiple interrupts received, hard kill
+    raise(SIGKILL);
+  }
+}
+
 // FIXME: known issue with seemingly wrong TSAN "data race" warnings when using
 // process mode (-p) but none of the attributes to disable them seem to work?
 int main(int argc, char **argv) {
@@ -779,14 +800,23 @@ int main(int argc, char **argv) {
   invariant_assert(cnd_init(&status.cond) == thrd_success,
                    "results cnd_init failed");
 
+  // block workers from receiving SIGINT
+  sigset_t set;
+  sigemptyset(&set);
+  sigaddset(&set, SIGINT);
+  pthread_sigmask(SIG_BLOCK, &set, NULL);
+
   for (size_t i = 0; i < opts.jobs; i++) {
     struct arena_allocator *worker_arena;
     arena_allocator_create("thread-worker", &worker_arena);
 
     arenas[i] = worker_arena;
 
-    struct jcc_worker_args worker = {
-        .jobq = jobq, .results = &status, .opts = opts, .arena = worker_arena};
+    struct jcc_worker_args worker = {.die = &die,
+                                     .jobq = jobq,
+                                     .results = &status,
+                                     .opts = opts,
+                                     .arena = worker_arena};
 
     void *data = aralloc_init(worker_arena, sizeof(worker), &worker);
 
@@ -794,6 +824,16 @@ int main(int argc, char **argv) {
                          thrd_success,
                      "thrd_create failed");
   }
+
+  // re-register this thread to receive them
+  sigemptyset(&set);
+  sigaddset(&set, SIGINT);
+  pthread_sigmask(SIG_UNBLOCK, &set, NULL);
+
+  struct sigaction sa = {.sa_handler = sigint_handle};
+  sigemptyset(&sa.sa_mask);
+  sa.sa_flags = 0;
+  sigaction(SIGINT, &sa, NULL);
 
   size_t total_tests = opts.num_tests * opts.num_arg_groups;
   int pad = (int)num_digits(total_tests);
@@ -834,7 +874,7 @@ int main(int argc, char **argv) {
       printf("\033[?25h");
       fflush(stdout);
 
-      if (num_done == total_tests) {
+      if (atomic_load(&die) || num_done == total_tests) {
         break;
       }
     }

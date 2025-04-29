@@ -55,8 +55,10 @@ void opts_run_op_pass(struct ir_unit *unit, const struct opts_op_pass *pass) {
       // passes should really choose which of these are run, for efficiency
       ir_eliminate_redundant_ops(glb->func,
                                  IR_ELIMINATE_REDUNDANT_OPS_FLAG_ELIM_MOVS);
-      ir_prune_basicblocks(glb->func);
-      ir_order_basicblocks(glb->func);
+
+      // these are generating 1-entry phis (illegal)
+      // ir_prune_basicblocks(glb->func);
+      // ir_order_basicblocks(glb->func);
       ir_simplify_phis(glb->func);
 
       ir_validate(unit, IR_VALIDATE_FLAG_NONE);

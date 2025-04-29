@@ -234,8 +234,8 @@ static void gen_var_phis(struct ir_func *irb, struct hashtbl *stores,
 
     phi->phi = (struct ir_op_phi){
         .num_values = basicblock->num_preds,
-        .values = aralloc(irb->arena, sizeof(*phi->phi.values) *
-                                              basicblock->num_preds)};
+        .values = aralloc(irb->arena,
+                          sizeof(*phi->phi.values) * basicblock->num_preds)};
     *build->entry =
         (struct ir_phi_entry){.basicblock = basicblock, .value = phi};
 
@@ -273,7 +273,7 @@ static void find_phi_exprs(struct ir_func *irb, struct hashtbl *stores,
   phi->phi = (struct ir_op_phi){
       .num_values = basicblock->num_preds,
       .values = aralloc(irb->arena,
-                            sizeof(*phi->phi.values) * basicblock->num_preds)};
+                        sizeof(*phi->phi.values) * basicblock->num_preds)};
 
   struct vector *phi_builds = vector_create(sizeof(struct ir_build_phi_build));
 
@@ -379,8 +379,8 @@ static void opts_do_promote(struct ir_func *func, struct vector *lcl_uses,
       if (ir_var_ty_is_aggregate(&op->var_ty)) {
         first_field = use->field_idx;
         num_fields = op->var_ty.aggregate.num_fields;
-        gather_values = aralloc(
-            func->arena, num_fields * sizeof(struct ir_gather_value));
+        gather_values =
+            aralloc(func->arena, num_fields * sizeof(struct ir_gather_value));
         fields = op->var_ty.aggregate.fields;
       } else {
         first_field = use->field_idx;
@@ -651,6 +651,9 @@ static bool opts_promote_pass(struct ir_func *func) {
   }
 
   vector_free(&lcls_to_remove);
+
+  // we may have generated one-op phis which we need to change to movs
+  ir_transform_single_op_phis(func);
 
   return num > 0;
 }

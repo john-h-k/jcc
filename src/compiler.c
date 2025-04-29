@@ -571,14 +571,16 @@ static enum compile_result compile_stage_opts(struct compiler *compiler,
     break;
   case COMPILE_OPTS_LEVEL_3:
     opts_cnst_fold(ir);
-    opts_promote(ir);
+    // FIXME: promote broken
+    // opts_promote(ir);
 
     opts_cnst_fold(ir);
     opts_instr_comb(ir);
 
     opts_cnst_branches(ir);
 
-    opts_promote(ir);
+    // FIXME: promote broken
+    // opts_promote(ir);
     opts_cnst_fold(ir);
     opts_instr_comb(ir);
     break;

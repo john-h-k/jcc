@@ -1122,6 +1122,11 @@ enum FLAG_ENUM ir_eliminate_redundant_ops_flags {
 void ir_eliminate_redundant_ops(struct ir_func *func,
                                 enum ir_eliminate_redundant_ops_flags flags);
 
+// some passes can generate single-op phis
+// but it is generally legal
+// this function transform them to MOVs
+void ir_transform_single_op_phis(struct ir_func *func);
+
 void ir_clear_metadata(struct ir_func *irb);
 void ir_rebuild_glb_ids(struct ir_unit *iru);
 void ir_rebuild_func_ids(struct ir_func *irb);

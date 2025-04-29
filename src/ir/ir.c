@@ -1120,6 +1120,20 @@ void ir_eliminate_redundant_ops(struct ir_func *func,
   vector_free(&detach);
 }
 
+void ir_transform_single_op_phis(struct ir_func *func) {
+  struct ir_func_iter iter = ir_func_iter(func, IR_FUNC_ITER_FLAG_NONE);
+
+  struct ir_op *op;
+  while (ir_func_iter_next(&iter, &op)) {
+    if (op->ty == IR_OP_TY_PHI && op->phi.num_values == 1) {
+      struct ir_op *value = op->phi.values[0].value;
+
+      op->ty = IR_OP_TY_MOV;
+      op->mov = (struct ir_op_mov){.value = value};
+    }
+  }
+}
+
 void ir_detach_global(struct ir_unit *iru, struct ir_glb *glb) {
   glb->id = DETACHED_GLB;
 
