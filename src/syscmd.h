@@ -35,4 +35,23 @@ void syscmd_write_cmd(const struct syscmd *restrict cmd, FILE *file);
 
 int syscmd_exec(struct syscmd *restrict *syscmd);
 
+struct syscmd_timeout {
+  int secs;
+};
+
+enum syscmd_exec_result {
+  SYSCMD_EXEC_RESULT_EXEC,
+  SYSCMD_EXEC_RESULT_FAILED,
+  SYSCMD_EXEC_RESULT_TIMEOUT,
+};
+
+struct syscmd_exec {
+  enum syscmd_exec_result result;
+  int exc;
+};
+
+// TODO: `sysmcd_exec` should also return this structure
+struct syscmd_exec syscmd_timed_exec(struct syscmd *restrict *syscmd,
+                                     struct syscmd_timeout timeout);
+
 #endif

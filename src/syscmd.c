@@ -3,6 +3,8 @@
 #include "alloc.h"
 #include "vector.h"
 
+#include <time.h>
+
 #if __has_include(<unistd.h>) && __has_include(<fcntl.h>)
 #include <fcntl.h>
 #include <unistd.h>
@@ -126,8 +128,6 @@ static int syscmd_open_fd(const char *output) {
 
 static char *syscmd_read_pipe(const struct syscmd *cmd,
                               enum syscmd_buf_flags flags, int pipe[static 2]) {
-  close(pipe[1]);
-
   struct vector *content = vector_create_in_arena(sizeof(char), cmd->arena);
 
   char buf[4096];
@@ -138,8 +138,6 @@ static char *syscmd_read_pipe(const struct syscmd *cmd,
     buf[n] = '\0';
     vector_extend(content, buf, n);
   }
-
-  close(pipe[0]);
 
   if ((flags & SYSCMD_BUF_FLAG_STRIP_TRAILING_NEWLINE) && last_nl) {
     char *c = vector_tail(content);
@@ -161,7 +159,28 @@ static char *syscmd_read_pipe(const struct syscmd *cmd,
 
 extern char **environ;
 
+#define SYSCMD_TIMEOUT_NONE (-1)
+#define SYSCMD_TIMEOUT_POLL_MS (10)
+
 int syscmd_exec(struct syscmd *restrict *syscmd) {
+
+  struct syscmd_exec result = syscmd_timed_exec(
+      syscmd, (struct syscmd_timeout){.secs = SYSCMD_TIMEOUT_NONE});
+  switch (result.result) {
+
+  case SYSCMD_EXEC_RESULT_EXEC:
+    return result.exc;
+  case SYSCMD_EXEC_RESULT_FAILED:
+    // arbitrary
+    // TODO: should also return syscmd_exec
+    return -1;
+  case SYSCMD_EXEC_RESULT_TIMEOUT:
+    unreachable();
+  }
+}
+
+struct syscmd_exec syscmd_timed_exec(struct syscmd *restrict *syscmd,
+                                     struct syscmd_timeout timeout) {
   const struct syscmd *restrict s = *syscmd;
 
   vector_push_back(s->args, &(char *){NULL});
@@ -225,19 +244,77 @@ int syscmd_exec(struct syscmd *restrict *syscmd) {
     close(stdin_pipe[1]);
   }
 
+  bool timed_out = false;
   int status;
-  if (waitpid(pid, &status, 0) == -1) {
-    BUG("waitpid failed");
+
+  if (timeout.secs == SYSCMD_TIMEOUT_NONE) {
+    if (waitpid(pid, &status, 0) == -1) {
+      BUG("waitpid failed");
+    }
+  } else {
+    // poll-loop
+
+    struct timespec interval = {.tv_sec = 0,
+                                .tv_nsec = SYSCMD_TIMEOUT_POLL_MS * 1000000};
+
+    struct timespec start;
+    struct timespec now;
+
+    invariant_assert(TIME_UTC == timespec_get(&start, TIME_UTC),
+                     "timespec_get failed");
+
+    while (1) {
+      pid_t st = waitpid(pid, &status, WNOHANG);
+      if (st == -1) {
+        BUG("waitpid failed");
+      }
+
+      if (st > 0) {
+        break;
+      }
+
+      invariant_assert(TIME_UTC == timespec_get(&now, TIME_UTC),
+                       "timespec_get failed");
+
+      // FIXME: doesn't handle nanos properly
+      time_t elapsed = now.tv_sec - start.tv_sec;
+
+      if (elapsed >= timeout.secs) {
+        // TODO: should we give a more lenient signal first?
+        kill(pid, SIGKILL);
+
+        timed_out = true;
+        break;
+      }
+
+      nanosleep(&interval, NULL);
+    }
   }
 
   if (s->stdout_buf) {
-    *s->stdout_buf = syscmd_read_pipe(s, s->stdout_flags, stdout_pipe);
+    close(stdout_pipe[1]);
+
+    if (timed_out) {
+      *s->stdout_buf = NULL;
+    } else {
+      *s->stdout_buf = syscmd_read_pipe(s, s->stdout_flags, stdout_pipe);
+    }
+
+    close(stdout_pipe[0]);
   } else if (s->stdout_redir) {
     close(stdout_fd);
   }
 
   if (s->stderr_buf) {
-    *s->stderr_buf = syscmd_read_pipe(s, s->stderr_flags, stderr_pipe);
+    close(stderr_pipe[1]);
+
+    if (timed_out) {
+      *s->stderr_buf = NULL;
+    } else {
+      *s->stderr_buf = syscmd_read_pipe(s, s->stderr_flags, stderr_pipe);
+    }
+
+    close(stderr_pipe[0]);
   } else if (s->stderr_redir) {
     close(stderr_fd);
   }
@@ -245,7 +322,15 @@ int syscmd_exec(struct syscmd *restrict *syscmd) {
   posix_spawn_file_actions_destroy(&actions);
 
   *syscmd = NULL;
-  return WIFEXITED(status) ? WEXITSTATUS(status) : 1;
+
+  if (timed_out) {
+    return (struct syscmd_exec){.result = SYSCMD_EXEC_RESULT_TIMEOUT};
+  } else if (WIFEXITED(status)) {
+    return (struct syscmd_exec){.result = SYSCMD_EXEC_RESULT_EXEC,
+                                .exc = WEXITSTATUS(status)};
+  } else {
+    return (struct syscmd_exec){.result = SYSCMD_EXEC_RESULT_FAILED};
+  }
 }
 
 #else

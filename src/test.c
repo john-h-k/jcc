@@ -249,6 +249,7 @@ struct jcc_tests_status {
 
 struct jcc_worker_args {
   atomic_bool *die;
+  atomic_size_t *num_completed;
   struct jobq *jobq;
   struct arena_allocator *arena;
   struct jcc_tests_status *results;
@@ -275,9 +276,20 @@ static struct jcc_comp_info run_compilation(const struct jcc_worker_args *args,
 
     char *stderr_buf;
     syscmd_set_stderr(cmd, SYSCMD_BUF_FLAG_NONE, &stderr_buf);
-    int exc = syscmd_exec(&cmd);
 
-    return (struct jcc_comp_info){.exc = exc, .stderr_buf = stderr_buf};
+    struct syscmd_exec exec =
+        syscmd_timed_exec(&cmd, (struct syscmd_timeout){.secs = 5});
+
+    switch (exec.result) {
+    case SYSCMD_EXEC_RESULT_EXEC:
+      return (struct jcc_comp_info){.exc = exec.exc, .stderr_buf = stderr_buf};
+    case SYSCMD_EXEC_RESULT_FAILED:
+      // use non-success codes here
+      return (struct jcc_comp_info){.exc = 1, .stderr_buf = stderr_buf};
+    case SYSCMD_EXEC_RESULT_TIMEOUT:
+      return (struct jcc_comp_info){.exc = 1, .stderr_buf = stderr_buf};
+    }
+
   } else {
     const char *sink_flag = "-fdiagnostics-sink";
     vector_push_back(comp_args, &sink_flag);
@@ -591,8 +603,29 @@ static void run_test(struct jcc_worker_args *args, const struct jcc_test *test,
   syscmd_set_stderr_path(cmd, SYSCMD_BUF_FLAG_NONE, "/dev/null");
 
   // FIXME: handle malformed executable (syscmd will throw assert i think)
-  int run_ret = syscmd_exec(&cmd);
+  struct syscmd_exec exec =
+      syscmd_timed_exec(&cmd, (struct syscmd_timeout){.secs = 5});
 
+  switch (exec.result) {
+  case SYSCMD_EXEC_RESULT_FAILED:
+    add_test_result(args, &(struct jcc_test_result){
+                              .status = TEST_STATUS_FAIL,
+                              .file = test->file,
+                              .msg = "Running process failed",
+                          });
+    return;
+  case SYSCMD_EXEC_RESULT_TIMEOUT:
+    add_test_result(args, &(struct jcc_test_result){
+                              .status = TEST_STATUS_FAIL,
+                              .file = test->file,
+                              .msg = "Process timed out",
+                          });
+    return;
+  case SYSCMD_EXEC_RESULT_EXEC:
+    break;
+  }
+
+  int run_ret = exec.exc;
   if (run_ret != info.expected_exc) {
     add_test_result(args, &(struct jcc_test_result){
                               .status = TEST_STATUS_FAIL,
@@ -638,6 +671,8 @@ static int test_worker(void *arg) {
       run_test(args, &job, args->opts.arg_groups[i]);
     }
   }
+
+  atomic_fetch_add(args->num_completed, 1);
 
   return args->die ? WORKER_RESULT_KILLED : WORKER_RESULT_SUCCESS;
 }
@@ -806,6 +841,8 @@ int main(int argc, char **argv) {
   sigaddset(&set, SIGINT);
   pthread_sigmask(SIG_BLOCK, &set, NULL);
 
+  atomic_size_t num_completed = 0;
+
   for (size_t i = 0; i < opts.jobs; i++) {
     struct arena_allocator *worker_arena;
     arena_allocator_create("thread-worker", &worker_arena);
@@ -813,6 +850,7 @@ int main(int argc, char **argv) {
     arenas[i] = worker_arena;
 
     struct jcc_worker_args worker = {.die = &die,
+                                     .num_completed = &num_completed,
                                      .jobq = jobq,
                                      .results = &status,
                                      .opts = opts,
@@ -874,7 +912,7 @@ int main(int argc, char **argv) {
       printf("\033[?25h");
       fflush(stdout);
 
-      if (atomic_load(&die) || num_done == total_tests) {
+      if (atomic_load(&die) || atomic_load(&num_completed) == opts.jobs) {
         break;
       }
     }
