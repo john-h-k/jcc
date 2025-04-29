@@ -181,8 +181,8 @@ configure() {
     fi
 
     if [ -z "$cc" ]; then
-        # if ASan on try and use clang
-        if [[ "$mode" == "Debug" ]] && [[ "$san" == "address" ]] && command -v clang &>/dev/null; then
+        # if sanitizers on try and use clang
+        if [[ "$mode" == "Debug" ]] && [[ "$san" != "none" ]] && command -v clang &>/dev/null; then
            { cc --version 2>/dev/null | grep clang; } && cc="cc" || cc="clang"
         else
             cc="cc"
