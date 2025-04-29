@@ -726,11 +726,15 @@ static bool parse_args(struct arena_allocator *arena, int argc, char *argv[],
       opts->quiet = true;
     } else if (strcmp(argv[i], "-arch") == 0 && i + 1 < argc) {
       i++;
+      const char *arch_flag = "-arch";
+      vector_push_back(args, &arch_flag);
       vector_push_back(args, &argv[i]);
 
       opts->arch = MK_USTR(argv[i]);
     } else if (strcmp(argv[i], "-target") == 0 && i + 1 < argc) {
       i++;
+      const char *target_flag = "-target";
+      vector_push_back(args, &target_flag);
       vector_push_back(args, &argv[i]);
 
       ustr_t target = MK_USTR(argv[i]);

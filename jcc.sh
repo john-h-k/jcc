@@ -461,6 +461,7 @@ _test() {
     mkdir -p .tmp
     cd .tmp
 
+    echo "$@"
     $(_test_runner) "$@"
     exc="$?"
 
@@ -479,16 +480,16 @@ test-all() {
 }
 
 _test_all_sans() {
-    JCC_BUILD_FLAGS="--san address" _test -p --quiet "$@" || return $?
-    JCC_BUILD_FLAGS="--san thread" _test -p --quiet "$@" || return $?
+    JCC_BUILD_FLAGS="--san address" _test "$@" || return $?
+    JCC_BUILD_FLAGS="--san thread" _test "$@" || return $?
 
     if [[ "$(uname)" != "Darwin" ]]; then
-        JCC_BUILD_FLAGS="--san memory" _test -p --quiet "$@" || return $?
+        JCC_BUILD_FLAGS="--san memory" _test "$@" || return $?
     fi
 }
 
 ci-test() {
-    _test_all_sans --quiet --arg-group -O0 --arg-group -O1 --arg-group -O2 "$@"
+    _test_all_sans -p --quiet --arg-group -O0 --arg-group -O1 --arg-group -O2 "$@"
     # _test_all_sans --quiet --arg-group -O0 --arg-group -O1 --arg-group -O2 --arg-group -O3 "$@"
 }
 
