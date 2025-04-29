@@ -524,10 +524,6 @@ static void run_test(struct jcc_worker_args *args, const struct jcc_test *test,
     vector_push_back(comp_args, &buf);
   }
 
-  for (size_t i = 0; i < args->opts.num_args; i++) {
-    vector_push_back(comp_args, &args->opts.args[i]);
-  }
-
   // TODO: properly parse arg group
   if (arg_group) {
     vector_push_back(comp_args, &arg_group);
@@ -743,6 +739,7 @@ static bool parse_args(struct arena_allocator *arena, int argc, char *argv[],
       if (!ustr_split(target, '-', &arch, &rest)) {
         arch = target;
       }
+
       opts->arch = arch;
     } else if (strcmp(argv[i], "-n") == 0 && i + 1 < argc) {
       opts->num_tests = atoi(argv[++i]);

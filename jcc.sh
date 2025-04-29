@@ -461,7 +461,6 @@ _test() {
     mkdir -p .tmp
     cd .tmp
 
-    echo "$@"
     $(_test_runner) "$@"
     exc="$?"
 
