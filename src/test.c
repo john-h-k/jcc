@@ -503,12 +503,8 @@ static void run_test(struct jcc_worker_args *args, const struct jcc_test *test,
 
   setenv("MallocNanoZone", "0", 1);
 
-  const char *output_file;
-  FILE *f = fs_tmpfile(&output_file);
-  fclose(f);
-
-  char name[128];
-  snprintf(name, sizeof(name), "test-thread-%zu", test->id);
+  char output_file[128];
+  snprintf(output_file, sizeof(output_file), "test-output-%zu", test->id);
 
   // this is ugly
 
