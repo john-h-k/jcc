@@ -381,11 +381,15 @@ static struct ir_cast_info cast_ty_for_td_var_ty(struct ir_func_builder *irb,
   if (from_var_ty.ty == IR_VAR_TY_TY_PRIMITIVE &&
       to_var_ty.ty == IR_VAR_TY_TY_POINTER) {
     // primitive -> pointer
-    if (from_var_ty.primitive == ir_var_ty_pointer_primitive_ty(irb->unit)) {
+    enum ir_var_primitive_ty pointer = ir_var_ty_pointer_primitive_ty(irb->unit);
+    if (from_var_ty.primitive == pointer) {
       BUG("cast between primitive & pointer type of same size is implicit");
     }
 
-    if (WKT_IS_SIGNED(from->well_known)) {
+    if (pointer < from_var_ty.primitive) {
+      return (struct ir_cast_info){.cmp_nz = false,
+                                   .cast_ty = IR_OP_CAST_OP_TY_TRUNC};
+    } else if (WKT_IS_SIGNED(from->well_known)) {
       return (struct ir_cast_info){.cmp_nz = false,
                                    .cast_ty = IR_OP_CAST_OP_TY_SEXT};
     } else {

@@ -1,3 +1,5 @@
+// arch-skip: rv32i
+
 int printf(const char *, ...);
 char t[] = "012345678";
 
