@@ -478,16 +478,18 @@ test-all() {
     _test --arg-group -O0 --arg-group -O1 --arg-group -O2 --arg-group -O3 "$@"
 }
 
-ci-test() {
-    # timeout -k 30m 30m
-    # opts disabled for now
-    JCC_BUILD_FLAGS="--san address" _test --quiet "$@" || return $?
-    JCC_BUILD_FLAGS="--san thread" _test --quiet "$@" || return $?
+_test_all_sans() {
+    JCC_BUILD_FLAGS="--san address" _test -p --quiet "$@" || return $?
+    JCC_BUILD_FLAGS="--san thread" _test -p --quiet "$@" || return $?
 
     if [[ "$(uname)" != "Darwin" ]]; then
-        JCC_BUILD_FLAGS="--san memory" _test --quiet "$@" || return $?
+        JCC_BUILD_FLAGS="--san memory" _test -p --quiet "$@" || return $?
     fi
-    # _test --quiet --arg-group -O0 --arg-group -O1 --arg-group -O2 --arg-group -O3 "$@"
+}
+
+ci-test() {
+    _test_all_sans --quiet --arg-group -O0 --arg-group -O1 --arg-group -O2 "$@"
+    # _test_all_sans --quiet --arg-group -O0 --arg-group -O1 --arg-group -O2 --arg-group -O3 "$@"
 }
 
 cfg() {

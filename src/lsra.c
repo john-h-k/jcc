@@ -340,8 +340,8 @@ static void fixup_spills_callback(struct ir_op **op,
 
 static void fixup_spills(struct ir_func *irb, struct lsra_reg_info *info) {
   struct ir_basicblock *basicblock = irb->first;
-  while (basicblock) {
 
+  while (basicblock) {
     struct ir_stmt *stmt = basicblock->first;
     while (stmt) {
       struct ir_op *op = stmt->first;

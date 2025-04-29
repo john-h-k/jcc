@@ -358,6 +358,7 @@ struct interval_data construct_intervals(struct ir_func *irb) {
 
               if (pred->last && interval->end >= pred->last->last->id) {
                 size_t new_end = MAX(interval->end, max_end);
+
                 if (new_end > interval->end) {
                   interval->end = new_end;
                   changed = true;
