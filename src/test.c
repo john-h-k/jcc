@@ -232,6 +232,7 @@ static void discover_tests(struct arena_allocator *arena, struct vector *tests,
 
 struct jcc_test_result {
   enum test_status status;
+  const char *arg_group;
   const char *file;
   const char *msg;
 };
@@ -490,13 +491,14 @@ static void add_test_result(struct jcc_worker_args *args,
 }
 
 static void run_test(struct jcc_worker_args *args, const struct jcc_test *test,
-                     UNUSED const char *arggroup) {
+                     const char *arg_group) {
   struct jcc_test_info info = get_test_info(args, test);
 
   if (info.skip) {
     add_test_result(args,
                     &(struct jcc_test_result){
                         .status = TEST_STATUS_SKIP,
+                        .arg_group = arg_group,
                         .file = test->file,
                         .msg = aralloc_ustrconv(args->arena, info.skip_msg)});
     return;
@@ -520,6 +522,15 @@ static void run_test(struct jcc_worker_args *args, const struct jcc_test *test,
     ustr_t *flag = vector_get(info.flags, i);
     char *buf = aralloc_ustrconv(args->arena, *flag);
     vector_push_back(comp_args, &buf);
+  }
+
+  for (size_t i = 0; i < args->opts.num_args; i++) {
+    vector_push_back(comp_args, &args->opts.args[i]);
+  }
+
+  // TODO: properly parse arg group
+  if (arg_group) {
+    vector_push_back(comp_args, &arg_group);
   }
 
   for (size_t i = 0; i < args->opts.num_args; i++) {
@@ -558,12 +569,14 @@ static void run_test(struct jcc_worker_args *args, const struct jcc_test *test,
       add_test_result(args,
                       &(struct jcc_test_result){
                           .status = TEST_STATUS_FAIL,
+                          .arg_group = arg_group,
                           .file = test->file,
                           .msg = "test marked 'no-compile' but it compiled!",
                       });
     } else {
       add_test_result(args, &(struct jcc_test_result){
                                 .status = TEST_STATUS_PASS,
+                                .arg_group = arg_group,
                                 .file = test->file,
                             });
     }
@@ -575,6 +588,7 @@ static void run_test(struct jcc_worker_args *args, const struct jcc_test *test,
     add_test_result(
         args, &(struct jcc_test_result){
                   .status = TEST_STATUS_FAIL,
+                  .arg_group = arg_group,
                   .file = test->file,
                   .msg = comp_info.stderr_buf
                              ? aralloc_snprintf(
@@ -607,6 +621,7 @@ static void run_test(struct jcc_worker_args *args, const struct jcc_test *test,
   case SYSCMD_EXEC_RESULT_FAILED:
     add_test_result(args, &(struct jcc_test_result){
                               .status = TEST_STATUS_FAIL,
+                              .arg_group = arg_group,
                               .file = test->file,
                               .msg = "Running process failed",
                           });
@@ -614,6 +629,7 @@ static void run_test(struct jcc_worker_args *args, const struct jcc_test *test,
   case SYSCMD_EXEC_RESULT_TIMEOUT:
     add_test_result(args, &(struct jcc_test_result){
                               .status = TEST_STATUS_FAIL,
+                              .arg_group = arg_group,
                               .file = test->file,
                               .msg = "Process timed out",
                           });
@@ -626,6 +642,7 @@ static void run_test(struct jcc_worker_args *args, const struct jcc_test *test,
   if (run_ret != info.expected_exc) {
     add_test_result(args, &(struct jcc_test_result){
                               .status = TEST_STATUS_FAIL,
+                              .arg_group = arg_group,
                               .file = test->file,
                               .msg = aralloc_snprintf(
                                   args->arena, "Exit code %d vs expected %d",
@@ -639,6 +656,7 @@ static void run_test(struct jcc_worker_args *args, const struct jcc_test *test,
         args,
         &(struct jcc_test_result){
             .status = TEST_STATUS_FAIL,
+            .arg_group = arg_group,
             .file = test->file,
             .msg = aralloc_snprintf(
                 args->arena, "Stdout mismatch: expected \"%.*s\" got \"%s\"",
@@ -647,6 +665,7 @@ static void run_test(struct jcc_worker_args *args, const struct jcc_test *test,
   }
 
   add_test_result(args, &(struct jcc_test_result){.status = TEST_STATUS_PASS,
+                                                  .arg_group = arg_group,
                                                   .file = test->file});
 }
 
@@ -968,7 +987,12 @@ int main(int argc, char **argv) {
       struct jcc_test_result *result = vector_get(results, i);
 
       if (result->status == TEST_STATUS_FAIL) {
-        echo(PR_BOLD PR_RED, "- '%s' failed: %s", result->file, result->msg);
+        if (result->arg_group) {
+          echo(PR_BOLD PR_RED, "- '%s' (arg_group: '%s') failed: %s",
+               result->file, result->arg_group, result->msg);
+        } else {
+          echo(PR_BOLD PR_RED, "- '%s' failed: %s", result->file, result->msg);
+        }
       }
     }
   }
