@@ -819,7 +819,7 @@ int main(int argc, char **argv) {
 
   // TODO: take as flag or env var or whatever
   const char *runner = NULL;
-  if (!ustr_eq(opts.arch, MK_USTR("rv32i"))) {
+  if (ustr_eq(opts.arch, MK_USTR("rv32i"))) {
     fprintf(stderr, "Using riscy test runner...");
     runner = "riscy";
   }
