@@ -847,8 +847,10 @@ int main(int argc, char **argv) {
   }
 
   echo(PR_BOLD, "Using %zu processes...", opts.jobs);
+
+  size_t total_tests = opts.num_tests * opts.num_arg_groups;
   echo(PR_BOLD, "Found %zu tests, running %zu", vector_length(tests),
-       opts.num_tests);
+       total_tests);
 
   struct timestmp start = get_timestamp();
 
@@ -907,7 +909,6 @@ int main(int argc, char **argv) {
   sa.sa_flags = 0;
   sigaction(SIGINT, &sa, NULL);
 
-  size_t total_tests = opts.num_tests * opts.num_arg_groups;
   int pad = (int)num_digits(total_tests);
 
   if (!opts.quiet) {
