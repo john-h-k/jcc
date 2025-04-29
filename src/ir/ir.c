@@ -3502,7 +3502,9 @@ void ir_alloc_locals_conservative(struct ir_func *func) {
                            (target->reg_info.gp_registers.num_volatile *
                             target->reg_info.gp_registers.max_reg_size);
 
-  func->total_locals_size = func->caller_stack_needed + max_callee_save;
+  if (func->flags & IR_FUNC_FLAG_MAKES_CALL) {
+    func->total_locals_size = func->caller_stack_needed + max_callee_save;
+  }
 
   ir_alloc_locals(func);
 }
