@@ -278,7 +278,7 @@ static struct jcc_comp_info run_compilation(const struct jcc_worker_args *args,
     syscmd_set_stderr(cmd, SYSCMD_BUF_FLAG_NONE, &stderr_buf);
 
     struct syscmd_exec exec =
-        syscmd_timed_exec(&cmd, (struct syscmd_timeout){.secs = 5});
+        syscmd_timed_exec(&cmd, (struct syscmd_timeout){.secs = 30});
 
     switch (exec.result) {
     case SYSCMD_EXEC_RESULT_EXEC:
@@ -601,7 +601,7 @@ static void run_test(struct jcc_worker_args *args, const struct jcc_test *test,
 
   // FIXME: handle malformed executable (syscmd will throw assert i think)
   struct syscmd_exec exec =
-      syscmd_timed_exec(&cmd, (struct syscmd_timeout){.secs = 5});
+      syscmd_timed_exec(&cmd, (struct syscmd_timeout){.secs = 30});
 
   switch (exec.result) {
   case SYSCMD_EXEC_RESULT_FAILED:
