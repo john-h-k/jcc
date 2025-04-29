@@ -97,6 +97,11 @@ void syscmd_write_cmd(const struct syscmd *restrict cmd, FILE *file) {
   for (size_t i = 0; i < num_args; i++) {
     const char **arg = vector_get(cmd->args, i);
 
+    // post `syscmd_exec` there is a trailing null
+    if (i + 1 == num_args && !*arg) {
+      continue;
+    }
+
     fprintf(file, "'%s'", *arg);
     if (i + 1 != num_args) {
       fprintf(file, " ");

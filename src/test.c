@@ -504,7 +504,7 @@ static void run_test(struct jcc_worker_args *args, const struct jcc_test *test,
   setenv("MallocNanoZone", "0", 1);
 
   char output_file[128];
-  snprintf(output_file, sizeof(output_file), "test-output-%zu", test->id);
+  snprintf(output_file, sizeof(output_file), "./test-output-%zu", test->id);
 
   // this is ugly
 
