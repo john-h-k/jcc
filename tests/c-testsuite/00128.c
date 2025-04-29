@@ -1,3 +1,4 @@
+// arch-skip: rv32i
 
 int a;
 unsigned b;

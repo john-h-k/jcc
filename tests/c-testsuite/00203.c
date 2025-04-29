@@ -1,3 +1,5 @@
+// arch-skip: rv32i
+
 #include <stdio.h>
 
 int main()

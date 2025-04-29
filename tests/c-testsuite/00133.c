@@ -1,3 +1,5 @@
+// arch-skip: rv32i
+
 int main(void)
 {
 	int i;
