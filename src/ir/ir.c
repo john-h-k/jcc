@@ -3494,6 +3494,8 @@ ir_compute_dominance_frontier(struct ir_func *func) {
                                         .dom_trees = dom_trees};
 }
 
+static void ir_alloc_local(struct ir_func *func, struct ir_lcl *lcl);
+
 void ir_alloc_locals_conservative(struct ir_func *func) {
   const struct target *target = func->unit->target;
 
@@ -3502,13 +3504,70 @@ void ir_alloc_locals_conservative(struct ir_func *func) {
                            (target->reg_info.gp_registers.num_volatile *
                             target->reg_info.gp_registers.max_reg_size);
 
-  if (func->flags & IR_FUNC_FLAG_MAKES_CALL) {
-    func->total_locals_size = func->caller_stack_needed + max_callee_save;
-  }
+  // TODO: this should reserve less
+  // while it does not actually cause stack to be used, it can pessimise targets
+  // because during lower they do instruction selection based on this
+  // so e.g if there is a local at offset #600 during lowering, they may need to
+  // lower to two instrs but then when local re-alloc happens post regalloc, it
+  // may actually be at offset #400 and could have been contained
+  func->total_locals_size = func->caller_stack_needed + max_callee_save;
 
-  ir_alloc_locals(func);
+  struct ir_lcl *lcl = func->first_lcl;
+  while (lcl) {
+    DEBUG_ASSERT(!(lcl->flags & IR_LCL_FLAG_CALL_SAVE),
+                 "call save during conservative reg allocation (none should "
+                 "exist as this is pre regalloc)");
+
+    if (lcl->alloc_ty == IR_LCL_ALLOC_TY_FIXED) {
+      lcl = lcl->succ;
+      continue;
+    }
+
+    ir_alloc_local(func, lcl);
+
+    lcl = lcl->succ;
+  }
 }
 
+void ir_alloc_locals(struct ir_func *func) {
+  struct ir_lcl *lcl = func->first_lcl;
+
+  size_t total_locals_size = func->total_locals_size;
+  func->total_locals_size = func->caller_stack_needed;
+
+  // first pass do call saves
+  while (lcl) {
+    if (lcl->alloc_ty != IR_LCL_ALLOC_TY_NONE ||
+        !(lcl->flags & IR_LCL_FLAG_CALL_SAVE)) {
+      lcl = lcl->succ;
+      continue;
+    }
+
+    ir_alloc_local(func, lcl);
+
+    lcl = lcl->succ;
+  }
+
+  size_t allocated = func->total_locals_size - func->caller_stack_needed;
+  DEBUG_ASSERT(allocated <= total_locals_size,
+               "allocating call saves overflowed their region (%zu byte "
+               "region, %zu bytes allocated)",
+               total_locals_size, allocated);
+
+  lcl = func->first_lcl;
+  while (lcl) {
+    if (lcl->alloc_ty == IR_LCL_ALLOC_TY_FIXED ||
+        (lcl->flags & IR_LCL_FLAG_CALL_SAVE)) {
+      lcl = lcl->succ;
+      continue;
+    }
+
+    lcl->alloc_ty = IR_LCL_ALLOC_TY_NONE;
+    ir_alloc_local(func, lcl);
+
+    lcl = lcl->succ;
+  }
+}
 static void ir_alloc_local(struct ir_func *func, struct ir_lcl *lcl) {
   struct ir_var_ty_info ty_info = ir_var_ty_info(func->unit, &lcl->var_ty);
 
@@ -3534,43 +3593,6 @@ static void ir_alloc_local(struct ir_func *func, struct ir_lcl *lcl) {
       .offset = func->total_locals_size, .padding = lcl_pad, .size = lcl_size};
 
   func->total_locals_size += lcl_size;
-}
-
-void ir_alloc_locals(struct ir_func *func) {
-  struct ir_lcl *lcl = func->first_lcl;
-
-  size_t total_locals_size = func->total_locals_size;
-  func->total_locals_size = func->caller_stack_needed;
-
-  // first pass do call saves
-  while (lcl) {
-    if (lcl->alloc_ty != IR_LCL_ALLOC_TY_NONE ||
-        !(lcl->flags & IR_LCL_FLAG_CALL_SAVE)) {
-      lcl = lcl->succ;
-      continue;
-    }
-
-    ir_alloc_local(func, lcl);
-
-    lcl = lcl->succ;
-  }
-
-  DEBUG_ASSERT(func->total_locals_size <= total_locals_size,
-               "allocating call saves overflowed their region");
-
-  func->total_locals_size = total_locals_size;
-
-  lcl = func->first_lcl;
-  while (lcl) {
-    if (lcl->alloc_ty != IR_LCL_ALLOC_TY_NONE) {
-      lcl = lcl->succ;
-      continue;
-    }
-
-    ir_alloc_local(func, lcl);
-
-    lcl = lcl->succ;
-  }
 }
 
 void ir_simplify_phis(struct ir_func *func) {
