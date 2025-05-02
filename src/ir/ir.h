@@ -136,6 +136,7 @@ enum ir_op_unary_op_ty {
   IR_OP_UNARY_OP_TY_NEG,
   IR_OP_UNARY_OP_TY_LOGICAL_NOT,
   IR_OP_UNARY_OP_TY_NOT,
+  IR_OP_UNARY_OP_TY_POPCNT
 };
 
 struct ir_op_unary_op {
@@ -799,10 +800,19 @@ struct ir_var_value {
   };
 };
 
+enum FLAG_ENUM ir_var_flags {
+  IR_VAR_FLAG_NONE = 0,
+
+  // value of address itself is insignificant
+  IR_VAR_FLAG_UNNAMED_ADDR = 1 << 0,
+};
+
 struct ir_var {
   struct ir_unit *unit;
 
   enum ir_var_data_ty ty;
+
+  enum ir_var_flags flags;
 
   struct ir_var_ty var_ty;
   struct ir_var_value value;
@@ -972,10 +982,10 @@ struct ir_unit {
   struct arena_allocator *arena;
   const struct target *target;
 
+  size_t glb_count;
+  size_t next_glb_id;
   struct ir_glb *first_global;
   struct ir_glb *last_global;
-
-  size_t num_globals;
 
   struct {
     struct ir_glb *memmove;
@@ -1139,7 +1149,7 @@ void ir_detach_local(struct ir_func *irb, struct ir_lcl *lcl);
 void ir_alloc_locals_conservative(struct ir_func *func);
 void ir_alloc_locals(struct ir_func *func);
 
-void ir_detach_global(struct ir_unit *iru, struct ir_glb *glb);
+void ir_detach_glb(struct ir_unit *iru, struct ir_glb *glb);
 struct ir_glb *ir_add_global(struct ir_unit *iru, enum ir_glb_ty ty,
                              const struct ir_var_ty *var_ty,
                              enum ir_glb_def_ty def_ty, const char *name);
@@ -1396,6 +1406,15 @@ struct ir_op_use_map {
 // struct ir_rewrite_info {
 //   struct ir_op *
 // };
+
+struct ir_glb_use_info {
+  bool *used;
+  size_t num_used;
+};
+
+struct ir_glb_use_info ir_build_glb_usage_info(struct ir_unit *unit);
+
+void ir_eliminate_dead_glbs(struct ir_unit *unit);
 
 struct ir_op_use_map ir_build_op_uses_map(struct ir_func *func);
 

@@ -182,6 +182,7 @@ struct cg_state {
   enum codegen_flags flags;
 
   const struct target *target;
+  struct cg_entry *entry;
   struct cg_func *func;
   struct ir_func *ir;
 

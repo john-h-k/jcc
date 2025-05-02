@@ -406,6 +406,7 @@ static struct cg_entry codegen_func(struct cg_unit *unit, struct ir_glb *glb,
   struct cg_func *func = &entry.func;
   struct cg_state state = {.arena = unit->arena,
                            .flags = flags,
+                           .entry = &entry,
                            .target = unit->target,
                            .func = func,
                            .ir = ir_func};
@@ -455,9 +456,9 @@ struct cg_unit *codegen(struct ir_unit *unit, enum codegen_flags flags) {
       .ty = info.ty,
       .target = unit->target,
       .instr_size = info.instr_sz,
-      .num_entries = unit->num_globals,
+      .num_entries = unit->glb_count,
       .entries =
-          aralloc(unit->arena, unit->num_globals * sizeof(struct cg_entry))};
+          aralloc(unit->arena, unit->glb_count * sizeof(struct cg_entry))};
 
   arena_allocator_create("codegen", &codegen_unit->arena);
 

@@ -30,6 +30,8 @@ PRINTF_ARGS(1)
 char *aralloc_snprintf(struct arena_allocator *allocator, const char *format,
                        ...);
 
+void *arzalloc(struct arena_allocator *allocator, size_t size);
+
 /* Try and expand the allocation at `ptr` to `size`.
      - If `ptr` is `NULL`, acts the same as calling `arena_alloc(allocator,
    size)`

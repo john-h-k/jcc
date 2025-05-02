@@ -328,6 +328,12 @@ static void *arena_alloc_in_new(struct arena_allocator *allocator,
   return allocation;
 }
 
+void *arzalloc(struct arena_allocator *allocator, size_t size) {
+  void *p = aralloc(allocator, size);
+  memset(p, 0, size);
+  return p;
+}
+
 void *aralloc(struct arena_allocator *allocator, size_t size) {
   if (!size) {
     return 0;

@@ -484,6 +484,10 @@ static void lower_mem_set(struct ir_func *func, struct ir_op *op) {
 }
 
 static void lower_mem_copy(struct ir_func *func, struct ir_op *op) {
+  // NOTE: jcc relies on `mem.copy` allowing overlapping regions
+  // if you change that, change `Builder::memmove` to do something that allows
+  // overlapping
+
   struct ir_op *dest = op->mem_copy.dest;
   struct ir_op *source = op->mem_copy.source;
 
@@ -1676,17 +1680,26 @@ void lower(struct ir_unit *unit) {
 
       iter = ir_func_iter(func, IR_FUNC_ITER_FLAG_NONE);
       while (ir_func_iter_next(&iter, &op)) {
-        if (op->ty != IR_OP_TY_CALL) {
-          continue;
-        }
+        if (op->ty == IR_OP_TY_ADDR && op->addr.ty == IR_OP_ADDR_TY_GLB &&
+            op->addr.glb->var &&
+            (op->addr.glb->var->flags & IR_VAR_FLAG_UNNAMED_ADDR)) {
+          struct ir_var_ty_info info =
+              ir_var_ty_info(unit, &op->addr.glb->var_ty);
 
-        if (op->call.target->ty == IR_OP_TY_ADDR &&
-            op->call.target->addr.ty == IR_OP_ADDR_TY_GLB &&
-            !(op->call.target->flags & IR_OP_FLAG_CONTAINED)) {
-          op->call.target = ir_alloc_contained_op(func, op->call.target, op);
-        }
+          if (info.size == 0) {
+            // replace unnamed ZST addr usage with dangling constant
+            op = ir_replace_op(func, op, IR_OP_TY_CNST, IR_VAR_TY_POINTER);
+            ir_mk_pointer_constant(unit, op, info.alignment);
+          }
+        } else if (op->ty == IR_OP_TY_CALL) {
+          if (op->call.target->ty == IR_OP_TY_ADDR &&
+              op->call.target->addr.ty == IR_OP_ADDR_TY_GLB &&
+              !(op->call.target->flags & IR_OP_FLAG_CONTAINED)) {
+            op->call.target = ir_alloc_contained_op(func, op->call.target, op);
+          }
 
-        lower_call_registers(func, op);
+          lower_call_registers(func, op);
+        }
       }
 
       while (basicblock) {

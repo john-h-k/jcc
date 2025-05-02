@@ -1134,10 +1134,10 @@ void ir_transform_single_op_phis(struct ir_func *func) {
   }
 }
 
-void ir_detach_global(struct ir_unit *iru, struct ir_glb *glb) {
+void ir_detach_glb(struct ir_unit *iru, struct ir_glb *glb) {
   glb->id = DETACHED_GLB;
 
-  iru->num_globals--;
+  iru->glb_count--;
 
   // fix links on either side of glb
   if (glb->pred) {
@@ -1176,8 +1176,8 @@ static void ir_prune_globals_walk_var_value(struct ir_unit *iru, bool *seen,
 }
 
 void ir_prune_globals(struct ir_unit *iru) {
-  bool *seen = aralloc(iru->arena, sizeof(*seen) * iru->num_globals);
-  memset(seen, 0, sizeof(*seen) * iru->num_globals);
+  bool *seen = aralloc(iru->arena, sizeof(*seen) * iru->glb_count);
+  memset(seen, 0, sizeof(*seen) * iru->glb_count);
 
   struct ir_glb *glb = iru->first_global;
 
@@ -1251,7 +1251,7 @@ void ir_prune_globals(struct ir_unit *iru) {
     }
 
     struct ir_glb *succ = glb->succ;
-    ir_detach_global(iru, glb);
+    ir_detach_glb(iru, glb);
     glb = succ;
   }
 }
@@ -1405,7 +1405,7 @@ void ir_rebuild_glb_ids(struct ir_unit *iru) {
     glc = glc->succ;
   }
 
-  DEBUG_ASSERT(next_glb_id == iru->num_globals,
+  DEBUG_ASSERT(next_glb_id == iru->glb_count,
                "found diff number of globals to expected");
 }
 
@@ -2545,7 +2545,7 @@ struct ir_glb *ir_add_global(struct ir_unit *iru, enum ir_glb_ty ty,
 
   struct ir_glb *pred = iru->last_global;
 
-  iru->num_globals++;
+  iru->glb_count++;
   *glb = (struct ir_glb){
       .id = pred ? pred->id + 1 : 0,
       .unit = iru,
@@ -2924,6 +2924,124 @@ static void build_op_uses_callback(struct ir_op **op, enum ir_op_use_ty use_ty,
                use.consumer->id);
 
   vector_push_back(data->use_data[(*op)->id].uses, &use);
+}
+
+static void ir_build_glb_usage_walk_var(struct ir_unit *unit, bool *used,
+                                        const struct ir_var_value *value) {
+  switch (value->ty) {
+  case IR_VAR_VALUE_TY_ZERO:
+  case IR_VAR_VALUE_TY_INT:
+  case IR_VAR_VALUE_TY_FLT:
+  case IR_VAR_VALUE_TY_STR:
+    return;
+  case IR_VAR_VALUE_TY_ADDR: {
+    struct ir_glb *ref = value->addr.glb;
+
+    DEBUG_ASSERT(ref->id < unit->glb_count,
+                 "glb id > num_globals (needs rekey)");
+
+    used[ref->id] = true;
+    break;
+  }
+  case IR_VAR_VALUE_TY_VALUE_LIST:
+    for (size_t i = 0; i < value->value_list.num_values; i++) {
+      ir_build_glb_usage_walk_var(unit, used, &value->value_list.values[i]);
+    }
+  }
+}
+
+struct ir_glb_use_info ir_build_glb_usage_info(struct ir_unit *unit) {
+  bool *used = arzalloc(unit->arena, sizeof(*used) * unit->glb_count);
+
+  struct ir_glb *glb = unit->first_global;
+  while (glb) {
+
+    if (glb->ty == IR_GLB_TY_FUNC && glb->func) {
+      // HACK: fragile because needs new code for every new glb
+
+      struct ir_func_iter iter =
+          ir_func_iter(glb->func, IR_FUNC_ITER_FLAG_NONE);
+
+      struct ir_op *op;
+      while (ir_func_iter_next(&iter, &op)) {
+        struct ir_glb *ref = NULL;
+
+        switch (op->ty) {
+        case IR_OP_TY_ADDR:
+          if (op->addr.ty == IR_OP_ADDR_TY_GLB) {
+            ref = op->addr.glb;
+          }
+          break;
+        case IR_OP_TY_STORE:
+          if (op->store.ty == IR_OP_STORE_TY_GLB) {
+            ref = op->store.glb;
+          }
+          break;
+        case IR_OP_TY_LOAD:
+          if (op->load.ty == IR_OP_LOAD_TY_GLB) {
+            ref = op->load.glb;
+          }
+          break;
+        case IR_OP_TY_STORE_BITFIELD:
+          if (op->store_bitfield.ty == IR_OP_STORE_TY_GLB) {
+            ref = op->store_bitfield.glb;
+          }
+          break;
+        case IR_OP_TY_LOAD_BITFIELD:
+          if (op->load_bitfield.ty == IR_OP_LOAD_TY_GLB) {
+            ref = op->load_bitfield.glb;
+          }
+          break;
+        default:
+          break;
+        }
+
+        if (!ref) {
+          continue;
+        }
+
+        DEBUG_ASSERT(ref->id < unit->glb_count,
+                     "glb id > num_globals (needs rekey)");
+        used[ref->id] = true;
+      }
+    } else if (glb->var) {
+      ir_build_glb_usage_walk_var(unit, used, &glb->var->value);
+    }
+
+    glb = glb->succ;
+  }
+
+  return (struct ir_glb_use_info){.used = used, .num_used = unit->glb_count};
+}
+
+void ir_eliminate_dead_glbs(struct ir_unit *unit) {
+  bool eliminated = true;
+  while (eliminated) {
+    eliminated = false;
+
+    struct ir_glb_use_info info = ir_build_glb_usage_info(unit);
+
+    struct ir_glb *glb = unit->first_global;
+    while (glb) {
+      if (info.used[glb->id]) {
+        glb = glb->succ;
+        continue;
+      }
+
+      debug("glb %s UNUSED", glb->name);
+      struct ir_glb *succ = glb->succ;
+
+      if (glb->linkage == IR_LINKAGE_INTERNAL ||
+          glb->linkage == IR_LINKAGE_NONE) {
+        eliminated = true;
+        ir_detach_glb(unit, glb);
+      }
+
+      glb = succ;
+    }
+
+    ir_rebuild_glb_ids(unit);
+  }
 }
 
 struct ir_op_use_map ir_build_op_uses_map(struct ir_func *func) {

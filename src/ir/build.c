@@ -381,7 +381,8 @@ static struct ir_cast_info cast_ty_for_td_var_ty(struct ir_func_builder *irb,
   if (from_var_ty.ty == IR_VAR_TY_TY_PRIMITIVE &&
       to_var_ty.ty == IR_VAR_TY_TY_POINTER) {
     // primitive -> pointer
-    enum ir_var_primitive_ty pointer = ir_var_ty_pointer_primitive_ty(irb->unit);
+    enum ir_var_primitive_ty pointer =
+        ir_var_ty_pointer_primitive_ty(irb->unit);
     if (from_var_ty.primitive == pointer) {
       BUG("cast between primitive & pointer type of same size is implicit");
     }
@@ -4819,7 +4820,7 @@ build_ir_for_translationunit(const struct target *target, struct typechk *tchk,
                           .target = target,
                           .first_global = NULL,
                           .last_global = NULL,
-                          .num_globals = 0};
+                          .glb_count = 0};
 
   struct var_refs *global_var_refs = var_refs_create();
   // funcs do not necessarily have a seperate decl so we do it for defs too

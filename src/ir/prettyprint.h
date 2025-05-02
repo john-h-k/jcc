@@ -105,7 +105,8 @@ void debug_print_basicblock(FILE *file, struct ir_func *irb,
 void debug_print_ir_func(FILE *file, struct ir_func *irb,
                          const struct debug_print_ir_opts *opts);
 
-void debug_print_ir_var(FILE *file, struct ir_var *var);
+void debug_print_ir_var(FILE *file, struct ir_var *var,
+                        const struct debug_print_ir_opts *opts);
 
 void debug_print_ir_object(FILE *file, const struct ir_object *object,
                            const struct debug_print_ir_opts *opts);

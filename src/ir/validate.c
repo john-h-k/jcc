@@ -429,6 +429,7 @@ static void ir_validate_op(struct ir_validate_state *state,
   case IR_OP_TY_STORE:
     VALIDATION_CHECKZ(op->var_ty.ty == IR_VAR_TY_TY_NONE, op,
                       "store ops should not have a var ty");
+
     switch (op->store.ty) {
     case IR_OP_STORE_TY_LCL:
       // TODO: disabled, reenable (need to handle struct fields and stuff)
@@ -447,6 +448,10 @@ static void ir_validate_op(struct ir_validate_state *state,
       break;
     case IR_OP_STORE_TY_ADDR: {
       VALIDATION_CHECKZ(op->store.addr, op, "store ty addr must have addr");
+      VALIDATION_CHECKZ(
+          validate_var_ty_is_pointer(state, &op->store.addr->var_ty), op,
+          "address must have type pointer");
+
       // struct ir_op *addr = op->store.addr;
       // if (addr->ty == IR_OP_TY_ADDR) {
       //   switch (addr->addr.ty) {
@@ -497,8 +502,9 @@ static void ir_validate_op(struct ir_validate_state *state,
                        op->store_bitfield.glb->id);
       break;
     case IR_OP_STORE_TY_ADDR: {
-      VALIDATION_CHECKZ(op->store_bitfield.addr, op,
-                        "store ty addr must have addr");
+      VALIDATION_CHECKZ(
+          validate_var_ty_is_pointer(state, &op->store.addr->var_ty), op,
+          "address must have type pointer");
 
       // struct ir_op *addr = op->store_bitfield.addr;
       // if (addr->ty == IR_OP_TY_ADDR) {
@@ -531,8 +537,6 @@ static void ir_validate_op(struct ir_validate_state *state,
     break;
 
   case IR_OP_TY_LOAD:
-    ir_validate_operands_same_ty(state, op);
-
     switch (op->load.ty) {
     case IR_OP_LOAD_TY_LCL:
       // TODO: disabled, reenable (need to handle struct fields and stuff)
@@ -551,6 +555,9 @@ static void ir_validate_op(struct ir_validate_state *state,
       break;
     case IR_OP_LOAD_TY_ADDR: {
       VALIDATION_CHECKZ(op->load.addr, op, "load ty addr must have addr");
+      VALIDATION_CHECKZ(
+          validate_var_ty_is_pointer(state, &op->store.addr->var_ty), op,
+          "address must have type pointer");
 
       // struct ir_op *addr = op->load.addr;
       // if (addr->ty == IR_OP_TY_ADDR) {
@@ -578,6 +585,8 @@ static void ir_validate_op(struct ir_validate_state *state,
     }
     break;
   case IR_OP_TY_LOAD_BITFIELD:
+    ir_validate_operands_same_ty(state, op);
+
     switch (op->load_bitfield.ty) {
     case IR_OP_LOAD_TY_LCL:
       VALIDATION_CHECKZ(op->load_bitfield.lcl, op, "load ty lcl must have lcl");
@@ -596,6 +605,9 @@ static void ir_validate_op(struct ir_validate_state *state,
     case IR_OP_LOAD_TY_ADDR: {
       VALIDATION_CHECKZ(op->load_bitfield.addr, op,
                         "load ty addr must have addr");
+      VALIDATION_CHECKZ(
+          validate_var_ty_is_pointer(state, &op->store.addr->var_ty), op,
+          "address must have type pointer");
 
       // struct ir_op *addr = op->load_bitfield.addr;
       // if (addr->ty == IR_OP_TY_ADDR) {
@@ -952,8 +964,9 @@ static void ir_validate_glb(struct ir_validate_state *state,
 #endif
 
 #ifdef NDEBUG
-void ir_validate_object(struct ir_object *object,
-                        enum ir_validate_flags flags) {}
+void ir_validate_object(UNUSED struct ir_unit *unit,
+                        UNUSED struct ir_object object,
+                        UNUSED enum ir_validate_flags flags) {}
 
 void ir_validate(UNUSED struct ir_unit *iru,
                  UNUSED enum ir_validate_flags flags) {}

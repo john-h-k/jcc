@@ -486,8 +486,7 @@ preproc_create(struct program program, struct fs *fs,
     p->events = vector_create_in_arena(sizeof(struct preproc_event), arena);
     break;
   case COMPILE_PREPROC_MODE_NO_PREPROC:
-    BUG("preproc with COMPILE_PREPROC_MODE_NO_PREPROC makes no sense (preproc "
-        "should be skipped)");
+    break;
   }
 
   if (args.verbose) {
@@ -2669,10 +2668,9 @@ static unsigned long long eval_expr(struct preproc *preproc,
             MK_PREPROC_DIAGNOSTIC(
                 BAD_TOKEN_IN_COND, bad_token_in_cond, token->span,
                 MK_INVALID_TEXT_POS(0),
-                aralloc_snprintf(
-                    preproc->arena,
-                    "bad token in preprocessor condition '%.*s'",
-                    (int)token->text.len, token->text.str)));
+                aralloc_snprintf(preproc->arena,
+                                 "bad token in preprocessor condition '%.*s'",
+                                 (int)token->text.len, token->text.str)));
 
         return 0;
       }
@@ -3253,8 +3251,7 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token,
               *(struct preproc_token *)vector_head(directive_tokens);
           size_t name_len = file_tok.text.len;
 
-          char *file =
-              aralloc(preproc->arena, (sizeof(*file) * name_len) + 1);
+          char *file = aralloc(preproc->arena, (sizeof(*file) * name_len) + 1);
           memcpy(file, file_tok.text.str, name_len);
           file[name_len] = '\0';
 

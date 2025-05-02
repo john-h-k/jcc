@@ -1089,7 +1089,8 @@ void debug_print_ir_func(FILE *file, struct ir_func *irb,
 
 static void debug_print_ir_var_value(FILE *file, struct ir_unit *iru,
                                      struct ir_var_value *var_value, bool top,
-                                     size_t offset) {
+                                     size_t offset,
+                                     const struct debug_print_ir_opts *opts) {
   switch (var_value->ty) {
   case IR_VAR_VALUE_TY_STR: {
     struct ir_var_ty var_ty = var_value->var_ty;
@@ -1123,6 +1124,7 @@ static void debug_print_ir_var_value(FILE *file, struct ir_unit *iru,
     if (var_value->addr.offset) {
       fprintf(file, " + %llu", var_value->addr.offset);
     }
+    debug_print_glb_name_comment(file, iru->arena, var_value->addr.glb, opts);
     break;
   case IR_VAR_VALUE_TY_VALUE_LIST:
     if (top) {
@@ -1136,7 +1138,7 @@ static void debug_print_ir_var_value(FILE *file, struct ir_unit *iru,
       struct ir_var_value *sub_value = &var_value->value_list.values[i];
 
       size_t list_offset = offset + var_value->value_list.offsets[i];
-      debug_print_ir_var_value(file, iru, sub_value, false, list_offset);
+      debug_print_ir_var_value(file, iru, sub_value, false, list_offset, opts);
 
       if (sub_value->ty != IR_VAR_VALUE_TY_VALUE_LIST) {
         fprintf(file, "; OFFSET=%zu", list_offset);
@@ -1152,7 +1154,8 @@ static void debug_print_ir_var_value(FILE *file, struct ir_unit *iru,
   }
 }
 
-void debug_print_ir_var(FILE *file, struct ir_var *var) {
+void debug_print_ir_var(FILE *file, struct ir_var *var,
+                        const struct debug_print_ir_opts *opts) {
   switch (var->ty) {
   case IR_VAR_TY_STRING_LITERAL:
     fprintf(file, "[STRING LITERAL] ");
@@ -1165,11 +1168,28 @@ void debug_print_ir_var(FILE *file, struct ir_var *var) {
     break;
   }
 
+  if (var->flags) {
+    fprintf(file, "[ ");
+
+    bool first = true;
+#define PRINT_FLAG(name, str)                                                  \
+  if (var->flags & IR_VAR_FLAG_##name) {                                       \
+    fprintf(file, first ? "." str : ", ." str);                                \
+    first = false;                                                             \
+  }
+
+    PRINT_FLAG(UNNAMED_ADDR, "unnamed_addr");
+
+#undef PRINT_FLAG
+
+    fprintf(file, " ] ");
+  }
+
   DEBUG_ASSERT(var->var_ty.ty != IR_VAR_TY_TY_NONE, "GLB with no type");
 
   debug_print_var_ty_string(file, &var->var_ty);
   fprintf(file, " = ");
-  debug_print_ir_var_value(file, var->unit, &var->value, true, 0);
+  debug_print_ir_var_value(file, var->unit, &var->value, true, 0, opts);
   fprintf(file, "\n\n");
 }
 
@@ -1355,7 +1375,7 @@ void debug_print_glb(FILE *file, struct ir_glb *glb,
       // consistency
     case IR_GLB_TY_DATA:
       debug_print_glb_name(file, glb->unit->arena, glb, opts);
-      debug_print_ir_var(file, glb->var);
+      debug_print_ir_var(file, glb->var, opts);
       break;
     case IR_GLB_TY_FUNC:
       debug_print_ir_func(file, glb->func, opts);
@@ -1394,7 +1414,7 @@ void debug_print_ir_object(FILE *file, const struct ir_object *object,
     debug_print_ir_func(file, object->func, opts);
     break;
   case IR_OBJECT_TY_VAR:
-    debug_print_ir_var(file, object->var);
+    debug_print_ir_var(file, object->var, opts);
     break;
   case IR_OBJECT_TY_BASICBLOCK: {
     struct ir_func *func = object->basicblock->func;

@@ -92,6 +92,8 @@ void opts_run_func_pass(struct ir_unit *unit,
       ir_order_basicblocks(glb->func);
       ir_simplify_phis(glb->func);
 
+      ir_eliminate_dead_glbs(unit);
+
       ir_validate(unit, IR_VALIDATE_FLAG_NONE);
       break;
     }
