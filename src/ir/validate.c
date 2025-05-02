@@ -294,6 +294,11 @@ static void ir_validate_unary_op(struct ir_validate_state *state,
     VALIDATION_CHECKZ(ir_var_ty_is_integral(&op->var_ty), op,
                       "logical not (!) should have integral type");
     return;
+  case IR_OP_UNARY_OP_TY_POPCNT:
+    // FIXME: post lower this check cant happen
+    // VALIDATION_CHECKZ(ir_var_ty_is_integral(&op->var_ty), op,
+    //                   "popcnt should have integral type");
+    return;
   default:
     break;
   }
@@ -556,7 +561,7 @@ static void ir_validate_op(struct ir_validate_state *state,
     case IR_OP_LOAD_TY_ADDR: {
       VALIDATION_CHECKZ(op->load.addr, op, "load ty addr must have addr");
       VALIDATION_CHECKZ(
-          validate_var_ty_is_pointer(state, &op->store.addr->var_ty), op,
+          validate_var_ty_is_pointer(state, &op->load.addr->var_ty), op,
           "address must have type pointer");
 
       // struct ir_op *addr = op->load.addr;
@@ -685,10 +690,30 @@ static void ir_validate_op(struct ir_validate_state *state,
   case IR_OP_TY_MEM_SET:
     VALIDATION_CHECKZ(op->var_ty.ty == IR_VAR_TY_TY_NONE, op,
                       "mem.set ops should not have a var ty");
+    VALIDATION_CHECKZ(
+        validate_var_ty_is_pointer(state, &op->mem_set.addr->var_ty), op,
+        "mem.set addr should be pointer");
     break;
   case IR_OP_TY_MEM_COPY:
     VALIDATION_CHECKZ(op->var_ty.ty == IR_VAR_TY_TY_NONE, op,
                       "mem.copy ops should not have a var ty");
+    VALIDATION_CHECKZ(
+        validate_var_ty_is_pointer(state, &op->mem_copy.source->var_ty), op,
+        "mem.copy source should be pointer");
+    VALIDATION_CHECKZ(
+        validate_var_ty_is_pointer(state, &op->mem_copy.dest->var_ty), op,
+        "mem.copy dest should be pointer");
+    break;
+  case IR_OP_TY_MEM_EQ:
+    VALIDATION_CHECKZ(ir_var_ty_is_integral(&op->var_ty), op,
+                      "mem.copy var ty should be integral");
+
+    VALIDATION_CHECKZ(
+        validate_var_ty_is_pointer(state, &op->mem_eq.lhs->var_ty), op,
+        "mem.eq lhs should be pointer");
+    VALIDATION_CHECKZ(
+        validate_var_ty_is_pointer(state, &op->mem_eq.rhs->var_ty), op,
+        "mem.eq rhs should be pointer");
     break;
   case IR_OP_TY_ADDR_OFFSET:
     VALIDATION_CHECKZ(validate_var_ty_is_pointer(state, &op->var_ty), op,

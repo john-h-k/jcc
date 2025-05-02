@@ -39,6 +39,7 @@ enum ir_op_ty {
 
   IR_OP_TY_MEM_SET,
   IR_OP_TY_MEM_COPY,
+  IR_OP_TY_MEM_EQ,
 
   IR_OP_TY_ADDR,
   IR_OP_TY_ADDR_OFFSET,
@@ -518,6 +519,13 @@ struct ir_op_mem_copy {
   // enum ir_mem_copy_flags flags;
 };
 
+struct ir_op_mem_eq {
+  struct ir_op *lhs;
+  struct ir_op *rhs;
+
+  size_t length;
+};
+
 bool ir_reg_eq(struct ir_reg left, struct ir_reg right);
 bool ir_var_ty_has_reg(const struct ir_var_ty var_ty);
 enum ir_reg_ty ir_reg_ty_for_var_ty(const struct ir_var_ty var_ty);
@@ -608,6 +616,7 @@ struct ir_op {
     struct ir_op_select select;
     struct ir_op_mem_set mem_set;
     struct ir_op_mem_copy mem_copy;
+    struct ir_op_mem_eq mem_eq;
     struct ir_op_store store;
     struct ir_op_load load;
     struct ir_op_store_bitfield store_bitfield;
@@ -991,6 +1000,7 @@ struct ir_unit {
     struct ir_glb *memmove;
     struct ir_glb *memcpy;
     struct ir_glb *memset;
+    struct ir_glb *memcmp;
   } well_known_glbs;
 };
 
@@ -998,6 +1008,7 @@ enum ir_well_known_glb {
   IR_WELL_KNOWN_GLB_MEMMOVE,
   IR_WELL_KNOWN_GLB_MEMCPY,
   IR_WELL_KNOWN_GLB_MEMSET,
+  IR_WELL_KNOWN_GLB_MEMCMP,
 };
 
 enum FLAG_ENUM ir_func_iter_flags { IR_FUNC_ITER_FLAG_NONE = 0 };

@@ -152,6 +152,12 @@ static void emit_instr(const struct emit_state *state,
   case AARCH64_INSTR_TY_MOVK:
     aarch64_emit_movk(state->emitter, instr->aarch64->movk);
     break;
+  case AARCH64_INSTR_TY_CNT:
+    aarch64_emit_cnt(state->emitter, instr->aarch64->cnt);
+    break;
+  case AARCH64_INSTR_TY_ADDV:
+    aarch64_emit_addv(state->emitter, instr->aarch64->addv);
+    break;
   case AARCH64_INSTR_TY_FMOV:
     aarch64_emit_fmov(state->emitter, instr->aarch64->fmov);
     break;

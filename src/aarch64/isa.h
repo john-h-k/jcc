@@ -16,6 +16,12 @@
 #define FTYPE_DOUBLE (0b01u)
 #define FTYPE_HALF (0b11u)
 
+#define Q_8B (0b0)
+#define Q_16B (0b0)
+
+#define SIZE_8B (0b00)
+#define SIZE_16B (0b00)
+
 #define IMM_ASSERT(imm, expected) imm
 // (debug_assert(imm == expected, "imm did not match expected"), imm)
 #define IMM(imm, bitc)                                                         \
@@ -156,10 +162,24 @@
 
 /* Single reg FP data processing */
 
+#define V_1_REG(Q, U, size, opcode, Rn, Rd)                                    \
+  (uint32_t)((U32(Q) << 30) | (U32(U) << 29) | (U32(0b01110) << 24) |          \
+             (U32(size) << 22) | (U32(0b1) << 21) | (U32(opcode) << 12) |      \
+             (U32(0b10) << 10) | (U32(Rn) << 5) | U32(Rd))
+
+#define CNT(Q, size, Rn, Rd) V_1_REG(Q, 0b0, size, 0b00101, Rn, Rd)
+
+#define V_1_REG_XLANE(Q, U, size, opcode, Rn, Rd)                              \
+  (uint32_t)((U32(Q) << 30) | (U32(U) << 29) | (U32(0b01110) << 24) |          \
+             (U32(size) << 22) | (U32(0b11) << 20) | (U32(opcode) << 12) |     \
+             (U32(0b10) << 10) | (U32(Rn) << 5) | U32(Rd))
+
+#define ADDV(Q, size, Rn, Rd) V_1_REG_XLANE(Q, 0b0, size, 0b11011, Rn, Rd)
+
 #define FP_1_REG(M, S, ftype, opcode, Rn, Rd)                                  \
   (uint32_t)((U32(M) << 31) | (U32(S) << 29) | (U32(0b11110) << 24) |          \
              (U32(ftype) << 22) | (U32(0b1) << 21) | (U32(opcode) << 15) |     \
-             (U32(0b10000) << 10) | (U32(Rn) << 5) | U32(Rd))
+             (U32(0b10) << 10) | (U32(Rn) << 5) | U32(Rd))
 
 #define FMOV_S_TO_S(Rn, Rd) FP_1_REG(0b0, 0b0, 0b00, 0b000000, Rn, Rd)
 #define FMOV_D_TO_D(Rn, Rd) FP_1_REG(0b0, 0b0, 0b01, 0b000000, Rn, Rd)

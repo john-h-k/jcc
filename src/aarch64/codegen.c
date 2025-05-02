@@ -203,6 +203,9 @@ enum aarch64_instr_class instr_class(enum aarch64_instr_ty ty) {
   case AARCH64_INSTR_TY_FABS:
   case AARCH64_INSTR_TY_FSQRT:
     return AARCH64_INSTR_CLASS_REG_1_SOURCE;
+  case AARCH64_INSTR_TY_CNT:
+  case AARCH64_INSTR_TY_ADDV:
+    return AARCH64_INSTR_CLASS_VREG_1_SOURCE;
   case AARCH64_INSTR_TY_ASRV:
   case AARCH64_INSTR_TY_LSLV:
   case AARCH64_INSTR_TY_LSRV:
@@ -1272,6 +1275,22 @@ static void codegen_unary_op(struct cg_state *state,
   struct aarch64_reg source = codegen_reg(op->unary_op.value);
 
   switch (op->unary_op.ty) {
+  case IR_OP_UNARY_OP_TY_POPCNT:
+    instr->aarch64->ty = AARCH64_INSTR_TY_CNT;
+    instr->aarch64->cnt = (struct aarch64_vreg_1_source){
+        .dest = dest,
+        .source = source,
+        .arrangement = AARCH64_V_ARRANGMENT_8B,
+    };
+
+    struct cg_instr *addv = cg_alloc_instr(state->func, basicblock);
+    addv->aarch64->ty = AARCH64_INSTR_TY_ADDV;
+    addv->aarch64->addv = (struct aarch64_vreg_1_source){
+        .dest = dest,
+        .source = dest,
+        .arrangement = AARCH64_V_ARRANGMENT_8B,
+    };
+    return;
   case IR_OP_UNARY_OP_TY_FABS:
     instr->aarch64->ty = AARCH64_INSTR_TY_FABS;
     instr->aarch64->fabs = (struct aarch64_reg_1_source){
@@ -2329,6 +2348,13 @@ void walk_regs(const struct cg_func *func, walk_regs_callback *cb,
         cb(instr, reg_1_source.dest, AARCH64_REG_USAGE_TY_WRITE, metadata);
         break;
       }
+      case AARCH64_INSTR_CLASS_VREG_1_SOURCE: {
+        struct aarch64_vreg_1_source reg_1_source =
+            instr->aarch64->vreg_1_source;
+        cb(instr, reg_1_source.source, AARCH64_REG_USAGE_TY_READ, metadata);
+        cb(instr, reg_1_source.dest, AARCH64_REG_USAGE_TY_WRITE, metadata);
+        break;
+      }
       case AARCH64_INSTR_CLASS_REG_2_SOURCE: {
         struct aarch64_reg_2_source reg_2_source = instr->aarch64->reg_2_source;
         cb(instr, reg_2_source.lhs, AARCH64_REG_USAGE_TY_READ, metadata);
@@ -2639,7 +2665,7 @@ static void codegen_fprintf(FILE *file, const char *format, ...) {
       char prefix = reg_prefix(reg);
       fputc(prefix, file);
 
-      if (reg.idx == 31) {
+      if (is_zero_reg(reg)) {
         fprintf(file, "zr");
       } else {
         fprintf(file, "%zu", reg.idx);
@@ -2739,6 +2765,19 @@ static void codegen_fprintf(FILE *file, const char *format, ...) {
       fprintf(file, "#%zd", imm);
 
       format += 3;
+    } else if (strncmp(format, "ar", 2) == 0) {
+      enum aarch64_v_arrangment ar = va_arg(list, enum aarch64_v_arrangment);
+
+      switch (ar) {
+      case AARCH64_V_ARRANGMENT_8B:
+        fprintf(file, ".8b");
+        break;
+      case AARCH64_V_ARRANGMENT_16B:
+        fprintf(file, ".16b");
+        break;
+      }
+
+      format += 2;
     } else if (format[0] == '%') {
       fputc('%', file);
       format++;
@@ -2806,6 +2845,13 @@ debug_print_reg_1_source(FILE *file,
                          const struct aarch64_reg_1_source *reg_1_source) {
   codegen_fprintf(file, " %reg, %reg", reg_1_source->dest,
                   reg_1_source->source);
+}
+
+static void
+debug_print_vreg_1_source(FILE *file,
+                          const struct aarch64_vreg_1_source *reg_1_source) {
+  codegen_fprintf(file, "%ar %reg, %reg", reg_1_source->arrangement,
+                  reg_1_source->dest, reg_1_source->source);
 }
 
 static void debug_print_fcmp(FILE *file, const struct aarch64_fcmp *fcmp) {
@@ -3120,6 +3166,14 @@ static void print_instr(FILE *file, UNUSED_ARG(const struct cg_func *func),
     fprintf(file, "movk");
     debug_print_mov_imm(file, &instr->aarch64->movk);
     break;
+  case AARCH64_INSTR_TY_CNT:
+    fprintf(file, "cnt");
+    debug_print_vreg_1_source(file, &instr->aarch64->cnt);
+    break;
+  case AARCH64_INSTR_TY_ADDV:
+    fprintf(file, "addv");
+    debug_print_vreg_1_source(file, &instr->aarch64->addv);
+    break;
   case AARCH64_INSTR_TY_FMOV:
     fprintf(file, "fmov");
     debug_print_reg_1_source(file, &instr->aarch64->fmov);
@@ -3272,6 +3326,58 @@ static void print_instr(FILE *file, UNUSED_ARG(const struct cg_func *func),
   }
 }
 
+static void aarch64_debug_print_func(FILE *file, struct cg_entry *entry) {
+  struct cg_func *func = &entry->func;
+
+  fprintf(file, "\nFUNCTION: %s\n", entry->name);
+  fprintf(file, "  prologue: %s\n", entry->func.prologue ? "true" : "false");
+  fprintf(file, "  stack_size: %zu\n", entry->func.stack_size);
+  fprintf(file, "\n");
+
+  int op_pad = /* guess */ 50;
+
+  bool supports_pos = ftell(file) != -1;
+
+  size_t offset = 0;
+  struct cg_basicblock *basicblock = func->first;
+  while (basicblock) {
+    fprintf(file, "\nBB @ %03zu", basicblock->id);
+    if (basicblock->ir_basicblock) {
+      fprintf(file, " (ir_basicblock %zu)", basicblock->ir_basicblock->id);
+    }
+    fprintf(file, "\n");
+
+    struct cg_instr *instr = basicblock->first;
+    while (instr) {
+      long pos = ftell(file);
+
+      fprintf(file, "%04zu: ", offset++);
+      print_instr(file, func, instr);
+
+      if (supports_pos && ftell(file) == pos) {
+        // no line was written
+        continue;
+      }
+
+      long width = ftell(file) - pos;
+      long pad = op_pad - width;
+
+      if (pad > 0) {
+        fprintf(file, "%*s", (int)pad, "");
+      }
+
+      if (instr->op) {
+        fprintf(file, "| op = %%%zu", instr->op->id);
+      }
+      fprintf(file, "\n");
+
+      instr = instr->succ;
+    }
+
+    basicblock = basicblock->succ;
+  }
+}
+
 void aarch64_debug_print_codegen(FILE *file, struct cg_unit *unit) {
   DEBUG_ASSERT(unit->ty == CODEGEN_UNIT_TY_AARCH64, "expected aarch64");
 
@@ -3283,55 +3389,7 @@ void aarch64_debug_print_codegen(FILE *file, struct cg_unit *unit) {
       continue;
     }
 
-    struct cg_func *func = &entry->func;
-
-    fprintf(file, "\nFUNCTION: %s\n", entry->name);
-    fprintf(file, "  prologue: %s\n", entry->func.prologue ? "true" : "false");
-    fprintf(file, "  stack_size: %zu\n", entry->func.stack_size);
-    fprintf(file, "\n");
-
-    int op_pad = /* guess */ 50;
-
-    bool supports_pos = ftell(file) != -1;
-
-    size_t offset = 0;
-    struct cg_basicblock *basicblock = func->first;
-    while (basicblock) {
-      fprintf(file, "\nBB @ %03zu", basicblock->id);
-      if (basicblock->ir_basicblock) {
-        fprintf(file, " (ir_basicblock %zu)", basicblock->ir_basicblock->id);
-      }
-      fprintf(file, "\n");
-
-      struct cg_instr *instr = basicblock->first;
-      while (instr) {
-        long pos = ftell(file);
-
-        fprintf(file, "%04zu: ", offset++);
-        print_instr(file, func, instr);
-
-        if (supports_pos && ftell(file) == pos) {
-          // no line was written
-          continue;
-        }
-
-        long width = ftell(file) - pos;
-        long pad = op_pad - width;
-
-        if (pad > 0) {
-          fprintf(file, "%*s", (int)pad, "");
-        }
-
-        if (instr->op) {
-          fprintf(file, "| op = %%%zu", instr->op->id);
-        }
-        fprintf(file, "\n");
-
-        instr = instr->succ;
-      }
-
-      basicblock = basicblock->succ;
-    }
+    aarch64_debug_print_func(file, entry);
 
     fprintf(file, "\n");
   }

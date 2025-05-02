@@ -1818,6 +1818,18 @@ static struct ir_op *build_ir_for_call(struct ir_func_builder *irb,
           .ty = IR_OP_STORE_TY_ADDR, .addr = lhs_addr, .value = rhs_op};
 
       return store;
+    } else if (ustr_eq(builtin, MK_USTR("__builtin_popcount")) ||
+               ustr_eq(builtin, MK_USTR("__builtin_popcountl")) ||
+               ustr_eq(builtin, MK_USTR("__builtin_popcountll"))) {
+      struct ir_op *value =
+          build_ir_for_expr(irb, stmt, &call->arg_list.args[0]);
+
+      struct ir_op *popcnt =
+          ir_append_op(irb->func, *stmt, IR_OP_TY_UNARY_OP, IR_VAR_TY_I32);
+      popcnt->unary_op = (struct ir_op_unary_op){.ty = IR_OP_UNARY_OP_TY_POPCNT,
+                                                 .value = value};
+
+      return popcnt;
     } else {
       BUG("unrecognised builtin '%.*s'", (int)builtin.len, builtin.str);
     }

@@ -379,6 +379,8 @@ static void lower_br_cond(struct ir_func *func, struct ir_op *op) {
 // aligned addresses and we don't generate byte-offset loads, other platforms:
 // unknown failure in vec3/main.c)
 #define MEMSET_THRESHOLD (0)
+#define MEMCOPY_THRESHOLD (0)
+#define MEMEQ_THRESHOLD (0)
 
 static void lower_mem_set(struct ir_func *func, struct ir_op *op) {
   struct ir_op *addr = op->mem_set.addr;
@@ -495,7 +497,7 @@ static void lower_mem_copy(struct ir_func *func, struct ir_op *op) {
 
   // only gen for zero because there are efficient ways to write zero on all
   // targets
-  if (op->mem_copy.length <= MEMSET_THRESHOLD) {
+  if (op->mem_copy.length <= MEMCOPY_THRESHOLD) {
     size_t left = op->mem_copy.length;
 
     struct ir_var_ty ptr = ir_var_ty_for_pointer_size(func->unit);
@@ -597,6 +599,60 @@ static void lower_mem_copy(struct ir_func *func, struct ir_op *op) {
   lower_call_registers(func, op);
 }
 
+static void lower_mem_eq(struct ir_func *func, struct ir_op *op) {
+  struct ir_op *lhs = op->mem_eq.lhs;
+  struct ir_op *rhs = op->mem_eq.rhs;
+
+  DEBUG_ASSERT(lhs && rhs, "dest and source should be non null");
+
+  // only gen for zero because there are efficient ways to write zero on all
+  // targets
+
+  struct ir_op *size =
+      ir_insert_before_op(func, op, IR_OP_TY_CNST, IR_VAR_TY_NONE);
+  ir_mk_pointer_constant(func->unit, size, op->mem_eq.length);
+
+  struct ir_glb *memcmp =
+      ir_add_well_known_global(func->unit, IR_WELL_KNOWN_GLB_MEMCMP);
+
+  struct ir_var_ty ptr_int = ir_var_ty_for_pointer_size(func->unit);
+  struct ir_op *memcmp_addr =
+      ir_insert_before_op(func, op, IR_OP_TY_ADDR, ptr_int);
+  memcmp_addr->flags |= IR_OP_FLAG_CONTAINED;
+  memcmp_addr->addr = (struct ir_op_addr){
+      .ty = IR_OP_ADDR_TY_GLB,
+      .glb = memcmp,
+  };
+
+  size_t num_args = 3;
+  struct ir_op **args = aralloc(func->arena, sizeof(struct ir_op *) * num_args);
+
+  args[0] = lhs;
+  args[1] = rhs;
+  args[2] = size;
+
+  func->flags |= IR_FUNC_FLAG_MAKES_CALL;
+
+  struct ir_op *call =
+      ir_insert_before_op(func, op, IR_OP_TY_CALL, IR_VAR_TY_NONE);
+  call->call = (struct ir_op_call){
+      .target = memcmp_addr,
+      .num_args = num_args,
+      .args = args,
+      .func_ty = memcmp->var_ty,
+  };
+
+  struct ir_op *zero =
+      ir_insert_before_op(func, op, IR_OP_TY_CNST, IR_VAR_TY_NONE);
+  ir_mk_zero_constant(func->unit, zero, &IR_VAR_TY_I1);
+
+  op = ir_replace_op(func, op, IR_OP_TY_BINARY_OP, IR_VAR_TY_I1);
+  op->binary_op = (struct ir_op_binary_op){
+      .ty = IR_OP_BINARY_OP_TY_EQ, .lhs = call, .rhs = zero};
+
+  lower_call(func, NULL, call);
+  lower_call_registers(func, call);
+}
 // TODO: signs and stuff are wrong
 static void lower_store_bitfield(struct ir_func *func, struct ir_op *op) {
   struct ir_op *value = op->store_bitfield.value;
@@ -1673,6 +1729,9 @@ void lower(struct ir_unit *unit) {
         case IR_OP_TY_MEM_COPY:
           lower_mem_copy(func, op);
           break;
+        case IR_OP_TY_MEM_EQ:
+          lower_mem_eq(func, op);
+          break;
         default:
           continue;
         }
@@ -1731,6 +1790,7 @@ void lower(struct ir_unit *unit) {
             case IR_OP_TY_CALL:
             case IR_OP_TY_MEM_COPY:
             case IR_OP_TY_MEM_SET:
+            case IR_OP_TY_MEM_EQ:
             case IR_OP_TY_CAST_OP:
               break;
             case IR_OP_TY_BR_COND:

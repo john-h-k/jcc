@@ -8,6 +8,8 @@
 
 static const char *unary_op_string(enum ir_op_unary_op_ty ty) {
   switch (ty) {
+  case IR_OP_UNARY_OP_TY_POPCNT:
+    return "popcnt";
   case IR_OP_UNARY_OP_TY_FNEG:
     return "f-";
   case IR_OP_UNARY_OP_TY_FSQRT:
@@ -717,6 +719,13 @@ static void debug_print_op_with_ctx(FILE *file, struct ir_op *op,
     fprintf(file, ", ");
     debug_print_op_use(file, op->mem_copy.source, opts);
     fprintf(file, ", #%zu", op->mem_set.length);
+    break;
+  case IR_OP_TY_MEM_EQ:
+    fprintf(file, "mem.eq ");
+    debug_print_op_use(file, op->mem_eq.lhs, opts);
+    fprintf(file, ", ");
+    debug_print_op_use(file, op->mem_eq.rhs, opts);
+    fprintf(file, ", #%zu", op->mem_eq.length);
     break;
   }
 }
@@ -1450,6 +1459,7 @@ void debug_print_ir_object(FILE *file, const struct ir_object *object,
       fprintf(file, "No stmt, likely detached\n");
     }
 
+    debug_print_ir_func(file, object->op->stmt->basicblock->func, opts);
     debug_print_op(file, object->op, opts);
     break;
   }

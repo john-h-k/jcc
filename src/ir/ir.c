@@ -169,6 +169,7 @@ bool ir_op_has_side_effects(const struct ir_op *op) {
   case IR_OP_TY_VA_ARG:
   case IR_OP_TY_MEM_SET:
   case IR_OP_TY_MEM_COPY:
+  case IR_OP_TY_MEM_EQ:
   case IR_OP_TY_STORE_BITFIELD:
   case IR_OP_TY_BR_COND:
   case IR_OP_TY_BR_SWITCH:
@@ -209,6 +210,7 @@ bool ir_op_produces_value(const struct ir_op *op) {
   case IR_OP_TY_BR:
   case IR_OP_TY_MEM_SET:
   case IR_OP_TY_MEM_COPY:
+  case IR_OP_TY_MEM_EQ:
   case IR_OP_TY_GATHER:
     return false;
   }
@@ -240,6 +242,7 @@ bool ir_op_is_branch(enum ir_op_ty ty) {
   case IR_OP_TY_LOAD:
   case IR_OP_TY_MEM_SET:
   case IR_OP_TY_MEM_COPY:
+  case IR_OP_TY_MEM_EQ:
   case IR_OP_TY_STORE_BITFIELD:
   case IR_OP_TY_LOAD_BITFIELD:
   case IR_OP_TY_BITFIELD_EXTRACT:
@@ -448,11 +451,15 @@ void ir_walk_op_uses(struct ir_op *op, ir_walk_op_uses_callback *cb,
     cb(&op->bitfield_insert.value, IR_OP_USE_TY_READ, cb_metadata);
     break;
   case IR_OP_TY_MEM_SET:
-    cb(&op->mem_set.addr, IR_OP_USE_TY_READ, cb_metadata);
+    cb(&op->mem_set.addr, IR_OP_USE_TY_DEREF, cb_metadata);
     break;
   case IR_OP_TY_MEM_COPY:
-    cb(&op->mem_copy.source, IR_OP_USE_TY_READ, cb_metadata);
-    cb(&op->mem_copy.dest, IR_OP_USE_TY_READ, cb_metadata);
+    cb(&op->mem_copy.source, IR_OP_USE_TY_DEREF, cb_metadata);
+    cb(&op->mem_copy.dest, IR_OP_USE_TY_DEREF, cb_metadata);
+    break;
+  case IR_OP_TY_MEM_EQ:
+    cb(&op->mem_eq.lhs, IR_OP_USE_TY_DEREF, cb_metadata);
+    cb(&op->mem_eq.rhs, IR_OP_USE_TY_DEREF, cb_metadata);
     break;
   }
 }
@@ -587,6 +594,10 @@ void ir_walk_op(struct ir_op *op, ir_walk_op_callback *cb, void *cb_metadata) {
   case IR_OP_TY_MEM_COPY:
     ir_walk_op(op->mem_copy.source, cb, cb_metadata);
     ir_walk_op(op->mem_copy.dest, cb, cb_metadata);
+    break;
+  case IR_OP_TY_MEM_EQ:
+    ir_walk_op(op->mem_eq.lhs, cb, cb_metadata);
+    ir_walk_op(op->mem_eq.rhs, cb, cb_metadata);
     break;
   }
 }
@@ -2450,6 +2461,34 @@ ir_insert_basicblocks_after_op(struct ir_func *irb, struct ir_op *insert_after,
 struct ir_glb *ir_add_well_known_global(struct ir_unit *iru,
                                         enum ir_well_known_glb glb) {
   switch (glb) {
+  case IR_WELL_KNOWN_GLB_MEMCMP: {
+    if (iru->well_known_glbs.memcmp) {
+      return iru->well_known_glbs.memcmp;
+    }
+
+    struct ir_var_ty *ptr = aralloc(iru->arena, sizeof(*ptr));
+    *ptr = IR_VAR_TY_POINTER;
+
+    size_t num_params = 3;
+    struct ir_var_ty *params =
+        aralloc(iru->arena, sizeof(*params) * num_params);
+
+    params[0] = IR_VAR_TY_POINTER;
+    params[1] = IR_VAR_TY_POINTER; // TODO: const-qualified
+    params[2] = ir_var_ty_for_pointer_size(iru);
+
+    struct ir_var_ty var_ty = {.ty = IR_VAR_TY_TY_FUNC,
+                               .func = {.ret_ty = ptr,
+                                        .num_params = num_params,
+                                        .params = params,
+                                        .flags = IR_VAR_FUNC_TY_FLAG_NONE}};
+
+    struct ir_glb *memcmp = ir_add_global(iru, IR_GLB_TY_FUNC, &var_ty,
+                                          IR_GLB_DEF_TY_UNDEFINED, "memcmp");
+
+    iru->well_known_glbs.memcmp = memcmp;
+    return memcmp;
+  }
   case IR_WELL_KNOWN_GLB_MEMMOVE: {
     if (iru->well_known_glbs.memmove) {
       return iru->well_known_glbs.memmove;

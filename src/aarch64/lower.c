@@ -3,6 +3,66 @@
 #include "../aarch64.h"
 #include "../vector.h"
 
+static void lower_popcnt(struct ir_func *func, struct ir_op *op) {
+  // ARM `cnt` instruction works on vector
+  // codegen does most of the work but we need to set it up to be allocated a fp
+  // reg
+
+  DEBUG_ASSERT(op->unary_op.value->var_ty.ty == IR_VAR_TY_TY_PRIMITIVE,
+               "expected primitive");
+
+  bool need_zext = false;
+  struct ir_var_ty fp_var_ty;
+
+  switch (op->unary_op.value->var_ty.primitive) {
+  case IR_VAR_PRIMITIVE_TY_I1:
+  case IR_VAR_PRIMITIVE_TY_I8:
+    // validation enforces mov op is same size
+    // FIXME: this is a useless zext validation should not stop us
+    // (but wont worsen codegen much, one mov)
+    need_zext = true;
+    fp_var_ty = IR_VAR_TY_F32;
+    break;
+  case IR_VAR_PRIMITIVE_TY_I16:
+  case IR_VAR_PRIMITIVE_TY_F16:
+    fp_var_ty = IR_VAR_TY_F16;
+    break;
+  case IR_VAR_PRIMITIVE_TY_I32:
+  case IR_VAR_PRIMITIVE_TY_F32:
+    fp_var_ty = IR_VAR_TY_F32;
+    break;
+  case IR_VAR_PRIMITIVE_TY_I64:
+  case IR_VAR_PRIMITIVE_TY_F64:
+    fp_var_ty = IR_VAR_TY_F64;
+    break;
+  case IR_VAR_PRIMITIVE_TY_I128:
+    TODO("popcnt i128");
+  }
+
+  struct ir_op *src;
+  if (need_zext) {
+    struct ir_op *zext =
+        ir_insert_before_op(func, op, IR_OP_TY_CAST_OP, IR_VAR_TY_I32);
+    zext->cast_op = (struct ir_op_cast_op){.ty = IR_OP_CAST_OP_TY_ZEXT,
+                                           .value = op->unary_op.value};
+
+    src = zext;
+  } else {
+    src = op->unary_op.value;
+  }
+
+  struct ir_op *mov = ir_insert_before_op(func, op, IR_OP_TY_MOV, fp_var_ty);
+  mov->mov = (struct ir_op_mov){.value = src};
+
+  struct ir_op *cnt =
+      ir_insert_after_op(func, mov, IR_OP_TY_UNARY_OP, IR_VAR_TY_F32);
+  cnt->unary_op =
+      (struct ir_op_unary_op){.ty = IR_OP_UNARY_OP_TY_POPCNT, .value = mov};
+
+  op = ir_replace_op(func, op, IR_OP_TY_MOV, op->var_ty);
+  op->mov = (struct ir_op_mov){.value = cnt};
+}
+
 static void lower_logical_not(struct ir_func *func, struct ir_op *op) {
   DEBUG_ASSERT(op->ty == IR_OP_TY_UNARY_OP &&
                    op->unary_op.ty == IR_OP_UNARY_OP_TY_LOGICAL_NOT,
@@ -396,8 +456,7 @@ static void lower_fp_cnst(struct ir_func *func, struct ir_op *op) {
   op->mov = (struct ir_op_mov){.value = int_mov};
 }
 
-static bool try_get_hfa_info(
-                             const struct ir_var_ty *var_ty,
+static bool try_get_hfa_info(const struct ir_var_ty *var_ty,
                              struct ir_var_ty *member_ty, size_t *num_members,
                              size_t *member_size) {
   if (var_ty->ty != IR_VAR_TY_TY_UNION && var_ty->ty != IR_VAR_TY_TY_STRUCT) {
@@ -710,8 +769,7 @@ struct ir_func_info aarch64_lower_func_ty(struct ir_func *func,
   }
 
   struct ir_var_func_ty new_func_ty = {
-      .flags = func_ty.flags,
-      .ret_ty = aralloc(func->arena, sizeof(ret_ty))};
+      .flags = func_ty.flags, .ret_ty = aralloc(func->arena, sizeof(ret_ty))};
 
   *new_func_ty.ret_ty = ret_ty;
 
@@ -1143,6 +1201,8 @@ void aarch64_lower(struct ir_unit *unit) {
             case IR_OP_TY_UNARY_OP:
               if (op->unary_op.ty == IR_OP_UNARY_OP_TY_LOGICAL_NOT) {
                 lower_logical_not(func, op);
+              } else if (op->unary_op.ty == IR_OP_UNARY_OP_TY_POPCNT) {
+                lower_popcnt(func, op);
               }
               break;
             case IR_OP_TY_BINARY_OP:

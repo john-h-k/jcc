@@ -19,6 +19,14 @@ void aarch64_emit_copy_to(struct aarch64_emitter *emitter, void *dest);
 
 void aarch64_emit_nop(struct aarch64_emitter *emitter);
 
+/* Single reg vector */
+
+void aarch64_emit_cnt(struct aarch64_emitter *emitter,
+                      const struct aarch64_vreg_1_source cnt);
+
+void aarch64_emit_addv(struct aarch64_emitter *emitter,
+                       const struct aarch64_vreg_1_source addv);
+
 /* Single reg FP data processing */
 
 void aarch64_emit_scvtf(struct aarch64_emitter *emitter,

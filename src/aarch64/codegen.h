@@ -12,9 +12,9 @@
 
 // `[w|x]zr` and `sp` are encoded as the same thing and the instruction decides
 // which is relevant
-#define STACK_PTR_REG ((struct aarch64_reg){AARCH64_REG_TY_X, 31})
-#define FRAME_PTR_REG ((struct aarch64_reg){AARCH64_REG_TY_X, 29})
-#define RET_PTR_REG ((struct aarch64_reg){AARCH64_REG_TY_X, 30})
+#define STACK_PTR_REG ((struct aarch64_reg){.ty = AARCH64_REG_TY_X, .idx = 31})
+#define FRAME_PTR_REG ((struct aarch64_reg){.ty = AARCH64_REG_TY_X, .idx = 29})
+#define RET_PTR_REG ((struct aarch64_reg){.ty = AARCH64_REG_TY_X, .idx = 30})
 
 typedef unsigned long long imm_t;
 typedef long long simm_t;
@@ -26,6 +26,9 @@ enum aarch64_instr_ty {
 
   AARCH64_INSTR_TY_FMINNM,
   AARCH64_INSTR_TY_FMAXNM,
+
+  AARCH64_INSTR_TY_CNT,
+  AARCH64_INSTR_TY_ADDV,
 
   AARCH64_INSTR_TY_FADD,
   AARCH64_INSTR_TY_FMUL,
@@ -173,6 +176,11 @@ enum aarch64_reg_class {
   AARCH64_REG_CLASS_FP,
 };
 
+enum aarch64_v_arrangment {
+  AARCH64_V_ARRANGMENT_8B,
+  AARCH64_V_ARRANGMENT_16B,
+};
+
 enum FLAG_ENUM aarch64_reg_attr_flags {
   AARCH64_REG_ATTR_FLAG_NONE = 0,
   AARCH64_REG_ATTR_FLAG_VOLATILE =
@@ -203,6 +211,7 @@ enum aarch64_instr_class {
   AARCH64_INSTR_CLASS_FCMP,
   AARCH64_INSTR_CLASS_FCMP_ZERO,
   AARCH64_INSTR_CLASS_REG_1_SOURCE,
+  AARCH64_INSTR_CLASS_VREG_1_SOURCE,
   AARCH64_INSTR_CLASS_REG_2_SOURCE,
   AARCH64_INSTR_CLASS_MOV_IMM,
   AARCH64_INSTR_CLASS_FMA,
@@ -300,6 +309,13 @@ struct aarch64_fcmp {
 
 struct aarch64_fcmp_zero {
   struct aarch64_reg lhs;
+};
+
+struct aarch64_vreg_1_source {
+  struct aarch64_reg dest;
+  struct aarch64_reg source;
+
+  enum aarch64_v_arrangment arrangement;
 };
 
 struct aarch64_reg_1_source {
@@ -447,6 +463,10 @@ struct aarch64_instr {
     union {
       struct aarch64_reg_1_source reg_1_source, fmov, fcvt, ucvtf, scvtf, fneg,
           fabs, fsqrt;
+    };
+
+    union {
+      struct aarch64_vreg_1_source vreg_1_source, cnt, addv;
     };
 
     union {

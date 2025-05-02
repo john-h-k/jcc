@@ -96,6 +96,38 @@ void aarch64_emit_nop(struct aarch64_emitter *emitter) {
   aarch64_emit_instr(emitter, NOP);
 }
 
+/* Single reg vector */
+
+void aarch64_emit_cnt(struct aarch64_emitter *emitter,
+                      const struct aarch64_vreg_1_source cnt) {
+  struct aarch64_reg dest = cnt.dest;
+  struct aarch64_reg source = cnt.source;
+
+  switch (cnt.arrangement) {
+  case AARCH64_V_ARRANGMENT_8B:
+    aarch64_emit_instr(emitter, CNT(Q_8B, SIZE_8B, source.idx, dest.idx));
+    break;
+  case AARCH64_V_ARRANGMENT_16B:
+    aarch64_emit_instr(emitter, CNT(Q_16B, SIZE_16B, source.idx, dest.idx));
+    break;
+  }
+}
+
+void aarch64_emit_addv(struct aarch64_emitter *emitter,
+                       const struct aarch64_vreg_1_source addv) {
+  struct aarch64_reg dest = addv.dest;
+  struct aarch64_reg source = addv.source;
+
+  switch (addv.arrangement) {
+  case AARCH64_V_ARRANGMENT_8B:
+    aarch64_emit_instr(emitter, ADDV(Q_8B, SIZE_8B, source.idx, dest.idx));
+    break;
+  case AARCH64_V_ARRANGMENT_16B:
+    aarch64_emit_instr(emitter, ADDV(Q_16B, SIZE_16B, source.idx, dest.idx));
+    break;
+  }
+}
+
 /* Single reg FP data processing */
 
 void aarch64_emit_scvtf(struct aarch64_emitter *emitter,

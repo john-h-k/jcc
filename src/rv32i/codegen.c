@@ -544,6 +544,8 @@ static void codegen_unary_op(struct cg_state *state,
   bool fp64 = op->unary_op.value->var_ty.primitive == IR_VAR_PRIMITIVE_TY_F64;
 #define SEL_FP_INSTR(ty) (fp64 ? ty##_D : ty##_S)
   switch (op->unary_op.ty) {
+  case IR_OP_UNARY_OP_TY_POPCNT:
+    TODO("popnt");
   case IR_OP_UNARY_OP_TY_FNEG:
     instr->rv32i->ty = SEL_FP_INSTR(RV32I_INSTR_TY_FSGNJN);
     instr->rv32i->fsgnjn = (struct rv32i_op_fp){

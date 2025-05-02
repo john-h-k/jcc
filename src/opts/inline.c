@@ -182,6 +182,7 @@ static struct ir_op *ir_clone_op(struct ir_func *func, const struct ir_op *op,
     CLONE_OP(BITFIELD_INSERT, bitfield_insert);
     CLONE_OP(MEM_SET, mem_set);
     CLONE_OP(MEM_COPY, mem_copy);
+    CLONE_OP(MEM_EQ, mem_eq);
     CLONE_OP(ADDR_OFFSET, addr_offset);
     CLONE_OP(BR_COND, br_cond);
     CLONE_OP(BR_SWITCH, br_switch);
