@@ -545,7 +545,10 @@ static void codegen_unary_op(struct cg_state *state,
 #define SEL_FP_INSTR(ty) (fp64 ? ty##_D : ty##_S)
   switch (op->unary_op.ty) {
   case IR_OP_UNARY_OP_TY_POPCNT:
-    TODO("popnt");
+  case IR_OP_UNARY_OP_TY_CLZ:
+  case IR_OP_UNARY_OP_TY_CTZ:
+  case IR_OP_UNARY_OP_TY_REV:
+    TODO("popcnt/clz/ctz");
   case IR_OP_UNARY_OP_TY_FNEG:
     instr->rv32i->ty = SEL_FP_INSTR(RV32I_INSTR_TY_FSGNJN);
     instr->rv32i->fsgnjn = (struct rv32i_op_fp){
@@ -1408,7 +1411,6 @@ static void codegen_call_op(struct cg_state *state,
 
 static void codegen_op(struct cg_state *state, struct cg_basicblock *basicblock,
                        struct ir_op *op) {
-  trace("lowering op with id %zu, type %u", op->id, op->ty);
   switch (op->ty) {
   case IR_OP_TY_UNDF:
   case IR_OP_TY_PHI:

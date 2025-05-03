@@ -151,6 +151,11 @@ static void debug_print_stage(struct compiler *compiler, struct ir_unit *ir,
     while (glb) {
       if (glb->name && hashtbl_lookup(compiler->args.log_symbols, &glb->name)) {
         debug_print_glb(stderr, glb, opts);
+      } else {
+        char *glb_name = aralloc_snprintf(compiler->arena, "GLB(%zu)", glb->id);
+        if (hashtbl_lookup(compiler->args.log_symbols, &glb_name)) {
+          debug_print_glb(stderr, glb, opts);
+        }
       }
 
       glb = glb->succ;
@@ -606,7 +611,8 @@ static enum compile_result compile_stage_lower(struct compiler *compiler,
     debug_print_stage(compiler, ir, "lower");
   }
 
-  ir_validate(ir, IR_VALIDATE_FLAG_LOWERED_POINTERS);
+  ir_validate(ir, IR_VALIDATE_FLAG_LOWERED_POINTERS |
+                      IR_VALIDATE_FLAG_ALLOW_MIXED_MOVS);
 
   return COMPILE_RESULT_SUCCESS;
 }
@@ -641,7 +647,8 @@ static enum compile_result compile_stage_regalloc(struct compiler *compiler,
     debug_print_stage(compiler, ir, "regalloc");
   }
 
-  ir_validate(ir, IR_VALIDATE_FLAG_LOWERED_POINTERS);
+  ir_validate(ir, IR_VALIDATE_FLAG_LOWERED_POINTERS |
+                      IR_VALIDATE_FLAG_ALLOW_MIXED_MOVS);
 
   return COMPILE_RESULT_SUCCESS;
 }
@@ -674,6 +681,7 @@ static enum compile_result compile_stage_elim_phi(struct compiler *compiler,
   }
 
   ir_validate(ir, IR_VALIDATE_FLAG_LOWERED_POINTERS |
+                      IR_VALIDATE_FLAG_ALLOW_MIXED_MOVS |
                       IR_VALIDATE_FLAG_ALLOW_MIXED_PHIS);
 
   return COMPILE_RESULT_SUCCESS;

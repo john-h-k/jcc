@@ -634,7 +634,7 @@ static void lower_mem_eq(struct ir_func *func, struct ir_op *op) {
   func->flags |= IR_FUNC_FLAG_MAKES_CALL;
 
   struct ir_op *call =
-      ir_insert_before_op(func, op, IR_OP_TY_CALL, IR_VAR_TY_NONE);
+      ir_insert_before_op(func, op, IR_OP_TY_CALL, IR_VAR_TY_I32);
   call->call = (struct ir_op_call){
       .target = memcmp_addr,
       .num_args = num_args,

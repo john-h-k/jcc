@@ -64,6 +64,38 @@ struct builtin_fn_spec {
   BUILTIN_FN(popcountll, BUILTIN_TYPE_SPEC_TD_VAR_TY(&TD_VAR_TY_VOID), 1,      \
              ARR_LIT({BUILTIN_TYPE_SPEC_TD_VAR_TY(                             \
                  &TD_VAR_TY_WELL_KNOWN_SIGNED_LONG_LONG)}))                    \
+  BUILTIN_FN(clz, BUILTIN_TYPE_SPEC_TD_VAR_TY(&TD_VAR_TY_VOID), 1,             \
+             ARR_LIT({BUILTIN_TYPE_SPEC_TD_VAR_TY(                             \
+                 &TD_VAR_TY_WELL_KNOWN_SIGNED_INT)}))                          \
+  BUILTIN_FN(clzl, BUILTIN_TYPE_SPEC_TD_VAR_TY(&TD_VAR_TY_VOID), 1,            \
+             ARR_LIT({BUILTIN_TYPE_SPEC_TD_VAR_TY(                             \
+                 &TD_VAR_TY_WELL_KNOWN_SIGNED_LONG)}))                         \
+  BUILTIN_FN(clzll, BUILTIN_TYPE_SPEC_TD_VAR_TY(&TD_VAR_TY_VOID), 1,           \
+             ARR_LIT({BUILTIN_TYPE_SPEC_TD_VAR_TY(                             \
+                 &TD_VAR_TY_WELL_KNOWN_SIGNED_LONG_LONG)}))                    \
+  BUILTIN_FN(ctz, BUILTIN_TYPE_SPEC_TD_VAR_TY(&TD_VAR_TY_VOID), 1,             \
+             ARR_LIT({BUILTIN_TYPE_SPEC_TD_VAR_TY(                             \
+                 &TD_VAR_TY_WELL_KNOWN_SIGNED_INT)}))                          \
+  BUILTIN_FN(ctzl, BUILTIN_TYPE_SPEC_TD_VAR_TY(&TD_VAR_TY_VOID), 1,            \
+             ARR_LIT({BUILTIN_TYPE_SPEC_TD_VAR_TY(                             \
+                 &TD_VAR_TY_WELL_KNOWN_SIGNED_LONG)}))                         \
+  BUILTIN_FN(ctzll, BUILTIN_TYPE_SPEC_TD_VAR_TY(&TD_VAR_TY_VOID), 1,           \
+             ARR_LIT({BUILTIN_TYPE_SPEC_TD_VAR_TY(                             \
+                 &TD_VAR_TY_WELL_KNOWN_SIGNED_LONG_LONG)}))                    \
+  BUILTIN_FN(                                                                  \
+      bswap16,                                                                 \
+      BUILTIN_TYPE_SPEC_TD_VAR_TY(&TD_VAR_TY_WELL_KNOWN_SIGNED_SHORT), 1,      \
+      ARR_LIT(                                                                 \
+          {BUILTIN_TYPE_SPEC_TD_VAR_TY(&TD_VAR_TY_WELL_KNOWN_SIGNED_SHORT)}))  \
+  BUILTIN_FN(bswap32,                                                          \
+             BUILTIN_TYPE_SPEC_TD_VAR_TY(&TD_VAR_TY_WELL_KNOWN_SIGNED_INT), 1, \
+             ARR_LIT({BUILTIN_TYPE_SPEC_TD_VAR_TY(                             \
+                 &TD_VAR_TY_WELL_KNOWN_SIGNED_INT)}))                          \
+  BUILTIN_FN(                                                                  \
+      bswap64,                                                                 \
+      BUILTIN_TYPE_SPEC_TD_VAR_TY(&TD_VAR_TY_WELL_KNOWN_SIGNED_LONG_LONG), 1,  \
+      ARR_LIT({BUILTIN_TYPE_SPEC_TD_VAR_TY(                                    \
+          &TD_VAR_TY_WELL_KNOWN_SIGNED_LONG_LONG)}))                           \
                                                                                \
   BUILTIN_FN(                                                                  \
       error, BUILTIN_TYPE_SPEC_TD_VAR_TY(&TD_VAR_TY_VOID), 1,                  \

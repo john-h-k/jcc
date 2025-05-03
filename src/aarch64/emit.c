@@ -32,6 +32,18 @@ struct emit_state {
 static void emit_instr(const struct emit_state *state,
                        const struct cg_instr *instr) {
   switch (instr->aarch64->ty) {
+  case AARCH64_INSTR_TY_CLZ:
+    aarch64_emit_clz(state->emitter, instr->aarch64->clz);
+    break;
+  case AARCH64_INSTR_TY_RBIT:
+    aarch64_emit_rbit(state->emitter, instr->aarch64->rbit);
+    break;
+  case AARCH64_INSTR_TY_REV:
+    aarch64_emit_rev(state->emitter, instr->aarch64->rev);
+    break;
+  case AARCH64_INSTR_TY_REV16:
+    aarch64_emit_rev16(state->emitter, instr->aarch64->rev16);
+    break;
   case AARCH64_INSTR_TY_ADDS:
     aarch64_emit_adds(state->emitter, instr->aarch64->adds);
     break;

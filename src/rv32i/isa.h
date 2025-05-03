@@ -10,6 +10,7 @@
                     ((imm) >= 0 && ((simm_t)(imm) >> ((sz) - 1)) == 0),        \
                 "immediate %lld did not fit!", (long long)imm),                \
    imm)
+
 #define U32_S(v, hi, lo) ((U32(v) & ((1u << (hi + 1)) - 1)) >> lo)
 
 #define R_TYPE(funct7, rs2, rs1, funct3, rd, opcode)                           \

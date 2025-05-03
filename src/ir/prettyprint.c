@@ -10,6 +10,12 @@ static const char *unary_op_string(enum ir_op_unary_op_ty ty) {
   switch (ty) {
   case IR_OP_UNARY_OP_TY_POPCNT:
     return "popcnt";
+  case IR_OP_UNARY_OP_TY_CLZ:
+    return "clz";
+  case IR_OP_UNARY_OP_TY_CTZ:
+    return "ctz";
+  case IR_OP_UNARY_OP_TY_REV:
+    return "rev";
   case IR_OP_UNARY_OP_TY_FNEG:
     return "f-";
   case IR_OP_UNARY_OP_TY_FSQRT:

@@ -1507,7 +1507,6 @@ static void codegen_ret_op(struct cg_state *state,
 
 static void codegen_op(struct cg_state *state, struct cg_basicblock *basicblock,
                        struct ir_op *op) {
-  trace("lowering op with id %zu, type %u", op->id, op->ty);
   switch (op->ty) {
   case IR_OP_TY_UNDF:
   case IR_OP_TY_PHI:

@@ -316,6 +316,50 @@ void aarch64_emit_fcmp_zero(struct aarch64_emitter *emitter,
   aarch64_emit_instr(emitter, FCMP_ZERO(FTYPE_FOR_REG(fcmp_zero.lhs), fcmp_zero.lhs.idx)));
 }
 
+void aarch64_emit_clz(struct aarch64_emitter *emitter,
+                      const struct aarch64_reg_1_source clz) {
+  aarch64_emit_instr(emitter,
+                     CLZ(SF_FOR_REG(clz.dest), clz.source.idx, clz.dest.idx));
+}
+
+void aarch64_emit_rbit(struct aarch64_emitter *emitter,
+                       const struct aarch64_reg_1_source rbit) {
+  aarch64_emit_instr(
+      emitter, RBIT(SF_FOR_REG(rbit.dest), rbit.source.idx, rbit.dest.idx));
+}
+
+void aarch64_emit_rev(struct aarch64_emitter *emitter,
+                      const struct aarch64_reg_1_source rev) {
+  switch (rev.dest.ty) {
+  case AARCH64_REG_TY_W:
+    aarch64_emit_instr(
+        emitter, REV32(SF_FOR_REG(rev.dest), rev.source.idx, rev.dest.idx));
+    break;
+  case AARCH64_REG_TY_X:
+    aarch64_emit_instr(
+        emitter, REV64(SF_FOR_REG(rev.dest), rev.source.idx, rev.dest.idx));
+    break;
+  default:
+    bad_instr();
+  }
+}
+
+void aarch64_emit_rev16(struct aarch64_emitter *emitter,
+                        const struct aarch64_reg_1_source rev16) {
+  switch (rev16.dest.ty) {
+  case AARCH64_REG_TY_W:
+    aarch64_emit_instr(emitter, REV16(SF_FOR_REG(rev16.dest), rev16.source.idx,
+                                      rev16.dest.idx));
+    break;
+  case AARCH64_REG_TY_X:
+    aarch64_emit_instr(emitter, REV16(SF_FOR_REG(rev16.dest), rev16.source.idx,
+                                      rev16.dest.idx));
+    break;
+  default:
+    bad_instr();
+  }
+}
+
 /* Two reg FP data processing */
 
 void aarch64_emit_fadd(struct aarch64_emitter *emitter,

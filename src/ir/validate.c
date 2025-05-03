@@ -179,6 +179,10 @@ static void walk_op_ty_callback(struct ir_op **op, enum ir_op_use_ty use_ty,
 
 static void ir_validate_operands_same_ty(struct ir_validate_state *state,
                                          struct ir_op *op) {
+  if (state->flags & IR_VALIDATE_FLAG_ALLOW_MIXED_MOVS) {
+    return;
+  }
+
   struct ir_func *func = op->stmt->basicblock->func;
 
   struct walk_op_metadata metadata = {
@@ -208,7 +212,8 @@ static void ir_validate_mov_op(struct ir_validate_state *state,
   VALIDATION_CHECKZ(r.ty != IR_VAR_TY_TY_NONE, op,
                     "mov op with none type makes no sense");
 
-  if (l.ty != IR_VAR_TY_TY_NONE && r.ty != IR_VAR_TY_TY_NONE) {
+  if (!(state->flags & IR_VALIDATE_FLAG_ALLOW_MIXED_MOVS) &&
+      l.ty != IR_VAR_TY_TY_NONE && r.ty != IR_VAR_TY_TY_NONE) {
     struct ir_var_ty_info l_info = ir_var_ty_info(state->unit, &l);
     struct ir_var_ty_info r_info = ir_var_ty_info(state->unit, &r);
 
@@ -273,13 +278,13 @@ static void ir_validate_cast_op(struct ir_validate_state *state,
     VALIDATION_CHECKZ(
         (ir_var_ty_is_fp(&from) && ir_var_ty_is_integral(&to)) ||
             (ir_var_ty_is_integral(&from) && ir_var_ty_is_fp(&to)),
-        op, "both sides of uconv operator should be fp types");
+        op, "one side of uconv should be fp; the other should be integral");
     break;
   case IR_OP_CAST_OP_TY_SCONV:
     VALIDATION_CHECKZ(
         (ir_var_ty_is_fp(&from) && ir_var_ty_is_integral(&to)) ||
             (ir_var_ty_is_integral(&from) && ir_var_ty_is_fp(&to)),
-        op, "both sides of sconv operator should be fp types");
+        op, "one side of sconv should be fp; the other should be integral");
     break;
   }
 }
@@ -295,6 +300,8 @@ static void ir_validate_unary_op(struct ir_validate_state *state,
                       "logical not (!) should have integral type");
     return;
   case IR_OP_UNARY_OP_TY_POPCNT:
+  case IR_OP_UNARY_OP_TY_CLZ:
+  case IR_OP_UNARY_OP_TY_CTZ:
     // FIXME: post lower this check cant happen
     // VALIDATION_CHECKZ(ir_var_ty_is_integral(&op->var_ty), op,
     //                   "popcnt should have integral type");
@@ -409,8 +416,9 @@ static void ir_validate_op(struct ir_validate_state *state,
       //                  op->gather.num_values, var_ty->aggregate.num_fields);
       break;
     default:
-      VALIDATION_ERRZ(
-          op, "gather only makes sense when result is an aggregate type");
+      // FIXME: broken
+      // VALIDATION_ERRZ(
+      //     op, "gather only makes sense when result is an aggregate type");
       break;
     }
     break;

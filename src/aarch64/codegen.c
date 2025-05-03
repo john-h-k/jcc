@@ -202,6 +202,10 @@ enum aarch64_instr_class instr_class(enum aarch64_instr_ty ty) {
   case AARCH64_INSTR_TY_SCVTF:
   case AARCH64_INSTR_TY_FABS:
   case AARCH64_INSTR_TY_FSQRT:
+  case AARCH64_INSTR_TY_CLZ:
+  case AARCH64_INSTR_TY_RBIT:
+  case AARCH64_INSTR_TY_REV:
+  case AARCH64_INSTR_TY_REV16:
     return AARCH64_INSTR_CLASS_REG_1_SOURCE;
   case AARCH64_INSTR_TY_CNT:
   case AARCH64_INSTR_TY_ADDV:
@@ -666,7 +670,9 @@ static void codegen_load_addr_op(struct cg_state *state,
     case FOLDED_ADDR_OP_TY_IMM: {
       size_t imm = fold.imm;
       struct ir_var_ty_info info = ir_var_ty_info(state->ir->unit, &op->var_ty);
-      DEBUG_ASSERT(imm % info.size == 0, "expected imm to be multiple of size");
+      DEBUG_ASSERT(imm % info.size == 0,
+                   "%s: %zu expected imm %zu to be multiple of size %zu",
+                   state->entry->name, op->id, imm, info.size);
       imm /= info.size;
 
       instr->aarch64->ty = load_ty_for_op(op, ADDR_MODE_IMM);
@@ -714,7 +720,9 @@ static void codegen_store_addr_op(struct cg_state *state,
       size_t imm = fold.imm;
       struct ir_var_ty_info info =
           ir_var_ty_info(state->ir->unit, &op->store.value->var_ty);
-      DEBUG_ASSERT(imm % info.size == 0, "expected imm to be multiple of size");
+      DEBUG_ASSERT(imm % info.size == 0,
+                   "%s: %zu expected imm %zu to be multiple of size %zu",
+                   state->entry->name, op->id, imm, info.size);
       imm /= info.size;
 
       instr->aarch64->ty = store_ty_for_op(op->store.value, ADDR_MODE_IMM);
@@ -1275,6 +1283,61 @@ static void codegen_unary_op(struct cg_state *state,
   struct aarch64_reg source = codegen_reg(op->unary_op.value);
 
   switch (op->unary_op.ty) {
+  case IR_OP_UNARY_OP_TY_REV:
+    switch (op->unary_op.value->var_ty.primitive) {
+    case IR_VAR_PRIMITIVE_TY_I1:
+    case IR_VAR_PRIMITIVE_TY_I8:
+      BUG("i1/i8 rev makes no sense");
+    case IR_VAR_PRIMITIVE_TY_I16:
+      instr->aarch64->ty = AARCH64_INSTR_TY_REV16;
+      instr->aarch64->rev16 = (struct aarch64_reg_1_source){
+          .dest = dest,
+          .source = source,
+      };
+      break;
+    case IR_VAR_PRIMITIVE_TY_I32:
+    case IR_VAR_PRIMITIVE_TY_I64:
+      instr->aarch64->ty = AARCH64_INSTR_TY_REV;
+      instr->aarch64->rev = (struct aarch64_reg_1_source){
+          .dest = dest,
+          .source = source,
+      };
+      break;
+    case IR_VAR_PRIMITIVE_TY_I128:
+      TODO("rev i128");
+    default:
+      unreachable();
+    }
+    break;
+  case IR_OP_UNARY_OP_TY_CLZ:
+    if (op->unary_op.value->var_ty.primitive < IR_VAR_PRIMITIVE_TY_I32) {
+      TODO("i8/i16 clz");
+    }
+
+    instr->aarch64->ty = AARCH64_INSTR_TY_CLZ;
+    instr->aarch64->clz = (struct aarch64_reg_1_source){
+        .dest = dest,
+        .source = source,
+    };
+    break;
+  case IR_OP_UNARY_OP_TY_CTZ:
+    if (op->unary_op.value->var_ty.primitive < IR_VAR_PRIMITIVE_TY_I32) {
+      TODO("i8/i16 ctz");
+    }
+
+    instr->aarch64->ty = AARCH64_INSTR_TY_RBIT;
+    instr->aarch64->rbit = (struct aarch64_reg_1_source){
+        .dest = dest,
+        .source = source,
+    };
+
+    struct cg_instr *clz = cg_alloc_instr(state->func, basicblock);
+    clz->aarch64->ty = AARCH64_INSTR_TY_CLZ;
+    clz->aarch64->clz = (struct aarch64_reg_1_source){
+        .dest = dest,
+        .source = dest,
+    };
+    break;
   case IR_OP_UNARY_OP_TY_POPCNT:
     instr->aarch64->ty = AARCH64_INSTR_TY_CNT;
     instr->aarch64->cnt = (struct aarch64_vreg_1_source){
@@ -1359,7 +1422,9 @@ static void codegen_binary_op(struct cg_state *state,
   enum ir_op_binary_op_ty ty = op->binary_op.ty;
   DEBUG_ASSERT(ty == IR_OP_BINARY_OP_TY_FADD || ty == IR_OP_BINARY_OP_TY_FSUB ||
                    ty == IR_OP_BINARY_OP_TY_FMUL ||
-                   ty == IR_OP_BINARY_OP_TY_FDIV || !is_fp,
+                   ty == IR_OP_BINARY_OP_TY_FDIV ||
+                   ty == IR_OP_BINARY_OP_TY_FMAX ||
+                   ty == IR_OP_BINARY_OP_TY_FMIN || !is_fp,
                "floating point with invalid binary op");
 
 #define CONTAINED_OP(str, ins_up, ins)                                         \
@@ -1975,7 +2040,6 @@ static void codegen_ret_op(struct cg_state *state,
 
 static void codegen_op(struct cg_state *state, struct cg_basicblock *basicblock,
                        struct ir_op *op) {
-  trace("lowering op with id %zu, type %u", op->id, op->ty);
   switch (op->ty) {
   case IR_OP_TY_UNDF:
   case IR_OP_TY_PHI:
@@ -2967,6 +3031,22 @@ static void print_instr(FILE *file, UNUSED_ARG(const struct cg_func *func),
   switch (instr->aarch64->ty) {
   case AARCH64_INSTR_TY_NOP:
     fprintf(file, "nop");
+    break;
+  case AARCH64_INSTR_TY_REV:
+    fprintf(file, "rev");
+    debug_print_reg_1_source(file, &instr->aarch64->rev);
+    break;
+  case AARCH64_INSTR_TY_REV16:
+    fprintf(file, "rev16");
+    debug_print_reg_1_source(file, &instr->aarch64->rev16);
+    break;
+  case AARCH64_INSTR_TY_CLZ:
+    fprintf(file, "clz");
+    debug_print_reg_1_source(file, &instr->aarch64->clz);
+    break;
+  case AARCH64_INSTR_TY_RBIT:
+    fprintf(file, "rbit");
+    debug_print_reg_1_source(file, &instr->aarch64->rbit);
     break;
   case AARCH64_INSTR_TY_SBFM:
     fprintf(file, "sbfm");

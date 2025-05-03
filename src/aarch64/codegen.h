@@ -38,6 +38,11 @@ enum aarch64_instr_ty {
   AARCH64_INSTR_TY_FCMP,
   AARCH64_INSTR_TY_FCMP_ZERO,
 
+  AARCH64_INSTR_TY_CLZ,
+  AARCH64_INSTR_TY_RBIT,
+  AARCH64_INSTR_TY_REV,
+  AARCH64_INSTR_TY_REV16,
+
   AARCH64_INSTR_TY_ADDS,
   AARCH64_INSTR_TY_ADDS_EXT,
   AARCH64_INSTR_TY_ADDS_IMM,
@@ -462,7 +467,7 @@ struct aarch64_instr {
 
     union {
       struct aarch64_reg_1_source reg_1_source, fmov, fcvt, ucvtf, scvtf, fneg,
-          fabs, fsqrt;
+          fabs, fsqrt, clz, rbit, rev, rev16;
     };
 
     union {

@@ -44,6 +44,15 @@ void aarch64_emit_fsqrt(struct aarch64_emitter *emitter,
 void aarch64_emit_fabs(struct aarch64_emitter *emitter,
                        const struct aarch64_reg_1_source fabs);
 
+void aarch64_emit_clz(struct aarch64_emitter *emitter,
+                      const struct aarch64_reg_1_source clz);
+void aarch64_emit_rbit(struct aarch64_emitter *emitter,
+                       const struct aarch64_reg_1_source rbit);
+void aarch64_emit_rev(struct aarch64_emitter *emitter,
+                      const struct aarch64_reg_1_source rev);
+void aarch64_emit_rev16(struct aarch64_emitter *emitter,
+                        const struct aarch64_reg_1_source rev16);
+
 /* Two reg FP data processing */
 
 void aarch64_emit_fcmp(struct aarch64_emitter *emitter,

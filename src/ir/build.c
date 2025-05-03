@@ -1830,6 +1830,42 @@ static struct ir_op *build_ir_for_call(struct ir_func_builder *irb,
                                                  .value = value};
 
       return popcnt;
+    } else if (ustr_eq(builtin, MK_USTR("__builtin_clz")) ||
+               ustr_eq(builtin, MK_USTR("__builtin_clzl")) ||
+               ustr_eq(builtin, MK_USTR("__builtin_clzll"))) {
+      struct ir_op *value =
+          build_ir_for_expr(irb, stmt, &call->arg_list.args[0]);
+
+      struct ir_op *popcnt =
+          ir_append_op(irb->func, *stmt, IR_OP_TY_UNARY_OP, IR_VAR_TY_I32);
+      popcnt->unary_op =
+          (struct ir_op_unary_op){.ty = IR_OP_UNARY_OP_TY_CLZ, .value = value};
+
+      return popcnt;
+    } else if (ustr_eq(builtin, MK_USTR("__builtin_ctz")) ||
+               ustr_eq(builtin, MK_USTR("__builtin_ctzl")) ||
+               ustr_eq(builtin, MK_USTR("__builtin_ctzll"))) {
+      struct ir_op *value =
+          build_ir_for_expr(irb, stmt, &call->arg_list.args[0]);
+
+      struct ir_op *popcnt =
+          ir_append_op(irb->func, *stmt, IR_OP_TY_UNARY_OP, IR_VAR_TY_I32);
+      popcnt->unary_op =
+          (struct ir_op_unary_op){.ty = IR_OP_UNARY_OP_TY_CTZ, .value = value};
+
+      return popcnt;
+    } else if (ustr_eq(builtin, MK_USTR("__builtin_bswap16")) ||
+               ustr_eq(builtin, MK_USTR("__builtin_bswap32")) ||
+               ustr_eq(builtin, MK_USTR("__builtin_bswap64"))) {
+      struct ir_op *value =
+          build_ir_for_expr(irb, stmt, &call->arg_list.args[0]);
+
+      struct ir_op *popcnt =
+          ir_append_op(irb->func, *stmt, IR_OP_TY_UNARY_OP, value->var_ty);
+      popcnt->unary_op =
+          (struct ir_op_unary_op){.ty = IR_OP_UNARY_OP_TY_REV, .value = value};
+
+      return popcnt;
     } else {
       BUG("unrecognised builtin '%.*s'", (int)builtin.len, builtin.str);
     }

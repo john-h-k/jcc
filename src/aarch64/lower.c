@@ -196,7 +196,9 @@ static bool can_contain_lcl_addr(struct ir_func *func, struct ir_lcl *lcl,
   case IR_LCL_ALLOC_TY_NORMAL: {
     offset += func->caller_stack_needed + lcl->alloc.offset;
 
-    if (offset > MAX_IMM_SIZE) {
+    size_t align = ir_var_ty_info(func->unit, &lcl->var_ty).alignment;
+
+    if (offset > MAX_IMM_SIZE || (offset % align)) {
       return false;
     }
 
@@ -1161,6 +1163,7 @@ void aarch64_lower_variadic(struct ir_func *func) {
     }
   }
 }
+
 void aarch64_lower(struct ir_unit *unit) {
   struct ir_glb *glb = unit->first_global;
   while (glb) {
@@ -1174,6 +1177,41 @@ void aarch64_lower(struct ir_unit *unit) {
       break;
     case IR_GLB_TY_FUNC: {
       struct ir_func *func = glb->func;
+
+      {
+        // lower i128 to 2xi64
+        struct ir_func_iter iter = ir_func_iter(func, IR_FUNC_ITER_FLAG_NONE);
+
+        struct ir_op *op;
+        while (ir_func_iter_next(&iter, &op)) {
+          if (op->ty == IR_OP_TY_CAST_OP &&
+              ir_var_ty_is_primitive(&op->var_ty, IR_VAR_PRIMITIVE_TY_I64) &&
+              ir_var_ty_is_primitive(&op->cast_op.value->var_ty,
+                                     IR_VAR_PRIMITIVE_TY_I64)) {
+            struct ir_op *value = op->cast_op.value;
+            op->ty = IR_OP_TY_MOV;
+            op->mov = (struct ir_op_mov){.value = value};
+          }
+
+          if (op->var_ty.ty != IR_VAR_TY_TY_PRIMITIVE ||
+              op->var_ty.primitive != IR_VAR_PRIMITIVE_TY_I128) {
+            continue;
+          }
+
+          // temp super horrendous hack: just make i64
+          op->var_ty = IR_VAR_TY_I64;
+
+          // switch (op->ty) {
+          // case IR_OP_TY_LOAD:
+          //   break;
+          // case IR_OP_TY_STORE:
+          //   break;
+          // default:
+          //   break;
+          //   // BUG("unrecognised op producing i128");
+          // }
+        }
+      }
 
       struct ir_basicblock *basicblock = func->first;
       while (basicblock) {

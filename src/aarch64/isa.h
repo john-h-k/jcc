@@ -393,6 +393,17 @@
 
 /* Arithmetic & logical operations (Register) */
 
+#define BIT_1_REG(sf, S, opcode2, opcode, Rn, Rd)                              \
+  (uint32_t)((U32(sf) << 31) | (U32(0b1) << 30) | (U32(S) << 29) |             \
+             (U32(0b11010110) << 21) | (U32(opcode2) << 16) |                  \
+             (U32(opcode) << 10) | (U32(Rn) << 5) | U32(Rd))
+
+#define CLZ(sf, Rn, Rd) BIT_1_REG(sf, 0b0, 0b00000, 0b000100, Rn, Rd)
+#define RBIT(sf, Rn, Rd) BIT_1_REG(sf, 0b0, 0b00000, 0b000000, Rn, Rd)
+#define REV16(sf, Rn, Rd) BIT_1_REG(sf, 0b0, 0b00000, 0b000001, Rn, Rd)
+#define REV32(sf, Rn, Rd) BIT_1_REG(sf, 0b0, 0b00000, 0b000010, Rn, Rd)
+#define REV64(sf, Rn, Rd) BIT_1_REG(sf, 0b0, 0b00000, 0b000011, Rn, Rd)
+
 #define LOGICAL_SHIFTED_REG(sf, opc, shift, N, Rm, imm6, Rn, Rd)               \
   (uint32_t)((U32(sf) << 31) | (U32(opc) << 29) | (U32(0b01010) << 24) |       \
              (U32(shift) << 22) | (U32(N) << 21) | (U32(Rm) << 16) |           \
