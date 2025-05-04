@@ -531,6 +531,14 @@ static inline bool ustr_eq(ustr_t l, ustr_t r) {
   return !memcmp(l.str, r.str, l.len);
 }
 
+// we define this so you can do `ustr_eq(ustr, str-literal)`
+
+#define COERCE_USTR(s)                                                         \
+  (_Generic((s),                                                               \
+       ustr_t: (s),                                                            \
+       const char *: MK_USTR(*(const char *const *)&(s))))
+#define ustr_eq(l, r) ustr_eq((l), COERCE_USTR((r)))
+
 static inline bool ustr_prefix(ustr_t str, ustr_t prefix) {
   if (str.len < prefix.len) {
     return false;

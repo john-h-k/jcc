@@ -67,6 +67,7 @@ set(
   src/ir/prettyprint.c
   src/ir/validate.c
   src/ir/rw.c
+  src/ir/interp.c
 
   src/opts/opts.c
   src/opts/cnst_fold.c
@@ -255,6 +256,9 @@ elseif(CMAKE_C_COMPILER_ID STREQUAL "AppleClang")
     # i would _like_ to enable this, but it causes errors everywhere flag enums are used
     # -Wsign-conversion
     -Wno-sign-conversion
+
+    # we use recursive macros
+    -Wno-disabled-macro-expansion
 
     -Wno-missing-noreturn
     -Wno-unused-macros
