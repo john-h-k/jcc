@@ -1182,14 +1182,11 @@ static void ir_interp_exec_func(struct ir_interp *interp, struct ir_func *func,
                                 struct ir_ssa_slot *args, size_t num_args,
                                 struct ir_ssa_slot *ret_slot);
 
-static void ir_exec_op_call_undef(struct ir_interp *interp,
-                                  struct ir_stack_frame *stack_frame,
-                                  struct ir_op *op, struct ir_glb *target) {
-  if (!strcmp(target->name, "printf")) {
-
-  } else {
-    TODO("undef call %s", target->name);
-  }
+static void ir_exec_op_call_undef(UNUSED struct ir_interp *interp,
+                                  UNUSED struct ir_stack_frame *stack_frame,
+                                  UNUSED struct ir_op *op,
+                                  UNUSED struct ir_glb *target) {
+  printf("")
 }
 
 static void ir_exec_op_call(struct ir_interp *interp,
