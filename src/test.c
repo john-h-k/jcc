@@ -119,6 +119,8 @@ struct jcc_test_opts {
   char **arg_groups;
   size_t num_arg_groups;
 
+  bool interp;
+
   bool quiet;
   bool use_process;
 };
@@ -261,6 +263,7 @@ struct jcc_worker_args {
 struct jcc_comp_info {
   int exc;
   char *stderr_buf;
+  char *stdout_buf;
 };
 
 static struct jcc_comp_info run_compilation(const struct jcc_worker_args *args,
@@ -279,15 +282,20 @@ static struct jcc_comp_info run_compilation(const struct jcc_worker_args *args,
     char *stderr_buf;
     syscmd_set_stderr(cmd, SYSCMD_BUF_FLAG_NONE, &stderr_buf);
 
+    char *stdout_buf;
+    syscmd_set_stdout(cmd, SYSCMD_BUF_FLAG_NONE, &stdout_buf);
+
     struct syscmd_exec exec =
         syscmd_timed_exec(&cmd, (struct syscmd_timeout){.secs = 30});
 
     switch (exec.result) {
     case SYSCMD_EXEC_RESULT_EXEC:
-      return (struct jcc_comp_info){.exc = exec.exc, .stderr_buf = stderr_buf};
+      return (struct jcc_comp_info){
+          .exc = exec.exc, .stdout_buf = stdout_buf, .stderr_buf = stderr_buf};
     case SYSCMD_EXEC_RESULT_FAILED:
       // use non-success codes here
-      return (struct jcc_comp_info){.exc = 1, .stderr_buf = stderr_buf};
+      return (struct jcc_comp_info){
+          .exc = 1, .stdout_buf = stdout_buf, .stderr_buf = stderr_buf};
     case SYSCMD_EXEC_RESULT_TIMEOUT:
       return (struct jcc_comp_info){.exc = 1,
                                     .stderr_buf = "compilation timed out"};
@@ -517,6 +525,11 @@ static void run_test(struct jcc_worker_args *args, const struct jcc_test *test,
 
   vector_push_back(comp_args, &args->opts.jcc);
 
+  if (args->opts.interp) {
+    const char *interp = "-interp";
+    vector_push_back(comp_args, &interp);
+  }
+
   size_t num_flags = vector_length(info.flags);
 
   for (size_t i = 0; i < num_flags; i++) {
@@ -581,69 +594,76 @@ static void run_test(struct jcc_worker_args *args, const struct jcc_test *test,
     return;
   }
 
-  if (comp_info.exc != 0) {
-    add_test_result(
-        args, &(struct jcc_test_result){
-                  .status = TEST_STATUS_FAIL,
-                  .arg_group = arg_group,
-                  .file = test->file,
-                  .msg = comp_info.stderr_buf
-                             ? aralloc_snprintf(
-                                   args->arena,
-                                   "compilation error! build output: \n%s\n",
-                                   comp_info.stderr_buf)
-                             : "compilation error!"});
-    return;
-  }
-
-  // Run produced executable
-  struct syscmd *cmd;
-
-  char run_cmd[512];
-  snprintf(run_cmd, sizeof(run_cmd), "%s", output_file);
-
-  if (args->runner) {
-    cmd = syscmd_create(args->arena, args->runner);
-    syscmd_add_arg(cmd, run_cmd);
-  } else {
-    cmd = syscmd_create(args->arena, run_cmd);
-  }
-
-  if (info.stdin_val.str) {
-    syscmd_set_stdin(cmd, info.stdin_val);
-  }
-
+  int run_ret;
   char *run_output;
-  syscmd_set_stdout(cmd, SYSCMD_BUF_FLAG_STRIP_TRAILING_NEWLINE, &run_output);
+  if (args->opts.interp) {
+    run_ret = comp_info.exc;
+    run_output = comp_info.stdout_buf;
+  } else {
+    if (comp_info.exc != 0) {
+      add_test_result(
+          args, &(struct jcc_test_result){
+                    .status = TEST_STATUS_FAIL,
+                    .arg_group = arg_group,
+                    .file = test->file,
+                    .msg = comp_info.stderr_buf
+                               ? aralloc_snprintf(
+                                     args->arena,
+                                     "compilation error! build output: \n%s\n",
+                                     comp_info.stderr_buf)
+                               : "compilation error!"});
+      return;
+    }
 
-  syscmd_set_stderr_path(cmd, SYSCMD_BUF_FLAG_NONE, "/dev/null");
+    // Run produced executable
+    struct syscmd *cmd;
 
-  // FIXME: handle malformed executable (syscmd will throw assert i think)
-  struct syscmd_exec exec =
-      syscmd_timed_exec(&cmd, (struct syscmd_timeout){.secs = 30});
+    char run_cmd[512];
+    snprintf(run_cmd, sizeof(run_cmd), "%s", output_file);
 
-  switch (exec.result) {
-  case SYSCMD_EXEC_RESULT_FAILED:
-    add_test_result(args, &(struct jcc_test_result){
-                              .status = TEST_STATUS_FAIL,
-                              .arg_group = arg_group,
-                              .file = test->file,
-                              .msg = "Running process failed",
-                          });
-    return;
-  case SYSCMD_EXEC_RESULT_TIMEOUT:
-    add_test_result(args, &(struct jcc_test_result){
-                              .status = TEST_STATUS_FAIL,
-                              .arg_group = arg_group,
-                              .file = test->file,
-                              .msg = "Process timed out",
-                          });
-    return;
-  case SYSCMD_EXEC_RESULT_EXEC:
-    break;
+    if (args->runner) {
+      cmd = syscmd_create(args->arena, args->runner);
+      syscmd_add_arg(cmd, run_cmd);
+    } else {
+      cmd = syscmd_create(args->arena, run_cmd);
+    }
+
+    if (info.stdin_val.str) {
+      syscmd_set_stdin(cmd, info.stdin_val);
+    }
+
+    syscmd_set_stdout(cmd, SYSCMD_BUF_FLAG_STRIP_TRAILING_NEWLINE, &run_output);
+
+    syscmd_set_stderr_path(cmd, SYSCMD_BUF_FLAG_NONE, "/dev/null");
+
+    // FIXME: handle malformed executable (syscmd will throw assert i think)
+    struct syscmd_exec exec =
+        syscmd_timed_exec(&cmd, (struct syscmd_timeout){.secs = 30});
+
+    switch (exec.result) {
+    case SYSCMD_EXEC_RESULT_FAILED:
+      add_test_result(args, &(struct jcc_test_result){
+                                .status = TEST_STATUS_FAIL,
+                                .arg_group = arg_group,
+                                .file = test->file,
+                                .msg = "Running process failed",
+                            });
+      return;
+    case SYSCMD_EXEC_RESULT_TIMEOUT:
+      add_test_result(args, &(struct jcc_test_result){
+                                .status = TEST_STATUS_FAIL,
+                                .arg_group = arg_group,
+                                .file = test->file,
+                                .msg = "Process timed out",
+                            });
+      return;
+    case SYSCMD_EXEC_RESULT_EXEC:
+      break;
+    }
+
+    run_ret = exec.exc;
   }
 
-  int run_ret = exec.exc;
   if (run_ret != info.expected_exc) {
     add_test_result(args, &(struct jcc_test_result){
                               .status = TEST_STATUS_FAIL,
@@ -729,6 +749,8 @@ static bool parse_args(struct arena_allocator *arena, int argc, char *argv[],
       opts->use_process = true;
     } else if (strcmp(argv[i], "--quiet") == 0) {
       opts->quiet = true;
+    } else if (strcmp(argv[i], "--interp") == 0) {
+      opts->interp = true;
     } else if (strcmp(argv[i], "-arch") == 0 && i + 1 < argc) {
       i++;
       const char *arch_flag = "-arch";

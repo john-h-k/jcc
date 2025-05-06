@@ -280,6 +280,7 @@ try_get_compile_args(int argc, char **argv, struct parsed_args *args,
   enum fs_flags fs_flags = FS_FLAG_NONE;
   switch (args->driver) {
   case JCC_DRIVER_COMPILER:
+  case JCC_DRIVER_INTERP:
     fs_flags |= FS_FLAG_ASSUME_CONSTANT;
     break;
   case JCC_DRIVER_LSP:
@@ -421,7 +422,12 @@ try_get_compile_args(int argc, char **argv, struct parsed_args *args,
   }
 
   switch (args->driver) {
-
+  case JCC_DRIVER_INTERP:
+    if (args->num_values != 1) {
+      err("interpretor only supports single-file currently");
+      return PARSE_ARGS_RESULT_FAIL;
+    }
+    break;
   case JCC_DRIVER_COMPILER:
     if (!args->num_values) {
       err("No sources provided");
@@ -446,6 +452,7 @@ static void signal_handle(UNUSED int signal) {
 void jcc_init(void) {
   signal(SIGTRAP, signal_handle);
   signal(SIGABRT, signal_handle);
+  signal(SIGSEGV, signal_handle);
 
   // we want to use the user's locale i think?
   // TODO: remove this
@@ -507,6 +514,11 @@ static int jcc_driver_lsp(struct arena_allocator *arena, struct fs *fs,
                           struct compile_args compile_args,
                           const struct target *target);
 
+static int jcc_driver_interp(UNUSED struct arena_allocator *arena,
+                             struct fs *fs, UNUSED struct parsed_args args,
+                             struct compile_args compile_args,
+                             const struct target *target, const char *source);
+
 static int jcc_driver_compiler(struct arena_allocator *arena, struct fs *fs,
                                struct parsed_args args,
                                struct compile_args compile_args,
@@ -551,6 +563,9 @@ int jcc_main(int argc, char **argv) {
     exc = jcc_driver_compiler(arena, fs, args, compile_args, target,
                               num_sources, sources);
     break;
+  case JCC_DRIVER_INTERP:
+    exc = jcc_driver_interp(arena, fs, args, compile_args, target, sources[0]);
+    break;
   case JCC_DRIVER_LSP:
     exc = jcc_driver_lsp(arena, fs, args, compile_args, target);
     break;
@@ -567,6 +582,50 @@ static int jcc_driver_lsp(struct arena_allocator *arena, struct fs *fs,
                           struct compile_args compile_args,
                           const struct target *target) {
   return lsp_run(arena, fs, args, compile_args, target);
+}
+
+static int jcc_driver_interp(UNUSED struct arena_allocator *arena,
+                             struct fs *fs, UNUSED struct parsed_args args,
+                             struct compile_args compile_args,
+                             const struct target *target, const char *source) {
+  // FIXME: does not contain full logic supported by compiler
+
+  disable_log();
+  struct compiler *compiler;
+
+  struct fs_file file;
+  if (!fs_read_path(fs, MK_USTR(source), &file)) {
+    return 1;
+  }
+
+  struct compiler_create_args comp_args = {
+      .program = (struct program){.text = file.data},
+      .fs = fs,
+      .target = target,
+      .args = compile_args,
+      .working_dir = source,
+      .mode = COMPILE_PREPROC_MODE_PREPROC,
+      .output =
+          (struct compile_file){.ty = COMPILE_FILE_TY_PATH, .path = NULL}};
+
+  if (compiler_create(&comp_args, &compiler) !=
+      COMPILER_CREATE_RESULT_SUCCESS) {
+    err("failed to create compiler");
+    return 1;
+  }
+
+  struct interp_result result = interp(compiler);
+  if (result.compile_result != COMPILE_RESULT_SUCCESS) {
+    // temp disabled because doesnt respect `-fdiagnostics-sink`
+    // err("compilation failed!");
+
+    free_compiler(&compiler);
+    return 1;
+  }
+
+  free_compiler(&compiler);
+
+  return result.exc;
 }
 
 static int jcc_driver_compiler(struct arena_allocator *arena, struct fs *fs,

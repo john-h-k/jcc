@@ -8,6 +8,7 @@
 #include "hashtbl.h"
 #include "ir/build.h"
 #include "ir/eliminate_phi.h"
+#include "ir/interp.h"
 #include "ir/ir.h"
 #include "ir/prettyprint.h"
 #include "ir/validate.h"
@@ -811,7 +812,6 @@ compile_stage_emit(UNUSED struct compiler *compiler, struct cg_unit *unit,
 
   return COMPILE_RESULT_SUCCESS;
 }
-
 static enum compile_result
 compile_stage_build_object(struct compiler *compiler,
                            struct emitted_unit *emitted_unit) {
@@ -871,7 +871,8 @@ compile_stage_build_object(struct compiler *compiler,
     COMPILER_STAGE_NO_LOG(stage, lo, __VA_ARGS__);                             \
   }
 
-enum compile_result compile(struct compiler *compiler) {
+static enum compile_result compile_to_ir(struct compiler *compiler,
+                                         struct ir_unit **unit) {
   if (compiler->args.preproc_only) {
     // preproc is kept local as it is seperate to other stages
 
@@ -905,11 +906,37 @@ enum compile_result compile(struct compiler *compiler) {
   }
 
   const struct target *target = compiler->target;
-  struct ir_unit *ir;
 
-  COMPILER_STAGE_NO_LOG(IR, ir, target, &typechk_result, &ir);
+  COMPILER_STAGE_NO_LOG(IR, ir, target, &typechk_result, unit);
 
-  return compile_ir(compiler, ir);
+  return COMPILE_RESULT_SUCCESS;
+}
+
+enum compile_result compile(struct compiler *compiler) {
+  struct ir_unit *unit;
+  enum compile_result result = compile_to_ir(compiler, &unit);
+
+  if (result != COMPILE_RESULT_SUCCESS) {
+    return result;
+  }
+
+  return compile_ir(compiler, unit);
+}
+
+struct interp_result interp(struct compiler *compiler) {
+  struct ir_unit *unit;
+  enum compile_result result = compile_to_ir(compiler, &unit);
+
+  if (result != COMPILE_RESULT_SUCCESS) {
+    return (struct interp_result){.compile_result = result};
+  }
+
+  struct ir_interp *interp = ir_interp_create((struct ir_interp_create_args){
+      .unit = unit, .entrypoint = MK_USTR("main")});
+
+  struct ir_interp_exec_info info = ir_interp_exec(interp);
+
+  return (struct interp_result){.compile_result = result, .exc = info.exc};
 }
 
 enum compile_result compile_ir(struct compiler *compiler, struct ir_unit *ir) {

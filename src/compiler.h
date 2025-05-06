@@ -9,7 +9,7 @@
 
 struct compiler;
 
-enum jcc_driver { JCC_DRIVER_COMPILER, JCC_DRIVER_LSP };
+enum jcc_driver { JCC_DRIVER_COMPILER, JCC_DRIVER_INTERP, JCC_DRIVER_LSP };
 
 enum FLAG_ENUM codegen_flags {
   CODEGEN_FLAG_NONE = 0,
@@ -257,6 +257,12 @@ enum compiler_create_result
 compiler_create_for_ir(const struct compiler_ir_create_args *args,
                        struct compiler **compiler);
 
+struct interp_result {
+  enum compile_result compile_result;
+  int exc;
+};
+
+struct interp_result interp(struct compiler *compiler);
 enum compile_result compile(struct compiler *compiler);
 
 struct ir_unit;

@@ -342,6 +342,9 @@ enum parse_args_result parse_args(int argc, char **argv,
     if (!strcmp(argv[1], "-lsp")) {
       parsed->driver = JCC_DRIVER_LSP;
       i++;
+    } else if (!strcmp(argv[1], "-interp")) {
+      parsed->driver = JCC_DRIVER_INTERP;
+      i++;
     } else if (!strcmp(argv[1], "-jcc")) {
       parsed->driver = JCC_DRIVER_COMPILER;
       i++;

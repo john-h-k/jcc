@@ -1182,6 +1182,16 @@ static void ir_interp_exec_func(struct ir_interp *interp, struct ir_func *func,
                                 struct ir_ssa_slot *args, size_t num_args,
                                 struct ir_ssa_slot *ret_slot);
 
+static void ir_exec_op_call_undef(struct ir_interp *interp,
+                                  struct ir_stack_frame *stack_frame,
+                                  struct ir_op *op, struct ir_glb *target) {
+  if (!strcmp(target->name, "printf")) {
+
+  } else {
+    TODO("undef call %s", target->name);
+  }
+}
+
 static void ir_exec_op_call(struct ir_interp *interp,
                             struct ir_stack_frame *stack_frame,
                             struct ir_op *op) {
@@ -1195,21 +1205,24 @@ static void ir_exec_op_call(struct ir_interp *interp,
     DEBUG_ASSERT(target_ptr.offset == 0, "call w offset?");
     struct ir_glb *glb = interp->glbs[target_ptr.idx];
 
-    if (glb->def_ty == IR_GLB_DEF_TY_UNDEFINED) {
-      TODO("external calls");
-    }
+    switch (glb->def_ty) {
+    case IR_GLB_DEF_TY_UNDEFINED:
+      ir_exec_op_call_undef(interp, stack_frame, op, glb);
+      break;
+    default:
+      DEBUG_ASSERT(call->num_args < 32, "TODO: more than 32 args");
+      struct ir_ssa_slot args[32];
+      for (size_t i = 0; i < call->num_args; i++) {
+        ir_copy_slot(&args[i], &stack_frame->ssas[call->args[i]->id]);
+      }
 
-    DEBUG_ASSERT(call->num_args < 32, "TODO: more than 32 args");
-    struct ir_ssa_slot args[32];
-    for (size_t i = 0; i < call->num_args; i++) {
-      ir_copy_slot(&args[i], &stack_frame->ssas[call->args[i]->id]);
-    }
+      struct ir_ssa_slot ret_slot;
+      ir_interp_exec_func(interp, glb->func, args, call->num_args, &ret_slot);
 
-    struct ir_ssa_slot ret_slot;
-    ir_interp_exec_func(interp, glb->func, args, call->num_args, &ret_slot);
-
-    if (op->var_ty.ty != IR_VAR_TY_TY_NONE) {
-      ir_copy_slot(slot, &ret_slot);
+      if (op->var_ty.ty != IR_VAR_TY_TY_NONE) {
+        ir_copy_slot(slot, &ret_slot);
+      }
+      break;
     }
   } else {
     TODO("indir calls");
@@ -1247,7 +1260,8 @@ static void ir_exec_op_binary_op(struct ir_interp *interp,
                                  struct ir_stack_frame *stack_frame,
                                  struct ir_op *op);
 
-static void debug_print_ssa_slot(FILE *file, const struct ir_ssa_slot *slot) {
+UNUSED static void debug_print_ssa_slot(FILE *file,
+                                        const struct ir_ssa_slot *slot) {
   switch (slot->ty) {
   case IR_SLOT_TY_I1:
     fprintf(file, "%zu", (size_t)slot->i1);
@@ -1416,13 +1430,13 @@ static void ir_interp_exec_func(struct ir_interp *interp, struct ir_func *func,
           break;
         }
 
-        {
-          debug_print_op(stderr, op, DEBUG_PRINT_IR_OPTS_DEFAULT);
-          fprintf(stderr, "\n");
-          fprintf(stderr, "%%%zu = ", op->id);
-          debug_print_ssa_slot(stderr, &stack_frame->ssas[op->id]);
-          fprintf(stderr, "\n\n");
-        }
+        // {
+        //   debug_print_op(stderr, op, DEBUG_PRINT_IR_OPTS_DEFAULT);
+        //   fprintf(stderr, "\n");
+        //   fprintf(stderr, "%%%zu = ", op->id);
+        //   debug_print_ssa_slot(stderr, &stack_frame->ssas[op->id]);
+        //   fprintf(stderr, "\n\n");
+        // }
 
         op = op->succ;
       }
@@ -1552,6 +1566,10 @@ static void ir_interp_write_var_value(struct ir_interp *interp, size_t offset,
 
 static struct ir_interp_glb_data
 ir_interp_define_glb_data(struct ir_interp *interp, struct ir_glb *glb) {
+  if (glb->def_ty != IR_GLB_DEF_TY_DEFINED) {
+    return (struct ir_interp_glb_data){.data = NULL, .len = 0};
+  }
+
   struct ir_var_ty_info info = ir_var_ty_info(interp->unit, &glb->var->var_ty);
 
   size_t len = info.size;
