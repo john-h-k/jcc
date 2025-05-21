@@ -1143,20 +1143,21 @@ static void codegen_br_cond_op(struct cg_state *state,
 
     instr->aarch64->ty = AARCH64_INSTR_TY_B_COND;
     instr->aarch64->b_cond = (struct aarch64_conditional_branch){
-        .cond = cond, .target = true_target};
+        .cond = cond, .target = AARCH64_BASICBLOCK_TARGET(true_target)};
   } else {
     struct aarch64_reg cmp_reg = codegen_reg(op->br_cond.cond);
 
     instr->aarch64->ty = AARCH64_INSTR_TY_CBNZ;
     instr->aarch64->cbnz = (struct aarch64_compare_and_branch){
-        .cmp = cmp_reg, .target = true_target};
+        .cmp = cmp_reg, .target = AARCH64_BASICBLOCK_TARGET(true_target)};
   }
 
   if (op->stmt->basicblock->succ != false_target) {
     // now generate the `br`
     struct cg_instr *br = cg_alloc_instr(state->func, basicblock);
     br->aarch64->ty = AARCH64_INSTR_TY_B;
-    br->aarch64->b = (struct aarch64_branch){.target = false_target};
+    br->aarch64->b = (struct aarch64_branch){
+        .target = AARCH64_BASICBLOCK_TARGET(false_target)};
   }
 }
 
@@ -1165,8 +1166,8 @@ static void codegen_br_op(struct cg_state *state,
   struct cg_instr *instr = cg_alloc_instr(state->func, basicblock);
 
   instr->aarch64->ty = AARCH64_INSTR_TY_B;
-  instr->aarch64->b =
-      (struct aarch64_branch){.target = op->stmt->basicblock->merge.target};
+  instr->aarch64->b = (struct aarch64_branch){
+      .target = AARCH64_BASICBLOCK_TARGET(op->stmt->basicblock->merge.target)};
 }
 
 static_assert((sizeof(unsigned long long) == 8) & (sizeof(unsigned short) == 2),
@@ -1936,13 +1937,21 @@ static void codegen_call_op(struct cg_state *state,
 
   struct cg_instr *instr = cg_alloc_instr(state->func, basicblock);
   if (op->call.target->flags & IR_OP_FLAG_CONTAINED) {
+    DEBUG_ASSERT(op->call.target->ty == IR_OP_TY_ADDR &&
+                     op->call.target->addr.ty == IR_OP_ADDR_TY_GLB,
+                 "expected addr GLB");
+
+    struct ir_glb *target = op->call.target->addr.glb;
+    struct cg_entry *entry = &state->func->unit->entries[target->id];
+
     instr->aarch64->ty = AARCH64_INSTR_TY_BL;
-    instr->aarch64->bl = (struct aarch64_branch){.target = NULL};
+    instr->aarch64->bl =
+        (struct aarch64_branch){.target = AARCH64_SYMBOL_TARGET(entry)};
 
     instr->reloc = aralloc(state->func->unit->arena, sizeof(*instr->reloc));
     *instr->reloc = (struct relocation){
         .ty = RELOCATION_TY_CALL,
-        .symbol_index = op->call.target->addr.glb->id,
+        .symbol_index = target->id,
         .size = 2,
         .address = 0,
     };
@@ -2542,6 +2551,10 @@ static char reg_prefix(struct aarch64_reg reg) {
 }
 #endif
 
+static void print_bb_symbol(FILE *file, struct ir_basicblock *basicblock) {
+  fprintf(file, "@ %03zu", basicblock->cg_basicblock->id);
+}
+
 static void codegen_fprintf(FILE *file, const char *format, ...) {
 #ifdef __JCC__
   (void)file;
@@ -2588,6 +2601,23 @@ static void codegen_fprintf(FILE *file, const char *format, ...) {
       }
 
       format += 8;
+    } else if (strncmp(format, "target", 6) == 0) {
+      struct aarch64_target target = va_arg(list, struct aarch64_target);
+
+      switch (target.ty) {
+      case AARCH64_TARGET_TY_OFFSET:
+        fprintf(file, ".%s%lld", target.offset > 0 ? "+" : "", target.offset);
+        break;
+      case AARCH64_TARGET_TY_BASICBLOCK: {
+        print_bb_symbol(file, target.basicblock);
+        break;
+      }
+      case AARCH64_TARGET_TY_SYMBOL:
+        fprintf(file, "<%s>", target.symbol->name);
+        break;
+      }
+
+      format += 6;
     } else if (strncmp(format, "addr", 4) == 0) {
       // expects addr + offset + extend + amount + operand size
       struct aarch64_reg addr = va_arg(list, struct aarch64_reg);
@@ -2950,13 +2980,13 @@ static void debug_print_conditional_select(
 
 static void debug_print_conditional_branch(
     FILE *file, const struct aarch64_conditional_branch *conditional_branch) {
-  codegen_fprintf(file, ".%cond %instr", conditional_branch->cond,
-                  conditional_branch->target->cg_basicblock->first);
+  codegen_fprintf(file, ".%cond %target", conditional_branch->cond,
+                  conditional_branch->target);
 }
 
 static void debug_print_branch(FILE *file,
                                const struct aarch64_branch *branch) {
-  codegen_fprintf(file, " %instr", branch->target->cg_basicblock->first);
+  codegen_fprintf(file, " %target", branch->target);
 }
 
 static void
@@ -2967,8 +2997,8 @@ debug_print_branch_reg(FILE *file,
 
 static void debug_print_compare_and_branch(
     FILE *file, const struct aarch64_compare_and_branch *compare_and_branch) {
-  codegen_fprintf(file, " %reg, %instr", compare_and_branch->cmp,
-                  compare_and_branch->target->cg_basicblock->first);
+  codegen_fprintf(file, " %reg, %target", compare_and_branch->cmp,
+                  compare_and_branch->target);
 }
 
 static void debug_print_load(FILE *file, const struct aarch64_load *load,
@@ -3147,12 +3177,7 @@ static void print_instr(FILE *file, UNUSED_ARG(const struct cg_func *func),
     break;
   case AARCH64_INSTR_TY_BL:
     fprintf(file, "bl");
-
-    if (instr->aarch64->bl.target) {
-      debug_print_branch(file, &instr->aarch64->bl);
-    } else {
-      fprintf(file, " <unknown>");
-    }
+    debug_print_branch(file, &instr->aarch64->bl);
     break;
   case AARCH64_INSTR_TY_BC_COND:
     fprintf(file, "bc");
@@ -3406,8 +3431,8 @@ static void print_instr(FILE *file, UNUSED_ARG(const struct cg_func *func),
   }
 }
 
-static void aarch64_debug_print_func(FILE *file, struct cg_entry *entry) {
-  struct cg_func *func = &entry->func;
+static void aarch64_debug_print_func(FILE *file, const struct cg_entry *entry) {
+  const struct cg_func *func = &entry->func;
 
   fprintf(file, "\nFUNCTION: %s\n", entry->name);
   fprintf(file, "  prologue: %s\n", entry->func.prologue ? "true" : "false");
@@ -3458,19 +3483,15 @@ static void aarch64_debug_print_func(FILE *file, struct cg_entry *entry) {
   }
 }
 
-void aarch64_debug_print_codegen(FILE *file, struct cg_unit *unit) {
-  DEBUG_ASSERT(unit->ty == CODEGEN_UNIT_TY_AARCH64, "expected aarch64");
-
-  for (size_t i = 0; i < unit->num_entries; i++) {
-    struct cg_entry *entry = &unit->entries[i];
-
-    if (entry->ty != CG_ENTRY_TY_FUNC) {
-      fprintf(file, "DATA: %s\n\n", entry->name);
-      continue;
-    }
-
-    aarch64_debug_print_func(file, entry);
-
-    fprintf(file, "\n");
+void aarch64_debug_print_codegen_entry(FILE *file,
+                                       const struct cg_entry *entry) {
+  // TODO: print data entries as well (also for x64 and rv32i)
+  if (entry->ty != CG_ENTRY_TY_FUNC) {
+    fprintf(file, "DATA: %s\n\n", entry->name);
+    return;
   }
+
+  aarch64_debug_print_func(file, entry);
+
+  fprintf(file, "\n");
 }

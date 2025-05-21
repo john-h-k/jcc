@@ -1186,7 +1186,7 @@ static void ir_exec_op_call_undef(UNUSED struct ir_interp *interp,
                                   UNUSED struct ir_stack_frame *stack_frame,
                                   UNUSED struct ir_op *op,
                                   UNUSED struct ir_glb *target) {
-  printf("")
+  TODO("undef call");
 }
 
 static void ir_exec_op_call(struct ir_interp *interp,

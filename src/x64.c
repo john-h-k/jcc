@@ -92,19 +92,17 @@ const struct target X64_MACOS_TARGET = {
         x64_lower,
         x64_lower_func_ty,
     },
-    {
-        .ty = CODEGEN_UNIT_TY_X64,
-        .instr_sz = sizeof(struct x64_instr),
-        .function_align = X64_FUNCTION_ALIGNMENT,
-        .codegen_start = x64_codegen_start,
-        .codegen_basicblock = x64_codegen_basicblock,
-        .codegen_end = x64_codegen_end,
-    },
+    {.ty = CODEGEN_UNIT_TY_X64,
+     .instr_sz = sizeof(struct x64_instr),
+     .function_align = X64_FUNCTION_ALIGNMENT,
+     .codegen_start = x64_codegen_start,
+     .codegen_basicblock = x64_codegen_basicblock,
+     .codegen_end = x64_codegen_end,
+     .debug_codegen_entry = x64_debug_print_codegen_entry},
     x64_emit,
     write_macho,
     macos_link_objects,
     objdump_debug_disasm,
-    x64_debug_print_codegen,
     NULL};
 
 const struct target X64_LINUX_TARGET = {
@@ -130,19 +128,17 @@ const struct target X64_LINUX_TARGET = {
         x64_lower,
         x64_lower_func_ty,
     },
-    {
-        .ty = CODEGEN_UNIT_TY_X64,
-        .instr_sz = sizeof(struct x64_instr),
-        .function_align = X64_FUNCTION_ALIGNMENT,
-        .codegen_start = x64_codegen_start,
-        .codegen_basicblock = x64_codegen_basicblock,
-        .codegen_end = x64_codegen_end,
-    },
+    {.ty = CODEGEN_UNIT_TY_X64,
+     .instr_sz = sizeof(struct x64_instr),
+     .function_align = X64_FUNCTION_ALIGNMENT,
+     .codegen_start = x64_codegen_start,
+     .codegen_basicblock = x64_codegen_basicblock,
+     .codegen_end = x64_codegen_end,
+     .debug_codegen_entry = x64_debug_print_codegen_entry},
     x64_emit,
     write_elf,
     linux_link_objects,
     objdump_debug_disasm,
-    x64_debug_print_codegen,
     NULL};
 
 #endif

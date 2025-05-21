@@ -54,12 +54,12 @@ const struct target AARCH64_MACOS_TARGET = {
         .codegen_start = aarch64_codegen_start,
         .codegen_basicblock = aarch64_codegen_basicblock,
         .codegen_end = aarch64_codegen_end,
+        .debug_codegen_entry = aarch64_debug_print_codegen_entry,
     },
     aarch64_emit,
     write_macho,
     macos_link_objects,
     objdump_debug_disasm,
-    aarch64_debug_print_codegen,
     NULL};
 
 // struct __va_list {
@@ -151,12 +151,12 @@ const struct target AARCH64_LINUX_TARGET = {
         .codegen_start = aarch64_codegen_start,
         .codegen_basicblock = aarch64_codegen_basicblock,
         .codegen_end = aarch64_codegen_end,
+        .debug_codegen_entry = aarch64_debug_print_codegen_entry,
     },
     aarch64_emit,
     write_elf,
     linux_link_objects,
     objdump_debug_disasm,
-    aarch64_debug_print_codegen,
     NULL};
 
 #endif

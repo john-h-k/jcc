@@ -385,7 +385,7 @@ void rv32i_codegen_basicblock(struct cg_state *state,
                               struct ir_basicblock *basicblock);
 void rv32i_codegen_end(struct cg_state *state);
 
-void rv32i_debug_print_codegen(FILE *file, struct cg_unit *unit);
+void rv32i_debug_print_codegen_entry(FILE *file, const struct cg_entry *entry);
 
 void rv32i_emit_asm(FILE *file, struct cg_unit *unit, enum codegen_flags flags);
 

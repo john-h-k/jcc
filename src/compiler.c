@@ -753,6 +753,22 @@ compile_stage_codegen_prepare(struct compiler *compiler, struct ir_unit *ir) {
   return COMPILE_RESULT_SUCCESS;
 }
 
+static void compile_print_codegen(struct compiler *compiler, FILE *file,
+                                  struct cg_unit *unit) {
+  for (size_t i = 0; i < unit->num_entries; i++) {
+    const struct cg_entry *entry = &unit->entries[i];
+
+    // FIXME: we have no good way to "demangle" the entry name
+    // hack by just ignoring first char
+    const char *name = entry->name ? entry->name + 1 : NULL;
+
+    if (!compiler->args.log_symbols ||
+        (entry->name && hashtbl_lookup(compiler->args.log_symbols, &name))) {
+      compiler->target->codegen.debug_codegen_entry(file, entry);
+    }
+  }
+}
+
 static enum compile_result
 compile_stage_codegen(struct compiler *compiler, struct ir_unit *ir,
                       struct cg_unit **codegen_unit) {
@@ -760,9 +776,9 @@ compile_stage_codegen(struct compiler *compiler, struct ir_unit *ir,
 
   *codegen_unit = codegen(ir, compiler->args.codegen_flags);
 
-  if (log_enabled() && target->debug_print_codegen) {
-    debug_print_stage(compiler, ir, "emit");
-    target->debug_print_codegen(stderr, *codegen_unit);
+  if (log_enabled() && target->codegen.debug_codegen_entry) {
+    slog("\n\n----------  CODEGEN  ----------\n");
+    compile_print_codegen(compiler, stderr, *codegen_unit);
   }
 
   if (compiler->args.build_asm_file) {
@@ -780,7 +796,7 @@ compile_stage_codegen(struct compiler *compiler, struct ir_unit *ir,
       fclose(file);
 
       return COMPILE_RESULT_SUCCESS;
-    } else if (target->debug_print_codegen) {
+    } else if (target->codegen.debug_codegen_entry) {
       warn("using debug codegen output; not valid assembler input");
 
       FILE *file;
@@ -791,7 +807,7 @@ compile_stage_codegen(struct compiler *compiler, struct ir_unit *ir,
         return COMPILE_RESULT_BAD_FILE;
       }
 
-      target->debug_print_codegen(file, *codegen_unit);
+      compile_print_codegen(compiler, file, *codegen_unit);
 
       fclose(file);
 

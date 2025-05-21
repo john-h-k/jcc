@@ -556,7 +556,7 @@ static bool parse_attribute(struct parser *parser,
   attribute->ty = AST_ATTRIBUTE_TY_PARAMETERIZED;
   attribute->name = identifier;
   attribute->params = aralloc(parser->arena, sizeof(*attribute->params) *
-                                                     compoundexpr.num_exprs);
+                                                 compoundexpr.num_exprs);
   attribute->num_params = compoundexpr.num_exprs;
 
   for (size_t i = 0; i < compoundexpr.num_exprs; i++) {
@@ -805,8 +805,8 @@ static bool parse_struct_or_union_specifier(
 
   struct lex_token identifier;
   if (parse_identifier(parser, &identifier)) {
-    struct_or_union_specifier->identifier = aralloc(
-        parser->arena, sizeof(*struct_or_union_specifier->identifier));
+    struct_or_union_specifier->identifier =
+        aralloc(parser->arena, sizeof(*struct_or_union_specifier->identifier));
     *struct_or_union_specifier->identifier = identifier;
 
     end = identifier.span.end;
@@ -818,8 +818,8 @@ static bool parse_struct_or_union_specifier(
   struct_or_union_specifier->decl_list = NULL;
 
   if (parse_token(parser, LEX_TOKEN_TY_OPEN_BRACE, NULL)) {
-    struct_or_union_specifier->decl_list = aralloc(
-        parser->arena, sizeof(*struct_or_union_specifier->decl_list));
+    struct_or_union_specifier->decl_list =
+        aralloc(parser->arena, sizeof(*struct_or_union_specifier->decl_list));
     parse_declaration_list(parser, struct_or_union_specifier->decl_list);
 
     struct text_span brace;
@@ -1446,8 +1446,8 @@ parse_direct_declarator(struct parser *parser,
   struct ast_array_declarator array_declarator;
   if (parse_ast_array_declarator(parser, &array_declarator)) {
     direct_declarator->ty = AST_DIRECT_DECLARATOR_TY_ARRAY_DECLARATOR;
-    direct_declarator->array_declarator = aralloc(
-        parser->arena, sizeof(*direct_declarator->array_declarator));
+    direct_declarator->array_declarator =
+        aralloc(parser->arena, sizeof(*direct_declarator->array_declarator));
     *direct_declarator->array_declarator = array_declarator;
     direct_declarator->span = direct_declarator->array_declarator->span;
     return true;
@@ -1473,8 +1473,8 @@ parse_direct_declarator(struct parser *parser,
                          "')' after declarator", NULL);
 
     direct_declarator->ty = AST_DIRECT_DECLARATOR_TY_PAREN_DECLARATOR;
-    direct_declarator->paren_declarator = aralloc(
-        parser->arena, sizeof(*direct_declarator->paren_declarator));
+    direct_declarator->paren_declarator =
+        aralloc(parser->arena, sizeof(*direct_declarator->paren_declarator));
     *direct_declarator->paren_declarator = declarator;
     direct_declarator->span = MK_TEXT_SPAN(start.start, end.end);
     return true;
@@ -1579,7 +1579,7 @@ static bool parse_declarator(struct parser *parser,
         aralloc(parser->arena, sizeof(*declarator->declarator_label));
     *declarator->declarator_label = (struct ast_declarator_label){
         .label = aralloc(parser->arena,
-                             sizeof(*declarator->declarator_label->label))};
+                         sizeof(*declarator->declarator_label->label))};
 
     *declarator->declarator_label->label = expr;
     end = expr.span.end;
@@ -2738,8 +2738,7 @@ static bool parse_ternary(struct parser *parser, const struct ast_expr *cond,
   expr->ternary = (struct ast_ternary){
       .cond = aralloc(parser->arena, sizeof(*expr->ternary.cond)),
       .true_expr = aralloc(parser->arena, sizeof(*expr->ternary.true_expr)),
-      .false_expr =
-          aralloc(parser->arena, sizeof(*expr->ternary.false_expr)),
+      .false_expr = aralloc(parser->arena, sizeof(*expr->ternary.false_expr)),
   };
 
   *expr->ternary.cond = *cond;
@@ -3266,8 +3265,7 @@ static bool parse_dowhilestmt(struct parser *parser,
   }
 
   do_while_stmt->cond = expr;
-  do_while_stmt->body =
-      aralloc(parser->arena, sizeof(*do_while_stmt->body));
+  do_while_stmt->body = aralloc(parser->arena, sizeof(*do_while_stmt->body));
   *do_while_stmt->body = stmt;
   do_while_stmt->span = MK_TEXT_SPAN(kw.start, stmt.span.end);
 

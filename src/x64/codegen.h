@@ -429,6 +429,7 @@ void x64_codegen_end(struct cg_state *state);
 
 void x64_debug_print_instr(FILE *file, const struct cg_func *func,
                            const struct cg_instr *instr);
-void x64_debug_print_codegen(FILE *file, struct cg_unit *unit);
+
+void x64_debug_print_codegen_entry(FILE *file, const struct cg_entry *entry);
 
 #endif

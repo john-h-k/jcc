@@ -954,37 +954,47 @@ void aarch64_emit_csneg(struct aarch64_emitter *emitter,
 
 /* Branches */
 
+#define OFFSET(instr)                                                          \
+  switch (instr.target.ty) {                                                   \
+  case AARCH64_TARGET_TY_OFFSET:                                               \
+    offset = instr.target.offset;                                              \
+    break;                                                                     \
+  case AARCH64_TARGET_TY_BASICBLOCK: {                                         \
+    signed long long cur_pos = aarch64_emitted_count(emitter);                 \
+    signed long long target_pos =                                              \
+        cg_get_next_instr(instr.target.basicblock->cg_basicblock)->id;         \
+                                                                               \
+    offset = (target_pos - cur_pos);                                           \
+    break;                                                                     \
+  }                                                                            \
+  case AARCH64_TARGET_TY_SYMBOL:                                               \
+    /* will be relocated */                                                    \
+    offset = 0;                                                                \
+    break;                                                                     \
+  }
+
 // NOTE: this relies on sequential ids
 
 void aarch64_emit_b_cond(struct aarch64_emitter *emitter,
                          const struct aarch64_conditional_branch br) {
-  signed long long cur_pos = (signed long long)aarch64_emitted_count(emitter);
-  signed long long target_pos =
-      (signed long long)cg_get_next_instr(br.target->cg_basicblock)->id;
-
-  simm_t offset = target_pos - cur_pos;
+  simm_t offset = 0;
+  OFFSET(br);
 
   aarch64_emit_instr(emitter, B_COND(offset, br.cond));
 }
 
 void aarch64_emit_bc_cond(struct aarch64_emitter *emitter,
                           const struct aarch64_conditional_branch br) {
-  signed long long cur_pos = (signed long long)aarch64_emitted_count(emitter);
-  signed long long target_pos =
-      (signed long long)cg_get_next_instr(br.target->cg_basicblock)->id;
-
-  simm_t offset = target_pos - cur_pos;
+  simm_t offset = 0;
+  OFFSET(br);
 
   aarch64_emit_instr(emitter, BC_COND(offset, br.cond));
 }
 
 void aarch64_emit_b(struct aarch64_emitter *emitter,
                     const struct aarch64_branch b) {
-  signed long long cur_pos = (signed long long)aarch64_emitted_count(emitter);
-  signed long long target_pos =
-      (signed long long)cg_get_next_instr(b.target->cg_basicblock)->id;
-
-  simm_t offset = target_pos - cur_pos;
+  simm_t offset = 0;
+  OFFSET(b);
 
   aarch64_emit_instr(emitter, B(offset));
 }
@@ -996,15 +1006,8 @@ void aarch64_emit_br(struct aarch64_emitter *emitter,
 
 void aarch64_emit_bl(struct aarch64_emitter *emitter,
                      const struct aarch64_branch bl) {
-
   simm_t offset = 0;
-  if (bl.target) {
-    signed long long cur_pos = (signed long long)aarch64_emitted_count(emitter);
-    signed long long target_pos =
-        (signed long long)cg_get_next_instr(bl.target->cg_basicblock)->id;
-
-    offset = target_pos - cur_pos;
-  }
+  OFFSET(bl);
 
   aarch64_emit_instr(emitter, BL(offset));
 }
@@ -1016,22 +1019,16 @@ void aarch64_emit_blr(struct aarch64_emitter *emitter,
 
 void aarch64_emit_cbz(struct aarch64_emitter *emitter,
                       const struct aarch64_compare_and_branch cmp) {
-  signed long long cur_pos = (signed long long)aarch64_emitted_count(emitter);
-  signed long long target_pos =
-      (signed long long)cg_get_next_instr(cmp.target->cg_basicblock)->id;
-
-  simm_t offset = target_pos - cur_pos;
+  simm_t offset = 0;
+  OFFSET(cmp);
 
   aarch64_emit_instr(emitter, CBZ(SF_FOR_REG(cmp.cmp), offset, cmp.cmp.idx));
 }
 
 void aarch64_emit_cbnz(struct aarch64_emitter *emitter,
                        const struct aarch64_compare_and_branch cmp) {
-  signed long long cur_pos = (signed long long)aarch64_emitted_count(emitter);
-  signed long long target_pos =
-      (signed long long)cg_get_next_instr(cmp.target->cg_basicblock)->id;
-
-  simm_t offset = target_pos - cur_pos;
+  simm_t offset = 0;
+  OFFSET(cmp);
 
   aarch64_emit_instr(emitter, CBNZ(SF_FOR_REG(cmp.cmp), offset, cmp.cmp.idx));
 }

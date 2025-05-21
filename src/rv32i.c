@@ -39,20 +39,18 @@ const struct target RV32I_LINUX_TARGET = {
         rv32i_lower,
         rv32i_lower_func_ty,
     },
-    {
-        .ty = CODEGEN_UNIT_TY_RV32I,
-        .instr_sz = sizeof(struct rv32i_instr),
-        .function_align = RV32I_FUNCTION_ALIGNMENT,
-        .codegen_start = rv32i_codegen_start,
-        .codegen_basicblock = rv32i_codegen_basicblock,
-        .codegen_end = rv32i_codegen_end,
-    },
+    {.ty = CODEGEN_UNIT_TY_RV32I,
+     .instr_sz = sizeof(struct rv32i_instr),
+     .function_align = RV32I_FUNCTION_ALIGNMENT,
+     .codegen_start = rv32i_codegen_start,
+     .codegen_basicblock = rv32i_codegen_basicblock,
+     .codegen_end = rv32i_codegen_end,
+     .debug_codegen_entry = rv32i_debug_print_codegen_entry},
     rv32i_emit,
     // rv32i_write_object,
     write_elf,
     linux_link_objects,
     objdump_debug_disasm,
-    rv32i_debug_print_codegen,
     rv32i_emit_asm};
 
 #endif

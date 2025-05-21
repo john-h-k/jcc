@@ -1080,7 +1080,6 @@ void lower_call(struct ir_func *func, const struct ir_op_use_map *use_map,
 
     op->var_ty = IR_VAR_TY_NONE;
   }
-
   for (size_t i = 0; i < op->call.num_args; i++) {
     struct ir_op *arg = op->call.args[i];
     DEBUG_ASSERT(i < func_info.call_info.num_params, "out of range");

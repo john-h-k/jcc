@@ -2232,61 +2232,55 @@ void x64_debug_print_instr(FILE *file, UNUSED_ARG(const struct cg_func *func),
   }
 }
 
-void x64_debug_print_codegen(FILE *file, struct cg_unit *unit) {
-  DEBUG_ASSERT(unit->ty == CODEGEN_UNIT_TY_X64, "expected x64");
+void x64_debug_print_codegen_entry(FILE *file, const struct cg_entry *entry) {
+  if (entry->ty != CG_ENTRY_TY_FUNC) {
+    fprintf(file, "DATA: %s\n\n", entry->name);
+    return;
+  }
 
-  for (size_t i = 0; i < unit->num_entries; i++) {
-    struct cg_entry *entry = &unit->entries[i];
+  const struct cg_func *func = &entry->func;
 
-    if (entry->ty != CG_ENTRY_TY_FUNC) {
-      fprintf(file, "DATA: %s\n\n", entry->name);
-      continue;
-    }
+  fprintf(file, "\nFUNCTION: %s\n", entry->name);
+  fprintf(file, "  prologue: %s\n", entry->func.prologue ? "true" : "false");
+  fprintf(file, "  stack_size: %zu\n", entry->func.stack_size);
+  fprintf(file, "\n");
 
-    struct cg_func *func = &entry->func;
+  int op_pad = /* guess */ 50;
 
-    fprintf(file, "\nFUNCTION: %s\n", entry->name);
-    fprintf(file, "  prologue: %s\n", entry->func.prologue ? "true" : "false");
-    fprintf(file, "  stack_size: %zu\n", entry->func.stack_size);
-    fprintf(file, "\n");
+  bool supports_pos = ftell(file) != -1;
 
-    int op_pad = /* guess */ 50;
+  size_t offset = 0;
 
-    bool supports_pos = ftell(file) != -1;
+  struct cg_basicblock *basicblock = func->first;
+  while (basicblock) {
+    struct cg_instr *instr = basicblock->first;
+    while (instr) {
+      long pos = ftell(file);
 
-    size_t offset = 0;
+      fprintf(file, "%04zu: ", offset++);
+      x64_debug_print_instr(file, func, instr);
 
-    struct cg_basicblock *basicblock = func->first;
-    while (basicblock) {
-      struct cg_instr *instr = basicblock->first;
-      while (instr) {
-        long pos = ftell(file);
-
-        fprintf(file, "%04zu: ", offset++);
-        x64_debug_print_instr(file, func, instr);
-
-        if (supports_pos && ftell(file) == pos) {
-          // no line was written
-          continue;
-        }
-
-        long width = ftell(file) - pos;
-        long pad = op_pad - width;
-
-        if (pad > 0) {
-          fprintf(file, "%*s", (int)pad, "");
-        }
-
-        if (instr->op) {
-          fprintf(file, "| op = %%%zu", instr->op->id);
-        }
-        fprintf(file, "\n");
-
-        instr = instr->succ;
+      if (supports_pos && ftell(file) == pos) {
+        // no line was written
+        continue;
       }
 
-      basicblock = basicblock->succ;
+      long width = ftell(file) - pos;
+      long pad = op_pad - width;
+
+      if (pad > 0) {
+        fprintf(file, "%*s", (int)pad, "");
+      }
+
+      if (instr->op) {
+        fprintf(file, "| op = %%%zu", instr->op->id);
+      }
+      fprintf(file, "\n");
+
+      instr = instr->succ;
     }
-    fprintf(file, "\n");
+
+    basicblock = basicblock->succ;
   }
+  fprintf(file, "\n");
 }

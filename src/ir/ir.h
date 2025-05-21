@@ -244,7 +244,8 @@ enum ir_var_ty_ty {
 
 enum FLAG_ENUM ir_var_func_ty_flags {
   IR_VAR_FUNC_TY_FLAG_NONE = 0,
-  IR_VAR_FUNC_TY_FLAG_VARIADIC = 1 << 0
+  IR_VAR_FUNC_TY_FLAG_VARIADIC = 1 << 0,
+  IR_VAR_FUNC_TY_FLAG_STRUCT_RET = 1 << 1
 };
 
 struct ir_var_func_ty {

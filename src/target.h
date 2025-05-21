@@ -158,7 +158,6 @@ typedef void (*build_object)(const struct build_object_args *args);
 typedef enum link_result (*link_objects)(const struct link_args *args);
 typedef void (*debug_disasm)(enum compile_target target, const char *filename,
                              const char *output);
-typedef void (*debug_print_codegen)(FILE *file, struct cg_unit *unit);
 
 enum target_id {
   TARGET_ID_NOT_SUPPORTED,
@@ -206,6 +205,9 @@ typedef void (*emit_asm)(FILE *file, struct cg_unit *unit,
 typedef struct cg_entry (*target_codegen_var)(struct cg_unit *unit,
                                               struct ir_glb *glb);
 
+typedef void (*debug_print_codegen_entry)(FILE *file,
+                                          const struct cg_entry *entry);
+
 struct codegen_info {
   enum cg_unit_ty ty;
   size_t instr_sz;
@@ -213,6 +215,7 @@ struct codegen_info {
   target_codegen codegen_start;
   target_codegen_basicblock codegen_basicblock;
   target_codegen codegen_end;
+  debug_print_codegen_entry debug_codegen_entry;
 };
 
 typedef void (*target_lower_variadic)(struct ir_func *func);
@@ -254,7 +257,6 @@ struct target {
   build_object build_object;
   link_objects link_objects;
   debug_disasm debug_disasm;
-  debug_print_codegen debug_print_codegen;
   emit_asm emit_asm;
 };
 

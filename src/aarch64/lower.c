@@ -589,12 +589,30 @@ struct ir_func_info aarch64_lower_func_ty(struct ir_func *func,
     break;
   }
 
+  // FIXME: we need to not use x8 if it is used for return pointer
+
   size_t ngrn = 0;
   size_t nsrn = 0;
   size_t nsaa = 0;
 
   size_t num = MAX(func_ty.num_params, num_args);
+
   for (size_t i = 0; i < num; i++) {
+    if (!i && (func_ty.flags & IR_VAR_FUNC_TY_FLAG_STRUCT_RET)) {
+      struct ir_param_info param_info = (struct ir_param_info){
+          .ty = IR_PARAM_INFO_TY_REGISTER,
+          .var_ty = func_ty.ret_ty,
+          .num_regs = 1,
+          // macOS/linux implicit ret is x8
+          // NOTE: on windows it is x0
+          .regs[0] = {.reg = {.ty = IR_REG_TY_INTEGRAL, .idx = 8}, .size = 8},
+      };
+
+      vector_push_back(param_infos, &param_info);
+
+      continue;
+    }
+
     const struct ir_var_ty *var_ty;
 
     bool variadic;

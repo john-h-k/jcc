@@ -354,13 +354,37 @@ struct aarch64_conditional_select {
   struct aarch64_reg dest;
 };
 
+enum aarch64_target_ty {
+  AARCH64_TARGET_TY_OFFSET,
+  AARCH64_TARGET_TY_BASICBLOCK,
+  AARCH64_TARGET_TY_SYMBOL,
+};
+
+struct aarch64_target {
+  enum aarch64_target_ty ty;
+
+  union {
+    simm_t offset;
+    struct ir_basicblock *basicblock;
+    struct cg_entry *symbol;
+  };
+};
+
+#define AARCH64_BASICBLOCK_TARGET(value)                                       \
+  ((struct aarch64_target){.ty = AARCH64_TARGET_TY_BASICBLOCK,                 \
+                           .basicblock = (value)})
+#define AARCH64_OFFSET_TARGET(value)                                           \
+  ((struct aarch64_target){.ty = AARCH64_TARGET_TY_OFFSET, .offset = (value)})
+#define AARCH64_SYMBOL_TARGET(value)                                           \
+  ((struct aarch64_target){.ty = AARCH64_TARGET_TY_SYMBOL, .symbol = (value)})
+
 struct aarch64_conditional_branch {
   enum aarch64_cond cond;
-  struct ir_basicblock *target;
+  struct aarch64_target target;
 };
 
 struct aarch64_branch {
-  struct ir_basicblock *target;
+  struct aarch64_target target;
 };
 
 struct aarch64_branch_reg {
@@ -369,7 +393,7 @@ struct aarch64_branch_reg {
 
 struct aarch64_compare_and_branch {
   struct aarch64_reg cmp;
-  struct ir_basicblock *target;
+  struct aarch64_target target;
 };
 
 enum aarch64_lsl {
@@ -569,6 +593,7 @@ void aarch64_codegen_basicblock(struct cg_state *state,
                                 struct ir_basicblock *basicblock);
 void aarch64_codegen_end(struct cg_state *state);
 
-void aarch64_debug_print_codegen(FILE *file, struct cg_unit *unit);
+void aarch64_debug_print_codegen_entry(FILE *file,
+                                       const struct cg_entry *entry);
 
 #endif

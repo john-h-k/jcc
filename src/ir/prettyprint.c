@@ -365,10 +365,11 @@ static void debug_print_glb_name(FILE *file, struct arena_allocator *arena,
     const char *name = glb->name;
 
     if (opts->demangle_sym) {
-      name = opts->demangle_sym(arena, glb->name);
+      const char *demangled = opts->demangle_sym(arena, glb->name);
+      fprintf(file, "%s (demangled: %s)", name, demangled);
+    } else {
+      fprintf(file, "%s", name);
     }
-
-    fprintf(file, "%s", name);
   }
 }
 

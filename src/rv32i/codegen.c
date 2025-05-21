@@ -1687,7 +1687,7 @@ static const char *FP_REG_ABI_NAMES[] = {
 
 struct codegen_debug_state {
   FILE *file;
-  struct cg_func *func;
+  const struct cg_func *func;
   struct cg_instr *instr;
 };
 
@@ -2576,42 +2576,36 @@ static void print_instr(const struct codegen_debug_state *state,
   }
 }
 
-void rv32i_debug_print_codegen(FILE *file, struct cg_unit *unit) {
-  DEBUG_ASSERT(unit->ty == CODEGEN_UNIT_TY_RV32I, "expected rv32i");
-
-  for (size_t i = 0; i < unit->num_entries; i++) {
-    struct cg_entry *entry = &unit->entries[i];
-
-    if (entry->ty != CG_ENTRY_TY_FUNC) {
-      continue;
-    }
-
-    struct cg_func *func = &entry->func;
-
-    fprintf(file, "\nFUNCTION: %s\n", entry->name);
-    fprintf(file, "  prologue: %s\n", entry->func.prologue ? "true" : "false");
-    fprintf(file, "  stack_size: %zu\n", entry->func.stack_size);
-    fprintf(file, "\n");
-
-    size_t offset = 0;
-    struct cg_basicblock *basicblock = func->first;
-    while (basicblock) {
-      struct cg_instr *instr = basicblock->first;
-      while (instr) {
-        struct codegen_debug_state state = {
-            .file = file, .func = func, .instr = instr};
-
-        fprintf(file, "%04zu: ", offset++ * 4);
-        print_instr(&state, CODEGEN_FLAG_NONE, instr);
-        fprintf(file, "\n");
-
-        instr = instr->succ;
-      }
-      basicblock = basicblock->succ;
-    }
-
-    fprintf(file, "\n");
+void rv32i_debug_print_codegen_entry(FILE *file, const struct cg_entry *entry) {
+  if (entry->ty != CG_ENTRY_TY_FUNC) {
+    return;
   }
+
+  const struct cg_func *func = &entry->func;
+
+  fprintf(file, "\nFUNCTION: %s\n", entry->name);
+  fprintf(file, "  prologue: %s\n", entry->func.prologue ? "true" : "false");
+  fprintf(file, "  stack_size: %zu\n", entry->func.stack_size);
+  fprintf(file, "\n");
+
+  size_t offset = 0;
+  struct cg_basicblock *basicblock = func->first;
+  while (basicblock) {
+    struct cg_instr *instr = basicblock->first;
+    while (instr) {
+      struct codegen_debug_state state = {
+          .file = file, .func = func, .instr = instr};
+
+      fprintf(file, "%04zu: ", offset++ * 4);
+      print_instr(&state, CODEGEN_FLAG_NONE, instr);
+      fprintf(file, "\n");
+
+      instr = instr->succ;
+    }
+    basicblock = basicblock->succ;
+  }
+
+  fprintf(file, "\n");
 }
 
 void rv32i_emit_asm(FILE *file, struct cg_unit *unit,
