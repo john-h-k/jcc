@@ -219,7 +219,7 @@ static void ir_write_ssa_i128(struct ir_ssa_slot *slot, i128 value) {
   slot->i128 = value;
 }
 
-#if __clang__
+#if ARCH_AARCH64
 static void ir_write_ssa_f16(struct ir_ssa_slot *slot, f16 value) {
 #else
 static void ir_write_ssa_f16(struct ir_ssa_slot *slot, f32 value) {
