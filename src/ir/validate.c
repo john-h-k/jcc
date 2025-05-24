@@ -1071,6 +1071,8 @@ void ir_validate_object(struct ir_unit *unit, struct ir_object object,
 void ir_validate(struct ir_unit *iru, enum ir_validate_flags flags) {
   struct ir_glb *glb = iru->first_global;
 
+  ir_rebuild_glb_ids(iru);
+
   struct ir_validate_state state = {
       .unit = iru,
       .flags = flags,
