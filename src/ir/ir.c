@@ -3054,6 +3054,8 @@ struct ir_glb_use_info ir_build_glb_usage_info(struct ir_unit *unit) {
 }
 
 void ir_eliminate_dead_glbs(struct ir_unit *unit) {
+  ir_rebuild_glb_ids(unit);
+
   bool eliminated = true;
   while (eliminated) {
     eliminated = false;
