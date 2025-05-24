@@ -60,7 +60,7 @@ struct ir_interp_ptr {
 };
 
 static struct ir_interp_ptr ptr_from_addr(ptr_t addr) {
-  static_assert(sizeof(ptr_t) == 8);
+  static_assert(sizeof(ptr_t) == 8, "expected 8b ptr");
 
   enum ir_interp_ptr_ty ty = addr >> 62;
 
@@ -219,14 +219,20 @@ static void ir_write_ssa_i128(struct ir_ssa_slot *slot, i128 value) {
   slot->i128 = value;
 }
 
+#if __clang__
 static void ir_write_ssa_f16(struct ir_ssa_slot *slot, f16 value) {
+#else
+static void ir_write_ssa_f16(struct ir_ssa_slot *slot, f32 value) {
+#endif
   slot->ty = IR_SLOT_TY_F16;
   slot->f16 = value;
 }
+
 static void ir_write_ssa_f32(struct ir_ssa_slot *slot, f32 value) {
   slot->ty = IR_SLOT_TY_F32;
   slot->f32 = value;
 }
+
 static void ir_write_ssa_f64(struct ir_ssa_slot *slot, f64 value) {
   slot->ty = IR_SLOT_TY_F64;
   slot->f64 = value;
@@ -1501,8 +1507,8 @@ static void ir_interp_write_var_value(struct ir_interp *interp, size_t offset,
   case IR_VAR_TY_TY_FUNC:
     BUG("func can not have data as a global var");
 
-    // FIXME: some bugs here around using compiler-ptr-size when we mean to use
-    // target-ptr-size
+    // FIXME: some bugs here around using compiler-ptr-size when we mean to
+    // use target-ptr-size
 
   case IR_VAR_TY_TY_POINTER:
   case IR_VAR_TY_TY_ARRAY:
@@ -1600,7 +1606,8 @@ struct ir_interp *ir_interp_create(struct ir_interp_create_args args) {
   struct ir_interp *interp = aralloc(arena, sizeof(*interp));
 
   // when using ustr_t, will need to change to ustr_keyed hashtbl
-  static_assert(sizeof(args.unit->first_global->name) == sizeof(char *));
+  static_assert(sizeof(args.unit->first_global->name) == sizeof(char *),
+                "unexpected size");
 
   struct ir_unit *unit = args.unit;
 
