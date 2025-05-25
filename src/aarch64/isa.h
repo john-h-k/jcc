@@ -179,7 +179,7 @@
 #define FP_1_REG(M, S, ftype, opcode, Rn, Rd)                                  \
   (uint32_t)((U32(M) << 31) | (U32(S) << 29) | (U32(0b11110) << 24) |          \
              (U32(ftype) << 22) | (U32(0b1) << 21) | (U32(opcode) << 15) |     \
-             (U32(0b10) << 10) | (U32(Rn) << 5) | U32(Rd))
+             (U32(0b10000) << 10) | (U32(Rn) << 5) | U32(Rd))
 
 #define FMOV_S_TO_S(Rn, Rd) FP_1_REG(0b0, 0b0, 0b00, 0b000000, Rn, Rd)
 #define FMOV_D_TO_D(Rn, Rd) FP_1_REG(0b0, 0b0, 0b01, 0b000000, Rn, Rd)

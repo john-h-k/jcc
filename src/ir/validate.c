@@ -516,8 +516,8 @@ static void ir_validate_op(struct ir_validate_state *state,
       break;
     case IR_OP_STORE_TY_ADDR: {
       VALIDATION_CHECKZ(
-          validate_var_ty_is_pointer(state, &op->store.addr->var_ty), op,
-          "address must have type pointer");
+          validate_var_ty_is_pointer(state, &op->store_bitfield.addr->var_ty),
+          op, "address must have type pointer");
 
       // struct ir_op *addr = op->store_bitfield.addr;
       // if (addr->ty == IR_OP_TY_ADDR) {
