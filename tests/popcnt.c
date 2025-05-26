@@ -1,4 +1,7 @@
 // expected value: 0
+// arch: aarch64
+
+// TODO: these intrinsics on other platforms
 
 int main() {
   int a = 7;
