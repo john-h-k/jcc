@@ -73,8 +73,7 @@ Working with RISC-V requires installing a RISC-V linker.
 * C11-compliant C compiler
 * Bash, version >=3
 * CMake
-* A few other tools are used by `jcc.sh` commands to make for a more pleasant experience, but are not needed. These include `bat` (for syntax-highlighting), `fd`, and `rg`</li>
-
+* A few other tools are used by `jcc.sh` commands to make for a more pleasant experience, but are not needed. These include `bat` (for syntax-highlighting), `fd`, and `rg`
 
 </div>
 
