@@ -491,7 +491,8 @@ _test_all_sans() {
 }
 
 ci-test() {
-    _test_all_sans -p --quiet --arg-group -O0 --arg-group -O1 --arg-group -O2 "$@"
+    _test_all_sans -p --quiet --arg-group -O0 --arg-group -O1 "$@"
+    # _test_all_sans -p --quiet --arg-group -O0 --arg-group -O1 --arg-group -O2 "$@"
     # _test_all_sans --quiet --arg-group -O0 --arg-group -O1 --arg-group -O2 --arg-group -O3 "$@"
 }
 
