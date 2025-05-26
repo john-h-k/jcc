@@ -302,6 +302,11 @@ set_target_properties(libjcc PROPERTIES OUTPUT_NAME jcc)
 add_executable(jcc src/main.c)
 target_link_libraries(jcc PRIVATE libjcc m pthread)
 
-# test
-add_executable(test src/test.c)
-target_link_libraries(test PRIVATE libjcc m pthread)
+
+if(NOT CMAKE_C_COMPILER_ID STREQUAL "JCC")
+  # currently can't bootstrap test due to atomic usage
+
+  # test
+  add_executable(test src/test.c)
+  target_link_libraries(test PRIVATE libjcc m pthread)
+endif()

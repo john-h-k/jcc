@@ -33,7 +33,13 @@ typedef uint8_t i8;
 typedef uint16_t i16;
 typedef uint32_t i32;
 typedef uint64_t i64;
+
+#ifdef HAS_INT128
 typedef uint128_t i128;
+#else
+// FIXME: just fake it via i64
+typedef uint64_t i128;
+#endif
 
 typedef int8_t s8;
 typedef int16_t s16;
@@ -90,21 +96,33 @@ enum ir_slot_ty {
   IR_SLOT_TY_AGGREGATE,
 };
 
+// BUG: jcc parses `i8 i8` as two type specifiers
+// so have dupe name here
+typedef i1 i1_t;
+typedef i8 i8_t;
+typedef i16 i16_t;
+typedef i32 i32_t;
+typedef i64 i64_t;
+typedef i128 i128_t;
+typedef f16 f16_t;
+typedef f32 f32_t;
+typedef f64 f64_t;
+
 struct ir_ssa_slot {
   struct ir_op *op;
 
   enum ir_slot_ty ty;
   union {
-    i1 i1;
-    i8 i8;
-    i16 i16;
-    i32 i32;
-    i64 i64;
-    i128 i128;
+    i1_t i1;
+    i8_t i8;
+    i16_t i16;
+    i32_t i32;
+    i64_t i64;
+    i128_t i128;
 
-    f16 f16;
-    f32 f32;
-    f64 f64;
+    f16_t f16;
+    f32_t f32;
+    f64_t f64;
 
     ptr_t ptr;
 
@@ -248,6 +266,7 @@ static void ir_write_ssa_invalid(struct ir_ssa_slot *slot) {
   memset(&slot->buf, INVALID_BYTE, sizeof(slot->buf));
 }
 
+#ifdef HAS_INT128
 #define ir_write_ssa_slot(slot, value)                                         \
   _Generic((value),                                                            \
       i1: ir_write_ssa_i1,                                                     \
@@ -260,6 +279,19 @@ static void ir_write_ssa_invalid(struct ir_ssa_slot *slot) {
       f32: ir_write_ssa_f32,                                                   \
       f64: ir_write_ssa_f64,                                                   \
       void *: ir_write_ssa_ptr)((slot), (value))
+#else
+#define ir_write_ssa_slot(slot, value)                                         \
+  _Generic((value),                                                            \
+      i1: ir_write_ssa_i1,                                                     \
+      i8: ir_write_ssa_i8,                                                     \
+      i16: ir_write_ssa_i16,                                                   \
+      i32: ir_write_ssa_i32,                                                   \
+      i64: ir_write_ssa_i64,                                                   \
+      f16: ir_write_ssa_f16,                                                   \
+      f32: ir_write_ssa_f32,                                                   \
+      f64: ir_write_ssa_f64,                                                   \
+      void *: ir_write_ssa_ptr)((slot), (value))
+#endif
 
 static void ir_write_slot_int(struct ir_ssa_slot *slot, enum ir_slot_ty ty,
                               i64 value) {

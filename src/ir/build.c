@@ -186,6 +186,14 @@ static bool ir_var_ty_needs_cast_op(struct ir_func_builder *irb,
     return true;
   }
 
+  if (l->ty == IR_VAR_TY_TY_PRIMITIVE &&
+      l->primitive == IR_VAR_PRIMITIVE_TY_I8 &&
+      r->ty == IR_VAR_TY_TY_PRIMITIVE &&
+      r->primitive == IR_VAR_PRIMITIVE_TY_I1) {
+    // i1 -> i8 is nop as bool must be 0/1
+    return false;
+  }
+
   if (((l->ty == IR_VAR_TY_TY_PRIMITIVE && ir_var_ty_is_integral(l) &&
         ir_var_ty_info(irb->unit, l).size == pointer_size) ||
        l->ty == IR_VAR_TY_TY_POINTER) &&
