@@ -38,6 +38,8 @@ jobs:
         with:
           source: ./docs
           destination: ./_site
+          button_text: Repo
+          button_link: "https://github.com/john-h-k/jcc"
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
 
