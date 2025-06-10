@@ -442,9 +442,6 @@ static void lower_mem_set(struct ir_func *func, struct ir_op *op) {
     return;
   }
 
-  struct ir_glb *memset =
-      ir_add_well_known_global(func->unit, IR_WELL_KNOWN_GLB_MEMSET);
-
   struct ir_op *value_cnst =
       ir_insert_before_op(func, op, IR_OP_TY_CNST, IR_VAR_TY_I32);
   value_cnst->cnst = (struct ir_op_cnst){.ty = IR_OP_CNST_TY_INT,
@@ -457,31 +454,7 @@ static void lower_mem_set(struct ir_func *func, struct ir_op *op) {
   length_cnst->cnst = (struct ir_op_cnst){.ty = IR_OP_CNST_TY_INT,
                                           .int_value = op->mem_set.length};
 
-  struct ir_op *memset_addr =
-      ir_insert_after_op(func, length_cnst, IR_OP_TY_ADDR, ptr_int);
-  memset_addr->flags |= IR_OP_FLAG_CONTAINED;
-  memset_addr->addr = (struct ir_op_addr){
-      .ty = IR_OP_ADDR_TY_GLB,
-      .glb = memset,
-  };
-
-  size_t num_args = 3;
-  struct ir_op **args = aralloc(func->arena, sizeof(struct ir_op *) * num_args);
-
-  args[0] = addr;
-  args[1] = value_cnst;
-  args[2] = length_cnst;
-
-  func->flags |= IR_FUNC_FLAG_MAKES_CALL;
-  op->ty = IR_OP_TY_CALL;
-  op->var_ty = *memset->var_ty.func.ret_ty;
-  op->call = (struct ir_op_call){
-      .target = memset_addr,
-      .num_args = num_args,
-      .args = args,
-      .func_ty = memset->var_ty,
-  };
-
+  op = ir_mk_wk_memset(func, op, addr, value_cnst, length_cnst);
   lower_call(func, NULL, op);
 }
 
@@ -566,34 +539,7 @@ static void lower_mem_copy(struct ir_func *func, struct ir_op *op) {
       ir_insert_before_op(func, op, IR_OP_TY_CNST, IR_VAR_TY_NONE);
   ir_mk_pointer_constant(func->unit, size, op->mem_copy.length);
 
-  struct ir_glb *memmove =
-      ir_add_well_known_global(func->unit, IR_WELL_KNOWN_GLB_MEMMOVE);
-
-  struct ir_var_ty ptr_int = ir_var_ty_for_pointer_size(func->unit);
-  struct ir_op *memmove_addr =
-      ir_insert_before_op(func, op, IR_OP_TY_ADDR, ptr_int);
-  memmove_addr->flags |= IR_OP_FLAG_CONTAINED;
-  memmove_addr->addr = (struct ir_op_addr){
-      .ty = IR_OP_ADDR_TY_GLB,
-      .glb = memmove,
-  };
-
-  size_t num_args = 3;
-  struct ir_op **args = aralloc(func->arena, sizeof(struct ir_op *) * num_args);
-
-  args[0] = dest;
-  args[1] = source;
-  args[2] = size;
-
-  func->flags |= IR_FUNC_FLAG_MAKES_CALL;
-  op->ty = IR_OP_TY_CALL;
-  op->var_ty = *memmove->var_ty.func.ret_ty;
-  op->call = (struct ir_op_call){
-      .target = memmove_addr,
-      .num_args = num_args,
-      .args = args,
-      .func_ty = memmove->var_ty,
-  };
+  op = ir_mk_wk_memmove(func, op, dest, source, size);
 
   lower_call(func, NULL, op);
   lower_call_registers(func, op);
@@ -612,35 +558,9 @@ static void lower_mem_eq(struct ir_func *func, struct ir_op *op) {
       ir_insert_before_op(func, op, IR_OP_TY_CNST, IR_VAR_TY_NONE);
   ir_mk_pointer_constant(func->unit, size, op->mem_eq.length);
 
-  struct ir_glb *memcmp =
-      ir_add_well_known_global(func->unit, IR_WELL_KNOWN_GLB_MEMCMP);
-
-  struct ir_var_ty ptr_int = ir_var_ty_for_pointer_size(func->unit);
-  struct ir_op *memcmp_addr =
-      ir_insert_before_op(func, op, IR_OP_TY_ADDR, ptr_int);
-  memcmp_addr->flags |= IR_OP_FLAG_CONTAINED;
-  memcmp_addr->addr = (struct ir_op_addr){
-      .ty = IR_OP_ADDR_TY_GLB,
-      .glb = memcmp,
-  };
-
-  size_t num_args = 3;
-  struct ir_op **args = aralloc(func->arena, sizeof(struct ir_op *) * num_args);
-
-  args[0] = lhs;
-  args[1] = rhs;
-  args[2] = size;
-
-  func->flags |= IR_FUNC_FLAG_MAKES_CALL;
-
   struct ir_op *call =
       ir_insert_before_op(func, op, IR_OP_TY_CALL, IR_VAR_TY_I32);
-  call->call = (struct ir_op_call){
-      .target = memcmp_addr,
-      .num_args = num_args,
-      .args = args,
-      .func_ty = memcmp->var_ty,
-  };
+  call = ir_mk_wk_memcmp(func, call, lhs, rhs, size);
 
   struct ir_op *zero =
       ir_insert_before_op(func, op, IR_OP_TY_CNST, IR_VAR_TY_NONE);

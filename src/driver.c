@@ -445,14 +445,14 @@ try_get_compile_args(int argc, char **argv, struct parsed_args *args,
   return PARSE_ARGS_RESULT_SUCCESS;
 }
 
-static void signal_handle(UNUSED int signal) {
-  debug_print_stack_trace(); // NOLINT(bugprone-signal-handler)
-}
+// static void signal_handle(UNUSED int signal) {
+//   debug_print_stack_trace(); // NOLINT(bugprone-signal-handler)
+// }
 
 void jcc_init(void) {
-  signal(SIGTRAP, signal_handle);
-  signal(SIGABRT, signal_handle);
-  signal(SIGSEGV, signal_handle);
+  // signal(SIGTRAP, signal_handle);
+  // signal(SIGABRT, signal_handle);
+  // signal(SIGSEGV, signal_handle);
 
   // we want to use the user's locale i think?
   // TODO: remove this
@@ -514,10 +514,14 @@ static int jcc_driver_lsp(struct arena_allocator *arena, struct fs *fs,
                           struct compile_args compile_args,
                           const struct target *target);
 
+#if JCC_INTERP
+
 static int jcc_driver_interp(UNUSED struct arena_allocator *arena,
                              struct fs *fs, UNUSED struct parsed_args args,
                              struct compile_args compile_args,
                              const struct target *target, const char *source);
+
+#endif
 
 static int jcc_driver_compiler(struct arena_allocator *arena, struct fs *fs,
                                struct parsed_args args,
@@ -564,7 +568,12 @@ int jcc_main(int argc, char **argv) {
                               num_sources, sources);
     break;
   case JCC_DRIVER_INTERP:
+#if JCC_INTERP
     exc = jcc_driver_interp(arena, fs, args, compile_args, target, sources[0]);
+#else
+    err("jcc was not built with interpreter support");
+    exc = 1;
+#endif
     break;
   case JCC_DRIVER_LSP:
     exc = jcc_driver_lsp(arena, fs, args, compile_args, target);
@@ -583,6 +592,8 @@ static int jcc_driver_lsp(struct arena_allocator *arena, struct fs *fs,
                           const struct target *target) {
   return lsp_run(arena, fs, args, compile_args, target);
 }
+
+#if JCC_INTERP
 
 static int jcc_driver_interp(UNUSED struct arena_allocator *arena,
                              struct fs *fs, UNUSED struct parsed_args args,
@@ -627,6 +638,8 @@ static int jcc_driver_interp(UNUSED struct arena_allocator *arena,
 
   return result.exc;
 }
+
+#endif
 
 static int jcc_driver_compiler(struct arena_allocator *arena, struct fs *fs,
                                struct parsed_args args,

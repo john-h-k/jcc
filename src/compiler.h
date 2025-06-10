@@ -257,12 +257,17 @@ enum compiler_create_result
 compiler_create_for_ir(const struct compiler_ir_create_args *args,
                        struct compiler **compiler);
 
+#if JCC_INTERP
+
 struct interp_result {
   enum compile_result compile_result;
   int exc;
 };
 
 struct interp_result interp(struct compiler *compiler);
+
+#endif
+
 enum compile_result compile(struct compiler *compiler);
 
 struct ir_unit;

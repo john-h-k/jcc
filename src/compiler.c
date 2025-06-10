@@ -419,6 +419,7 @@ static enum compile_result compile_stage_preproc(struct compiler *compiler,
   FILE *file;
   const char *path;
   compiler_open_file(compiler->output, &file, &path);
+
   if (!file) {
     return COMPILE_RESULT_BAD_FILE;
   }
@@ -887,13 +888,17 @@ compile_stage_build_object(struct compiler *compiler,
     COMPILER_STAGE_NO_LOG(stage, lo, __VA_ARGS__);                             \
   }
 
-static enum compile_result compile_to_ir(struct compiler *compiler,
+// FIXME: bool param is hacky
+static enum compile_result compile_to_ir(struct compiler *compiler, bool *done,
                                          struct ir_unit **unit) {
+  *done = false;
+
   if (compiler->args.preproc_only) {
     // preproc is kept local as it is seperate to other stages
 
     COMPILER_STAGE(PREPROC, preproc, NULL);
 
+    *done = true;
     return COMPILE_RESULT_SUCCESS;
   }
 
@@ -902,6 +907,7 @@ static enum compile_result compile_to_ir(struct compiler *compiler,
 
     COMPILER_STAGE_NO_LOG(LEX, lex, compiler->mode);
 
+    *done = true;
     return COMPILE_RESULT_SUCCESS;
   }
 
@@ -909,6 +915,7 @@ static enum compile_result compile_to_ir(struct compiler *compiler,
   COMPILER_STAGE(PARSE, parse, &parse_result);
 
   if (compiler->args.parse_only) {
+    *done = true;
     return COMPILE_RESULT_SUCCESS;
   }
 
@@ -918,6 +925,7 @@ static enum compile_result compile_to_ir(struct compiler *compiler,
   if (compiler->args.syntax_only) {
     // if diagnostics occurred, exit will of already occurred via COMPILER_STAGE
     // macro
+    *done = true;
     return COMPILE_RESULT_SUCCESS;
   }
 
@@ -930,7 +938,13 @@ static enum compile_result compile_to_ir(struct compiler *compiler,
 
 enum compile_result compile(struct compiler *compiler) {
   struct ir_unit *unit;
-  enum compile_result result = compile_to_ir(compiler, &unit);
+
+  bool done;
+  enum compile_result result = compile_to_ir(compiler, &done, &unit);
+
+  if (done) {
+    return result;
+  }
 
   if (result != COMPILE_RESULT_SUCCESS) {
     return result;
@@ -939,9 +953,17 @@ enum compile_result compile(struct compiler *compiler) {
   return compile_ir(compiler, unit);
 }
 
+#if JCC_INTERP
+
 struct interp_result interp(struct compiler *compiler) {
   struct ir_unit *unit;
-  enum compile_result result = compile_to_ir(compiler, &unit);
+
+  bool done;
+  enum compile_result result = compile_to_ir(compiler, &done, &unit);
+
+  if (done) {
+    BUG("interp mode but finished before IR build");
+  }
 
   if (result != COMPILE_RESULT_SUCCESS) {
     return (struct interp_result){.compile_result = result};
@@ -954,6 +976,8 @@ struct interp_result interp(struct compiler *compiler) {
 
   return (struct interp_result){.compile_result = result, .exc = info.exc};
 }
+
+#endif
 
 enum compile_result compile_ir(struct compiler *compiler, struct ir_unit *ir) {
   {

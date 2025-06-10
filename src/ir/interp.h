@@ -1,6 +1,8 @@
 #ifndef IR_INTERP_H
 #define IR_INTERP_H
 
+#if JCC_INTERP
+
 #include "../util.h"
 #include "ir.h"
 
@@ -20,5 +22,7 @@ struct ir_interp_exec_info {
 struct ir_interp_exec_info ir_interp_exec(struct ir_interp *interp);
 
 void ir_interp_free(struct ir_interp **interp);
+
+#endif
 
 #endif

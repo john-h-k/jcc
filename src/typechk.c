@@ -27,6 +27,11 @@ struct td_var_ty TD_VAR_TY_CHAR_POINTER = {
 struct td_var_ty TD_VAR_TY_INT_POINTER = {
     .ty = TD_VAR_TY_TY_POINTER,
     .pointer = {.underlying = &TD_VAR_TY_WELL_KNOWN_SIGNED_INT}};
+struct td_var_ty TD_VAR_TY_CONST_VOID_POINTER = {
+    .ty = TD_VAR_TY_TY_POINTER,
+    .type_qualifiers = TD_TYPE_QUALIFIER_FLAG_CONST,
+    .pointer = {.underlying = &TD_VAR_TY_VOID}};
+
 struct td_var_ty TD_VAR_TY_CONST_CHAR_POINTER = {
     .ty = TD_VAR_TY_TY_POINTER,
     .type_qualifiers = TD_TYPE_QUALIFIER_FLAG_CONST,
@@ -663,7 +668,7 @@ static char *tchk_base_type_name(struct typechk *tchk,
   case TD_VAR_TY_TY_ARRAY: {
     const char *el_name = tchk_type_name(tchk, var_ty->array.underlying);
     return aralloc_snprintf(tchk->arena, "%s[%zu]", el_name,
-                                var_ty->array.size);
+                            var_ty->array.size);
   }
 
   case TD_VAR_TY_TY_VARIADIC:
@@ -695,7 +700,7 @@ static char *tchk_base_type_name(struct typechk *tchk,
 
   named: {
     return aralloc_snprintf(tchk->arena, "%s %.*s", kw, (int)name.len,
-                                name.str);
+                            name.str);
   }
   }
 }
@@ -746,9 +751,9 @@ static char *tchk_qualifiers_name(struct typechk *tchk,
 }
 
 char *tchk_type_name(struct typechk *tchk, const struct td_var_ty *var_ty) {
-  return aralloc_snprintf(
-      tchk->arena, "%s%s", tchk_qualifiers_name(tchk, var_ty->type_qualifiers),
-      tchk_base_type_name(tchk, var_ty));
+  return aralloc_snprintf(tchk->arena, "%s%s",
+                          tchk_qualifiers_name(tchk, var_ty->type_qualifiers),
+                          tchk_base_type_name(tchk, var_ty));
 }
 
 enum cast_ty { CAST_TY_NONE, CAST_TY_CAST, CAST_TY_ERR };
@@ -834,9 +839,9 @@ static struct td_expr add_cast_if_needed(struct typechk *tchk,
         MK_SEMANTIC_DIAGNOSTIC(
             CAST, cast, context, MK_INVALID_TEXT_POS(0),
             aralloc_snprintf(tchk->arena,
-                                 "cast is not legal (from '%s' to '%s')",
-                                 tchk_type_name(tchk, &expr.var_ty),
-                                 tchk_type_name(tchk, &target_ty))));
+                             "cast is not legal (from '%s' to '%s')",
+                             tchk_type_name(tchk, &expr.var_ty),
+                             tchk_type_name(tchk, &target_ty))));
 
     return expr;
   }
@@ -1359,8 +1364,8 @@ static struct td_var_ty td_var_ty_for_struct_or_union(
   size_t num_var_decls = vector_length(var_decls);
 
   var_ty.aggregate.num_fields = num_var_decls;
-  var_ty.aggregate.fields = aralloc(
-      tchk->arena, sizeof(*var_ty.aggregate.fields) * num_var_decls);
+  var_ty.aggregate.fields =
+      aralloc(tchk->arena, sizeof(*var_ty.aggregate.fields) * num_var_decls);
 
   for (size_t i = 0; i < num_var_decls; i++) {
     struct td_var_declaration *var_decl = vector_get(var_decls, i);
@@ -1467,8 +1472,8 @@ type_array_declarator(struct typechk *tchk, struct td_var_ty var_ty,
 
     struct td_var_ty pointer_ty = {
         .ty = TD_VAR_TY_TY_POINTER,
-        .pointer = {.underlying = aralloc(
-                        tchk->arena, sizeof(*array_ty.array.underlying))}};
+        .pointer = {.underlying = aralloc(tchk->arena,
+                                          sizeof(*array_ty.array.underlying))}};
     *pointer_ty.pointer.underlying = var_ty;
 
     return pointer_ty;
@@ -1750,9 +1755,8 @@ td_var_ty_for_typedef(struct typechk *tchk,
         tchk->diagnostics,
         MK_SEMANTIC_DIAGNOSTIC(
             BAD_TYPEDEF, bad_typedef, identifier->span, MK_INVALID_TEXT_POS(0),
-            aralloc_snprintf(tchk->arena,
-                                 "typedef name '%.*s' does not exist",
-                                 (int)name.len, name.str)));
+            aralloc_snprintf(tchk->arena, "typedef name '%.*s' does not exist",
+                             (int)name.len, name.str)));
     return TD_VAR_TY_UNKNOWN;
   }
 
@@ -1943,11 +1947,11 @@ type_attr_format(struct typechk *tchk, const struct ast_attribute *attribute) {
     tchk->result_ty = TYPECHK_RESULT_TY_FAILURE;
     compiler_diagnostics_add(
         tchk->diagnostics,
-        MK_SEMANTIC_DIAGNOSTIC(
-            BAD_PARAM_COUNT, bad_param_count, attribute->span,
-            MK_INVALID_TEXT_POS(0),
-            aralloc_snprintf(tchk->arena, "expected 3 params, found %zu",
-                                 attribute->num_params)));
+        MK_SEMANTIC_DIAGNOSTIC(BAD_PARAM_COUNT, bad_param_count,
+                               attribute->span, MK_INVALID_TEXT_POS(0),
+                               aralloc_snprintf(tchk->arena,
+                                                "expected 3 params, found %zu",
+                                                attribute->num_params)));
 
     return (struct td_attr_format){0};
   }
@@ -2049,8 +2053,8 @@ static void type_attribute_list(struct typechk *tchk,
                 UNRECOGNISED_ATTR, unrecognised_attr, attr->span,
                 MK_INVALID_TEXT_POS(0),
                 aralloc_snprintf(tchk->arena,
-                                     "unrecognised attribute '%.*s' ignored",
-                                     (int)name.len, name.str)));
+                                 "unrecognised attribute '%.*s' ignored",
+                                 (int)name.len, name.str)));
       }
       break;
     }
@@ -2586,8 +2590,8 @@ static struct td_var_ty type_type_name(struct typechk *tchk,
 static struct td_arglist type_arglist(struct typechk *tchk,
                                       const struct ast_arglist *arg_list) {
   struct td_arglist td_arg_list = (struct td_arglist){
-      .args = aralloc(tchk->arena,
-                          sizeof(*td_arg_list.args) * arg_list->num_args),
+      .args =
+          aralloc(tchk->arena, sizeof(*td_arg_list.args) * arg_list->num_args),
       .num_args = arg_list->num_args};
 
   for (size_t i = 0; i < arg_list->num_args; i++) {
@@ -2903,9 +2907,9 @@ static struct printf_args parse_printf_format(struct typechk *tchk,
 
 static struct td_expr type_call(struct typechk *tchk,
                                 const struct ast_call *call) {
-  struct td_call td_call = {
-      .target = aralloc(tchk->arena, sizeof(*td_call.target)),
-      .arg_list = type_arglist(tchk, &call->arg_list)};
+  struct td_call td_call = {.target =
+                                aralloc(tchk->arena, sizeof(*td_call.target)),
+                            .arg_list = type_arglist(tchk, &call->arg_list)};
 
   *td_call.target = type_expr(tchk, TYPE_EXPR_FLAGS_NONE, call->target);
 
@@ -2925,8 +2929,8 @@ static struct td_expr type_call(struct typechk *tchk,
             FN_NOT_CALLABLE, fn_not_callable, call->span,
             MK_INVALID_TEXT_POS(0),
             aralloc_snprintf(tchk->arena,
-                                 "can't call non func expression with ty '%s'",
-                                 tchk_type_name(tchk, &target_var_ty))));
+                             "can't call non func expression with ty '%s'",
+                             tchk_type_name(tchk, &target_var_ty))));
 
     return (struct td_expr){
         .ty = TD_EXPR_TY_CALL, .var_ty = TD_VAR_TY_UNKNOWN, .call = td_call};
@@ -3255,10 +3259,10 @@ static struct td_expr type_call(struct typechk *tchk,
                   MK_SEMANTIC_DIAGNOSTIC(
                       BAD_PRINTF_ARGS, bad_printf_args, span, span.end,
                       aralloc_snprintf(tchk->arena,
-                                           "printf specifier expects type '%s' "
-                                           "but type '%s' was provided",
-                                           tchk_type_name(tchk, &exp_ty),
-                                           tchk_type_name(tchk, arg_ty))));
+                                       "printf specifier expects type '%s' "
+                                       "but type '%s' was provided",
+                                       tchk_type_name(tchk, &exp_ty),
+                                       tchk_type_name(tchk, arg_ty))));
             }
 
             arg_idx += num_spec_args;
@@ -3417,9 +3421,9 @@ static struct td_expr type_unary_op(struct typechk *tchk,
           MK_SEMANTIC_DIAGNOSTIC(
               CAST, cast, expr.span, MK_INVALID_TEXT_POS(0),
               aralloc_snprintf(tchk->arena,
-                                   "cast is not legal (from '%s' to '%s')",
-                                   tchk_type_name(tchk, &expr.var_ty),
-                                   tchk_type_name(tchk, &target_ty))));
+                               "cast is not legal (from '%s' to '%s')",
+                               tchk_type_name(tchk, &expr.var_ty),
+                               tchk_type_name(tchk, &target_ty))));
 
       return expr;
     }
@@ -3725,10 +3729,10 @@ static struct td_var_ty get_completed_aggregate(struct typechk *tchk,
   if (!try_get_completed_aggregate(tchk, var_ty, &complete)) {
     // TODO: need to allow extern / tentative decls here
 
-    char *msg = aralloc_snprintf(
-        tchk->arena, "incomplete type '%.*s' cannot be used here",
-        (int)var_ty->incomplete_aggregate.name.len,
-        var_ty->incomplete_aggregate.name.str);
+    char *msg = aralloc_snprintf(tchk->arena,
+                                 "incomplete type '%.*s' cannot be used here",
+                                 (int)var_ty->incomplete_aggregate.name.len,
+                                 var_ty->incomplete_aggregate.name.str);
 
     tchk->result_ty = TYPECHK_RESULT_TY_FAILURE;
     compiler_diagnostics_add(
@@ -3862,9 +3866,9 @@ type_memberaccess(struct typechk *tchk, enum type_expr_flags flags,
       !(flags & TYPE_EXPR_FLAGS_ARRAYS_DONT_DECAY)) {
     // array member access
     // decay this to addressof
-    struct td_unary_op addr = {
-        .ty = TD_UNARY_OP_TY_ADDRESSOF,
-        .expr = aralloc(tchk->arena, sizeof(*addr.expr))};
+    struct td_unary_op addr = {.ty = TD_UNARY_OP_TY_ADDRESSOF,
+                               .expr =
+                                   aralloc(tchk->arena, sizeof(*addr.expr))};
 
     *addr.expr = expr;
 
@@ -3933,9 +3937,9 @@ type_pointeraccess(struct typechk *tchk, enum type_expr_flags flags,
       !(flags & TYPE_EXPR_FLAGS_ARRAYS_DONT_DECAY)) {
     // array member access
     // decay this to addressof
-    struct td_unary_op addr = {
-        .ty = TD_UNARY_OP_TY_ADDRESSOF,
-        .expr = aralloc(tchk->arena, sizeof(*addr.expr))};
+    struct td_unary_op addr = {.ty = TD_UNARY_OP_TY_ADDRESSOF,
+                               .expr =
+                                   aralloc(tchk->arena, sizeof(*addr.expr))};
 
     *addr.expr = expr;
 
@@ -4234,7 +4238,7 @@ type_compoundexpr(struct typechk *tchk, enum type_expr_flags flags,
   struct td_compoundexpr td_compoundexpr = {
       .num_exprs = compoundexpr->num_exprs,
       .exprs = aralloc(tchk->arena, sizeof(*td_compoundexpr.exprs) *
-                                            compoundexpr->num_exprs)};
+                                        compoundexpr->num_exprs)};
 
   for (size_t i = 0; i < compoundexpr->num_exprs; i++) {
     td_compoundexpr.exprs[i] = type_expr(tchk, flags, &compoundexpr->exprs[i]);
@@ -5350,8 +5354,7 @@ type_static_init_expr(struct typechk *tchk, struct td_expr expr,
         .var_ty = expr.var_ty,
         .pointer_access =
             (struct td_pointeraccess){
-                .lhs =
-                    aralloc(tchk->arena, sizeof(*res.pointer_access.lhs)),
+                .lhs = aralloc(tchk->arena, sizeof(*res.pointer_access.lhs)),
                 .member = expr.pointer_access.member,
             },
         .span = expr.span,
@@ -5426,10 +5429,10 @@ type_static_init_expr(struct typechk *tchk, struct td_expr expr,
       struct td_expr addr = {
           .ty = TD_EXPR_TY_UNARY_OP,
           .var_ty = expr.var_ty,
-          .unary_op = (struct td_unary_op){.ty = TD_UNARY_OP_TY_ADDRESSOF,
-                                           .expr = aralloc(
-                                               tchk->arena,
-                                               sizeof(*addr.unary_op.expr))},
+          .unary_op =
+              (struct td_unary_op){
+                  .ty = TD_UNARY_OP_TY_ADDRESSOF,
+                  .expr = aralloc(tchk->arena, sizeof(*addr.unary_op.expr))},
           .span = expr.span,
       };
 
@@ -5889,7 +5892,7 @@ type_compoundstmt(struct typechk *tchk,
   struct td_compoundstmt td_cmpd = {
       .num_stmts = compound_stmt->num_stmts,
       .stmts = aralloc(tchk->arena,
-                           sizeof(*td_cmpd.stmts) * compound_stmt->num_stmts)};
+                       sizeof(*td_cmpd.stmts) * compound_stmt->num_stmts)};
 
   for (size_t i = 0; i < compound_stmt->num_stmts; i++) {
     td_cmpd.stmts[i] = type_stmt(tchk, &compound_stmt->stmts[i]);
@@ -6035,7 +6038,7 @@ type_designator_list(struct typechk *tchk, const struct td_var_ty *var_ty,
       .num_designators = designator_list->num_designators,
       .designators =
           aralloc(tchk->arena, sizeof(*td_designator_list.designators) *
-                                       designator_list->num_designators)};
+                                   designator_list->num_designators)};
 
   struct td_var_ty cur_var_ty = *var_ty;
 
@@ -6382,10 +6385,10 @@ static struct td_init type_init(struct typechk *tchk, struct text_span context,
               tchk->diagnostics,
               MK_SEMANTIC_DIAGNOSTIC(
                   CAST, cast, context, MK_INVALID_TEXT_POS(0),
-                  aralloc_snprintf(
-                      tchk->arena, "cast is not legal (from '%s' to '%s')",
-                      tchk_type_name(tchk, &td_init.expr.var_ty),
-                      tchk_type_name(tchk, var_ty))));
+                  aralloc_snprintf(tchk->arena,
+                                   "cast is not legal (from '%s' to '%s')",
+                                   tchk_type_name(tchk, &td_init.expr.var_ty),
+                                   tchk_type_name(tchk, var_ty))));
         }
 
         break;
@@ -6536,7 +6539,7 @@ static struct td_declaration type_init_declarator_list(
       .num_var_declarations = declarator_list->num_init_declarators,
       .var_declarations =
           aralloc(tchk->arena, sizeof(*td_declaration.var_declarations) *
-                                       declarator_list->num_init_declarators),
+                                   declarator_list->num_init_declarators),
       .span = declarator_list->span};
 
   for (size_t i = 0; i < declarator_list->num_init_declarators; i++) {
@@ -6630,6 +6633,8 @@ tchk_builtin_ty_spec(struct typechk *tchk,
     break;
   case BUILTIN_TYPE_SPEC_TY_VA_LIST:
     return *tchk->target->variadic_info.va_list_var_ty;
+  case BUILTIN_TYPE_SPEC_TY_SIZE_T:
+    return td_var_ty_pointer_sized_int(tchk, false);
   case BUILTIN_TYPE_SPEC_TY_TD_VAR_TY:
     return *ty_spec->td_var_ty;
   }
@@ -6642,11 +6647,11 @@ static void tchk_add_builtin_fn(struct typechk *tchk, ustr_t name,
   struct td_var_ty builtin_fn_ty = {
       .ty = TD_VAR_TY_TY_FUNC,
       .func = {.ty = TD_TY_FUNC_TY_KNOWN_ARGS,
-               .ret = aralloc_init(tchk->arena,
-                                       sizeof(*builtin_fn_ty.func.ret), &ret),
+               .ret = aralloc_init(tchk->arena, sizeof(*builtin_fn_ty.func.ret),
+                                   &ret),
                .params =
-                   aralloc(tchk->arena, sizeof(*builtin_fn_ty.func.params) *
-                                                fn->num_params),
+                   aralloc(tchk->arena,
+                           sizeof(*builtin_fn_ty.func.params) * fn->num_params),
                .num_params = fn->num_params}};
 
   for (size_t i = 0; i < fn->num_params; i++) {
@@ -6687,15 +6692,15 @@ typechk_create(const struct target *target, const struct compile_args *args,
   struct var_table_entry *entry = vt_create_entry(
       &t->ty_table, VAR_TABLE_NS_TYPEDEF, MK_USTR("__builtin_va_list"));
 
-  entry->var = aralloc_init(
-      t->arena, sizeof(*entry->var),
-      &(struct td_var){.ty = TD_VAR_VAR_TY_VAR,
-                       .identifier = MK_USTR("__builtin_va_list"),
-                       .scope = SCOPE_GLOBAL,
-                       .span = MK_INVALID_TEXT_SPAN2()});
+  entry->var =
+      aralloc_init(t->arena, sizeof(*entry->var),
+                   &(struct td_var){.ty = TD_VAR_VAR_TY_VAR,
+                                    .identifier = MK_USTR("__builtin_va_list"),
+                                    .scope = SCOPE_GLOBAL,
+                                    .span = MK_INVALID_TEXT_SPAN2()});
 
   entry->var_ty = aralloc_init(t->arena, sizeof(*entry->var_ty),
-                                   target->variadic_info.va_list_var_ty);
+                               target->variadic_info.va_list_var_ty);
 
 #define BUILTIN_TY(...)
 #define BUILTIN_FN(name, ...)                                                  \
@@ -6744,7 +6749,7 @@ static void type_staticassert(struct typechk *tchk,
 
     struct ast_cnst_str cnst = staticassert->message->cnst.str_value;
     message = aralloc_snprintf(tchk->arena, "static_assert failed: %.*s",
-                                   (int)cnst.ascii.len, cnst.ascii.value);
+                               (int)cnst.ascii.len, cnst.ascii.value);
   } else {
     message = "static_assert failed";
   }

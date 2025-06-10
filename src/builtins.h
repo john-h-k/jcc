@@ -10,6 +10,7 @@
 
 enum builtin_type_spec_ty {
   BUILTIN_TYPE_SPEC_TY_ANY,
+  BUILTIN_TYPE_SPEC_TY_SIZE_T,
   BUILTIN_TYPE_SPEC_TY_BUILTIN,
   BUILTIN_TYPE_SPEC_TY_VA_LIST,
   BUILTIN_TYPE_SPEC_TY_TD_VAR_TY,
@@ -39,7 +40,11 @@ struct builtin_fn_spec {
 #define BUILTIN_TYPE_SPEC_ANY                                                  \
   ((struct builtin_type_spec){.ty = BUILTIN_TYPE_SPEC_TY_ANY})
 
+#define BUILTIN_TYPE_SPEC_SIZE_T                                               \
+  ((struct builtin_type_spec){.ty = BUILTIN_TYPE_SPEC_TY_SIZE_T})
+
 #define ARR_LIT(...) __VA_ARGS__
+#define NO_ARGS {0}
 
 #define BUILTINS_LIST                                                          \
                                                                                \
@@ -96,6 +101,34 @@ struct builtin_fn_spec {
       BUILTIN_TYPE_SPEC_TD_VAR_TY(&TD_VAR_TY_WELL_KNOWN_SIGNED_LONG_LONG), 1,  \
       ARR_LIT({BUILTIN_TYPE_SPEC_TD_VAR_TY(                                    \
           &TD_VAR_TY_WELL_KNOWN_SIGNED_LONG_LONG)}))                           \
+                                                                               \
+  BUILTIN_FN(unreachable, BUILTIN_TYPE_SPEC_TD_VAR_TY(&TD_VAR_TY_VOID), 0,     \
+             NO_ARGS)                                                          \
+                                                                               \
+  BUILTIN_FN(                                                                  \
+      memset, BUILTIN_TYPE_SPEC_TD_VAR_TY(&TD_VAR_TY_VOID_POINTER), 3,         \
+      ARR_LIT({BUILTIN_TYPE_SPEC_TD_VAR_TY(&TD_VAR_TY_VOID_POINTER),           \
+               BUILTIN_TYPE_SPEC_TD_VAR_TY(&TD_VAR_TY_WELL_KNOWN_SIGNED_INT),  \
+               BUILTIN_TYPE_SPEC_SIZE_T}))                                     \
+                                                                               \
+  BUILTIN_FN(                                                                  \
+      memcpy, BUILTIN_TYPE_SPEC_TD_VAR_TY(&TD_VAR_TY_VOID_POINTER), 3,         \
+      ARR_LIT({BUILTIN_TYPE_SPEC_TD_VAR_TY(&TD_VAR_TY_VOID_POINTER),           \
+               BUILTIN_TYPE_SPEC_TD_VAR_TY(&TD_VAR_TY_CONST_VOID_POINTER),     \
+               BUILTIN_TYPE_SPEC_SIZE_T}))                                     \
+                                                                               \
+  BUILTIN_FN(                                                                  \
+      memmove, BUILTIN_TYPE_SPEC_TD_VAR_TY(&TD_VAR_TY_VOID_POINTER), 3,        \
+      ARR_LIT({BUILTIN_TYPE_SPEC_TD_VAR_TY(&TD_VAR_TY_VOID_POINTER),           \
+               BUILTIN_TYPE_SPEC_TD_VAR_TY(&TD_VAR_TY_CONST_VOID_POINTER),     \
+               BUILTIN_TYPE_SPEC_SIZE_T}))                                     \
+                                                                               \
+  BUILTIN_FN(                                                                  \
+      memcmp, BUILTIN_TYPE_SPEC_TD_VAR_TY(&TD_VAR_TY_WELL_KNOWN_SIGNED_INT),   \
+      3,                                                                       \
+      ARR_LIT({BUILTIN_TYPE_SPEC_TD_VAR_TY(&TD_VAR_TY_CONST_VOID_POINTER),     \
+               BUILTIN_TYPE_SPEC_TD_VAR_TY(&TD_VAR_TY_CONST_VOID_POINTER),     \
+               BUILTIN_TYPE_SPEC_SIZE_T}))                                     \
                                                                                \
   BUILTIN_FN(                                                                  \
       error, BUILTIN_TYPE_SPEC_TD_VAR_TY(&TD_VAR_TY_VOID), 1,                  \

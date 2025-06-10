@@ -1095,6 +1095,22 @@ bool ir_basicblock_succ_iter_next(struct ir_basicblock_succ_iter *iter,
 struct ir_glb *ir_add_well_known_global(struct ir_unit *iru,
                                         enum ir_well_known_glb glb);
 
+struct ir_op *ir_mk_wk_memmove(struct ir_func *func, struct ir_op *op,
+                               struct ir_op *dest, struct ir_op *source,
+                               struct ir_op *len);
+
+struct ir_op *ir_mk_wk_memcpy(struct ir_func *func, struct ir_op *op,
+                              struct ir_op *dest, struct ir_op *source,
+                              struct ir_op *len);
+
+struct ir_op *ir_mk_wk_memset(struct ir_func *func, struct ir_op *op,
+                              struct ir_op *dest, struct ir_op *ch,
+                              struct ir_op *len);
+
+struct ir_op *ir_mk_wk_memcmp(struct ir_func *func, struct ir_op *op,
+                              struct ir_op *left, struct ir_op *right,
+                              struct ir_op *len);
+
 enum ir_op_use_ty {
   IR_OP_USE_TY_READ,
   IR_OP_USE_TY_DEREF, // e.g `store.addr [%1], ...`

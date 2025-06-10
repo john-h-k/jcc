@@ -1187,8 +1187,7 @@ static void ir_prune_globals_walk_var_value(struct ir_unit *iru, bool *seen,
 }
 
 void ir_prune_globals(struct ir_unit *iru) {
-  bool *seen = aralloc(iru->arena, sizeof(*seen) * iru->glb_count);
-  memset(seen, 0, sizeof(*seen) * iru->glb_count);
+  bool *seen = arzalloc(iru->arena, sizeof(*seen) * iru->glb_count);
 
   struct ir_glb *glb = iru->first_global;
 
@@ -2577,6 +2576,177 @@ struct ir_glb *ir_add_well_known_global(struct ir_unit *iru,
   }
 }
 
+#define DEBUG_ASSERT_VAR_TY(lhs, var_ty)                                       \
+  do {                                                                         \
+    struct ir_var_ty l = (lhs);                                                \
+    struct ir_var_ty r = (var_ty);                                             \
+    DEBUG_ASSERT(ir_var_ty_eq(&l, &r), "unexpected var_ty!");                  \
+  } while (0)
+
+struct ir_op *ir_mk_wk_memmove(struct ir_func *func, struct ir_op *op,
+                               struct ir_op *dest, struct ir_op *source,
+                               struct ir_op *len) {
+  DEBUG_ASSERT_VAR_TY(dest->var_ty, IR_VAR_TY_POINTER);
+  DEBUG_ASSERT_VAR_TY(source->var_ty, IR_VAR_TY_POINTER);
+  DEBUG_ASSERT_VAR_TY(len->var_ty, ir_var_ty_for_pointer_size(func->unit));
+
+  struct ir_glb *glb =
+      ir_add_well_known_global(func->unit, IR_WELL_KNOWN_GLB_MEMMOVE);
+
+  struct ir_var_ty ptr_int = ir_var_ty_for_pointer_size(func->unit);
+  struct ir_op *memmove_addr =
+      ir_insert_before_op(func, op, IR_OP_TY_ADDR, ptr_int);
+
+  memmove_addr->flags |= IR_OP_FLAG_CONTAINED;
+  memmove_addr->addr = (struct ir_op_addr){
+      .ty = IR_OP_ADDR_TY_GLB,
+      .glb = glb,
+  };
+
+  size_t num_args = 3;
+  struct ir_op **args = aralloc(func->arena, sizeof(struct ir_op *) * num_args);
+
+  args[0] = dest;
+  args[1] = source;
+  args[2] = len;
+
+  func->flags |= IR_FUNC_FLAG_MAKES_CALL;
+  op->ty = IR_OP_TY_CALL;
+
+  op->var_ty = *glb->var_ty.func.ret_ty;
+  op->call = (struct ir_op_call){
+      .target = memmove_addr,
+      .num_args = num_args,
+      .args = args,
+      .func_ty = glb->var_ty,
+  };
+
+  return op;
+}
+
+struct ir_op *ir_mk_wk_memcpy(struct ir_func *func, struct ir_op *op,
+                              struct ir_op *dest, struct ir_op *source,
+                              struct ir_op *len) {
+  DEBUG_ASSERT_VAR_TY(dest->var_ty, IR_VAR_TY_POINTER);
+  DEBUG_ASSERT_VAR_TY(source->var_ty, IR_VAR_TY_POINTER);
+  DEBUG_ASSERT_VAR_TY(len->var_ty, ir_var_ty_for_pointer_size(func->unit));
+
+  struct ir_glb *glb =
+      ir_add_well_known_global(func->unit, IR_WELL_KNOWN_GLB_MEMCPY);
+
+  struct ir_var_ty ptr_int = ir_var_ty_for_pointer_size(func->unit);
+  struct ir_op *memcpy_addr =
+      ir_insert_before_op(func, op, IR_OP_TY_ADDR, ptr_int);
+
+  memcpy_addr->flags |= IR_OP_FLAG_CONTAINED;
+  memcpy_addr->addr = (struct ir_op_addr){
+      .ty = IR_OP_ADDR_TY_GLB,
+      .glb = glb,
+  };
+
+  size_t num_args = 3;
+  struct ir_op **args = aralloc(func->arena, sizeof(struct ir_op *) * num_args);
+
+  args[0] = dest;
+  args[1] = source;
+  args[2] = len;
+
+  func->flags |= IR_FUNC_FLAG_MAKES_CALL;
+  op->ty = IR_OP_TY_CALL;
+
+  op->var_ty = *glb->var_ty.func.ret_ty;
+  op->call = (struct ir_op_call){
+      .target = memcpy_addr,
+      .num_args = num_args,
+      .args = args,
+      .func_ty = glb->var_ty,
+  };
+
+  return op;
+}
+
+struct ir_op *ir_mk_wk_memset(struct ir_func *func, struct ir_op *op,
+                              struct ir_op *dest, struct ir_op *ch,
+                              struct ir_op *len) {
+  DEBUG_ASSERT_VAR_TY(dest->var_ty, IR_VAR_TY_POINTER);
+  DEBUG_ASSERT_VAR_TY(ch->var_ty, IR_VAR_TY_I32);
+  DEBUG_ASSERT_VAR_TY(len->var_ty, ir_var_ty_for_pointer_size(func->unit));
+
+  struct ir_glb *glb =
+      ir_add_well_known_global(func->unit, IR_WELL_KNOWN_GLB_MEMSET);
+
+  struct ir_var_ty ptr_int = ir_var_ty_for_pointer_size(func->unit);
+  struct ir_op *memset_addr =
+      ir_insert_before_op(func, op, IR_OP_TY_ADDR, ptr_int);
+
+  memset_addr->flags |= IR_OP_FLAG_CONTAINED;
+  memset_addr->addr = (struct ir_op_addr){
+      .ty = IR_OP_ADDR_TY_GLB,
+      .glb = glb,
+  };
+
+  size_t num_args = 3;
+  struct ir_op **args = aralloc(func->arena, sizeof(struct ir_op *) * num_args);
+
+  args[0] = dest;
+  args[1] = ch;
+  args[2] = len;
+
+  func->flags |= IR_FUNC_FLAG_MAKES_CALL;
+  op->ty = IR_OP_TY_CALL;
+
+  op->var_ty = *glb->var_ty.func.ret_ty;
+  op->call = (struct ir_op_call){
+      .target = memset_addr,
+      .num_args = num_args,
+      .args = args,
+      .func_ty = glb->var_ty,
+  };
+
+  return op;
+}
+
+struct ir_op *ir_mk_wk_memcmp(struct ir_func *func, struct ir_op *op,
+                              struct ir_op *left, struct ir_op *right,
+                              struct ir_op *len) {
+  DEBUG_ASSERT_VAR_TY(left->var_ty, IR_VAR_TY_POINTER);
+  DEBUG_ASSERT_VAR_TY(right->var_ty, IR_VAR_TY_POINTER);
+  DEBUG_ASSERT_VAR_TY(len->var_ty, ir_var_ty_for_pointer_size(func->unit));
+
+  struct ir_glb *glb =
+      ir_add_well_known_global(func->unit, IR_WELL_KNOWN_GLB_MEMCMP);
+
+  struct ir_var_ty ptr_int = ir_var_ty_for_pointer_size(func->unit);
+  struct ir_op *memset_addr =
+      ir_insert_before_op(func, op, IR_OP_TY_ADDR, ptr_int);
+
+  memset_addr->flags |= IR_OP_FLAG_CONTAINED;
+  memset_addr->addr = (struct ir_op_addr){
+      .ty = IR_OP_ADDR_TY_GLB,
+      .glb = glb,
+  };
+
+  size_t num_args = 3;
+  struct ir_op **args = aralloc(func->arena, sizeof(struct ir_op *) * num_args);
+
+  args[0] = left;
+  args[1] = right;
+  args[2] = len;
+
+  func->flags |= IR_FUNC_FLAG_MAKES_CALL;
+  op->ty = IR_OP_TY_CALL;
+
+  op->var_ty = *glb->var_ty.func.ret_ty;
+  op->call = (struct ir_op_call){
+      .target = memset_addr,
+      .num_args = num_args,
+      .args = args,
+      .func_ty = glb->var_ty,
+  };
+
+  return op;
+}
+
 struct ir_glb *ir_add_global(struct ir_unit *iru, enum ir_glb_ty ty,
                              const struct ir_var_ty *var_ty,
                              enum ir_glb_def_ty def_ty, const char *name) {
@@ -3727,6 +3897,7 @@ void ir_alloc_locals(struct ir_func *func) {
     lcl = lcl->succ;
   }
 }
+
 static void ir_alloc_local(struct ir_func *func, struct ir_lcl *lcl) {
   struct ir_var_ty_info ty_info = ir_var_ty_info(func->unit, &lcl->var_ty);
 

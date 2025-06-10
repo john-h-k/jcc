@@ -1,23 +1,58 @@
 #include "var_refs.h"
 
+#include "../hashtbl.h"
 #include "../vector.h"
 
-struct var_refs {
-  struct vector *refs;
+struct var_ref_scope {
+  struct hashtbl *vars;
 };
 
-// static void hash_var_key(struct hasher *hasher, const struct var_key *key) {
-//   hasher_hash_str(hasher, key->name);
-//   hasher_hash_pointer(hasher, key->basicblock);
-//   hasher_hash_integer(hasher, key->scope, sizeof(key->scope));
-// }
+struct var_refs {
+  struct arena_allocator *arena;
+  struct vector *scopes;
+};
 
-struct var_refs *var_refs_create(void) {
-  struct var_refs refs = {.refs = vector_create(sizeof(struct var_ref))};
+static void hash_var_key(struct hasher *hasher, const void *obj) {
+  const struct var_key *key = obj;
 
-  struct var_refs *var_refs = nonnull_malloc(sizeof(*var_refs));
+  hashtbl_hash_ustr(hasher, &key->name);
+  hasher_hash_integer(hasher, key->scope, sizeof(key->scope));
+}
+
+static bool eq_var_key(const void *l, const void *r) {
+  const struct var_key *sl = l;
+  const struct var_key *sr = r;
+
+  if (sl->scope != sr->scope) {
+    return false;
+  }
+
+  return ustr_eq(sl->name, sr->name);
+}
+
+struct var_refs *var_refs_create(struct arena_allocator *arena) {
+  struct var_refs refs = {
+      .arena = arena,
+      .scopes = vector_create_in_arena(sizeof(struct var_ref_scope), arena)};
+
+  var_refs_push_scope(&refs);
+
+  struct var_refs *var_refs = aralloc(arena, sizeof(*var_refs));
   *var_refs = refs;
   return var_refs;
+}
+
+void var_refs_push_scope(struct var_refs *var_refs) {
+  struct var_ref_scope var_ref_scope = {
+      .vars = hashtbl_create_in_arena(var_refs->arena, sizeof(struct var_key),
+                                      sizeof(struct var_ref), hash_var_key,
+                                      eq_var_key)};
+
+  vector_push_back(var_refs->scopes, &var_ref_scope);
+}
+
+void var_refs_pop_scope(struct var_refs *var_refs) {
+  vector_pop(var_refs->scopes);
 }
 
 struct var_ref *var_refs_add(struct var_refs *var_refs,
@@ -25,26 +60,24 @@ struct var_ref *var_refs_add(struct var_refs *var_refs,
   DEBUG_ASSERT(ty == VAR_REF_TY_GLB || key->basicblock,
                "must provide basicblock for non globals!");
 
-  // might be same name and scope as a now-out-of-scope var
-  struct var_ref *prev = var_refs_get(var_refs, key);
-  if (prev) {
-    *prev = (struct var_ref){.key = *key, .ty = ty, .op = NULL};
-    return prev;
-  }
-
   struct var_ref ref = {.key = *key, .ty = ty, .op = NULL};
-  return (struct var_ref *)vector_push_back(var_refs->refs, &ref);
+  struct var_ref_scope *scope = vector_tail(var_refs->scopes);
+
+  // FIXME: `hashtbl_insert` should return data pointer
+  hashtbl_insert(scope->vars, key, &ref);
+  return hashtbl_lookup(scope->vars, key);
 }
 
 // TODO: needs general refactor, old code
-static struct var_ref *var_refs_get_impl(const struct var_refs *var_refs,
-                                         const struct var_key *key,
-                                         bool bb_specific) {
-  size_t num_refs = vector_length(var_refs->refs);
-  for (size_t i = 0; i < num_refs; i++) {
-    struct var_ref *ref = vector_get(var_refs->refs, i);
+struct var_ref *var_refs_get(const struct var_refs *var_refs,
+                             const struct var_key *key) {
+  size_t num_scopes = vector_length(var_refs->scopes);
+  for (size_t i = num_scopes; i; i--) {
+    struct var_ref_scope *scope = vector_get(var_refs->scopes, i - 1);
 
-    if (ref->key.scope != key->scope || !ustr_eq(ref->key.name, key->name)) {
+    struct var_ref *ref = hashtbl_lookup(scope->vars, key);
+
+    if (!ref) {
       continue;
     }
 
@@ -54,8 +87,7 @@ static struct var_ref *var_refs_get_impl(const struct var_refs *var_refs,
     // accessed anywhere
     if (ref->ty == VAR_REF_TY_SSA && ref->key.basicblock == key->basicblock) {
       return ref;
-    } else if ((!bb_specific && ref->ty != VAR_REF_TY_SSA) ||
-               key->basicblock == NULL) {
+    } else if (ref->ty != VAR_REF_TY_SSA || key->basicblock == NULL) {
       return ref;
     }
   }
@@ -63,19 +95,4 @@ static struct var_ref *var_refs_get_impl(const struct var_refs *var_refs,
   return NULL;
 }
 
-struct var_ref *var_refs_get_for_basicblock(const struct var_refs *var_refs,
-                                            const struct var_key *key) {
-  return var_refs_get_impl(var_refs, key, true);
-}
-
-struct var_ref *var_refs_get(const struct var_refs *var_refs,
-                             const struct var_key *key) {
-  return var_refs_get_impl(var_refs, key, false);
-}
-
-void var_refs_free(struct var_refs **var_refs) {
-  vector_free(&(*var_refs)->refs);
-
-  free(*var_refs);
-  *var_refs = NULL;
-}
+void var_refs_free(struct var_refs **var_refs) { *var_refs = NULL; }

@@ -120,6 +120,11 @@ if(NOT DEFINED ARCHITECTURES OR "${ARCHITECTURES}" STREQUAL "")
   )
 endif()
 
+if (DEFINED INTERP)
+  message(STATUS "Enabling interpreter")
+  add_definitions(-DJCC_INTERP)
+endif()
+
 foreach(arch IN LISTS ARCHITECTURES)
   if("${arch}" STREQUAL "aarch64")
     add_definitions(-DJCC_AARCH64)

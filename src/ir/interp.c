@@ -9,6 +9,8 @@
 
 #include <stddef.h>
 
+#if JCC_INTERP
+
 struct ir_interp_glb_data {
   char *data;
   size_t len;
@@ -1819,3 +1821,5 @@ static void ir_exec_op_binary_op(UNUSED struct ir_interp *interp,
     BINOP_INTEGRAL(FLTEQ, <=);
   }
 }
+
+#endif

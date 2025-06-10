@@ -60,6 +60,9 @@ configure() {
         echo "    --enable-arch "
         echo "        Enable architecture"
         echo ""
+        echo "    --enable-interp "
+        echo "        Enable interpreter"
+        echo ""
         echo "    --san [none|address|memory|thread]"
         echo "        Set sanitizer mode - (default: 'address' if debug, else 'none')"
         echo ""
@@ -92,6 +95,7 @@ configure() {
     san=""
     cc=""
     fresh=""
+    interp=()
 
     if [ -z "$generator" ]; then
         generator="$(_get_generator)"
@@ -122,6 +126,10 @@ configure() {
           shift
           [ -z "$archs" ] && archs="$1" || archs="$archs;$1"
           shift
+          ;;
+        --enable-interp)
+          shift
+          interp=(-DINTERP=)
           ;;
         --profile-build)
           profile_build="1"
@@ -234,7 +242,7 @@ configure() {
 
     cd build
 
-    if ! (cmake $fresh -DSANITIZER_TYPE="$san" -DARCHITECTURES="$archs" -DCMAKE_C_COMPILER="$cc" -G "$generator" -DCMAKE_C_FLAGS="$flags" -DCMAKE_BUILD_TYPE=$mode ..); then
+    if ! (cmake $fresh -DSANITIZER_TYPE="$san" "${interp[@]}" -DARCHITECTURES="$archs" -DCMAKE_C_COMPILER="$cc" -G "$generator" -DCMAKE_C_FLAGS="$flags" -DCMAKE_BUILD_TYPE=$mode ..); then
         echo -e "${BOLDRED}Configuring build failed!${RESET}"
         return -1
     fi

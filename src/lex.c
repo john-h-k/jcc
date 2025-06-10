@@ -77,6 +77,7 @@ static void build_keywords(void) {
   KEYWORD_WITH_ALIASES("asm", LEX_TOKEN_TY_KW_ASM);
 
   KEYWORD("__attribute__", LEX_TOKEN_TY_KW_ATTRIBUTE);
+  KEYWORD("__attribute", LEX_TOKEN_TY_KW_ATTRIBUTE);
 
   KEYWORD_WITH_ALIASES_NEW("typeof", LEX_TOKEN_TY_KW_TYPEOF,
                            COMPILE_C_STANDARD_C23);

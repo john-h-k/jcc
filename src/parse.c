@@ -2912,9 +2912,14 @@ static bool parse_declaration(struct parser *parser,
 
   parse_init_declarator_list(parser, &declaration->declarator_list);
 
-  parse_expected_token(parser, LEX_TOKEN_TY_SEMICOLON,
-                       declaration->specifier_list.span.start,
-                       "';' after declaration", NULL);
+  if (declaration->declarator_list.num_init_declarators) {
+    parse_expected_token(parser, LEX_TOKEN_TY_SEMICOLON,
+                         declaration->specifier_list.span.start,
+                         "';' after declaration", NULL);
+  } else if (!parse_token(parser, LEX_TOKEN_TY_SEMICOLON, NULL)) {
+    lex_backtrack(parser->lexer, pos);
+    return false;
+  }
 
   // FIXME: inefficient
   bool is_typedef = false;

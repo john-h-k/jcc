@@ -32,10 +32,10 @@ struct var_ref {
   };
 };
 
-struct var_refs *var_refs_create(void);
+struct var_refs *var_refs_create(struct arena_allocator *arena);
 
-struct var_ref *var_refs_get_for_basicblock(const struct var_refs *var_refs,
-                                            const struct var_key *key);
+void var_refs_push_scope(struct var_refs *var_refs);
+void var_refs_pop_scope(struct var_refs *var_refs);
 
 struct var_ref *var_refs_get(const struct var_refs *var_refs,
                              const struct var_key *key);

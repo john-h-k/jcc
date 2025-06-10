@@ -30,8 +30,8 @@ static bool eq_var_key(const void *l, const void *r) {
   return ustr_eq(sl->identifier, sr->identifier);
 }
 
-static struct var_table_scope *var_table_scope_create(struct var_table *table,
-                                                      int scope) {
+static struct var_table_scope *vt_scope_create(struct var_table *table,
+                                               int scope) {
   struct var_table_scope var_table_scope = {
       .entries = hashtbl_create_in_arena(table->arena, sizeof(struct var_key),
                                          sizeof(struct var_table_entry),
@@ -46,13 +46,13 @@ struct var_table vt_create(struct arena_allocator *arena) {
       .arena = arena,
       .scopes = vector_create_in_arena(sizeof(struct var_table_scope), arena)};
 
-  var_table_scope_create(&var_table, SCOPE_GLOBAL);
+  vt_scope_create(&var_table, SCOPE_GLOBAL);
 
   return var_table;
 }
 
-static struct var_table_entry *add_entry(struct var_table_scope *scope,
-                                         enum var_table_ns ns, ustr_t name) {
+static struct var_table_entry *vt_add_entry(struct var_table_scope *scope,
+                                            enum var_table_ns ns, ustr_t name) {
   struct var_key key = {.identifier = name, .ns = ns};
 
   struct var_table_entry *entry =
@@ -68,14 +68,14 @@ struct var_table_entry *vt_create_entry_at_scope(struct var_table *var_table,
                                                  ustr_t name, size_t scope) {
   struct var_table_scope *tbl = vector_get(var_table->scopes, scope);
 
-  return add_entry(tbl, ns, name);
+  return vt_add_entry(tbl, ns, name);
 }
 
 struct var_table_entry *vt_create_entry(struct var_table *var_table,
                                         enum var_table_ns ns, ustr_t name) {
   struct var_table_scope *last = vector_tail(var_table->scopes);
 
-  return add_entry(last, ns, name);
+  return vt_add_entry(last, ns, name);
 }
 
 void vt_free(UNUSED struct var_table *var_table) {
@@ -91,11 +91,10 @@ int vt_cur_scope(struct var_table *var_table) {
 }
 
 void vt_push_scope(struct var_table *var_table) {
-  var_table_scope_create(var_table, vt_cur_scope(var_table) + 1);
+  vt_scope_create(var_table, vt_cur_scope(var_table) + 1);
 }
 
 void vt_pop_scope(struct var_table *var_table) {
-
   DEBUG_ASSERT(vt_cur_scope(var_table) != SCOPE_GLOBAL,
                "popping global scope is never correct");
 

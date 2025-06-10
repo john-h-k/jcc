@@ -8,7 +8,6 @@
 #include "../var_table.h"
 #include "../vector.h"
 #include "ir.h"
-#include "prettyprint.h"
 #include "var_refs.h"
 
 // break/continues will add an entry into the jumps vector
@@ -1874,6 +1873,42 @@ static struct ir_op *build_ir_for_call(struct ir_func_builder *irb,
           (struct ir_op_unary_op){.ty = IR_OP_UNARY_OP_TY_REV, .value = value};
 
       return popcnt;
+    } else if (ustr_eq(builtin, MK_USTR("__builtin_memset"))) {
+      struct ir_op *dest =
+          build_ir_for_expr(irb, stmt, &call->arg_list.args[0]);
+      struct ir_op *ch = build_ir_for_expr(irb, stmt, &call->arg_list.args[1]);
+      struct ir_op *len = build_ir_for_expr(irb, stmt, &call->arg_list.args[2]);
+
+      struct ir_op *op = ir_alloc_op(irb->func, *stmt);
+      return ir_mk_wk_memset(irb->func, op, dest, ch, len);
+    } else if (ustr_eq(builtin, MK_USTR("__builtin_memmove"))) {
+      struct ir_op *dest =
+          build_ir_for_expr(irb, stmt, &call->arg_list.args[0]);
+      struct ir_op *source =
+          build_ir_for_expr(irb, stmt, &call->arg_list.args[1]);
+      struct ir_op *len = build_ir_for_expr(irb, stmt, &call->arg_list.args[2]);
+
+      struct ir_op *op = ir_alloc_op(irb->func, *stmt);
+      return ir_mk_wk_memmove(irb->func, op, dest, source, len);
+    } else if (ustr_eq(builtin, MK_USTR("__builtin_memcpy"))) {
+      struct ir_op *dest =
+          build_ir_for_expr(irb, stmt, &call->arg_list.args[0]);
+      struct ir_op *source =
+          build_ir_for_expr(irb, stmt, &call->arg_list.args[1]);
+      struct ir_op *len = build_ir_for_expr(irb, stmt, &call->arg_list.args[2]);
+
+      struct ir_op *op = ir_alloc_op(irb->func, *stmt);
+      return ir_mk_wk_memcpy(irb->func, op, dest, source, len);
+    } else if (ustr_eq(builtin, MK_USTR("__builtin_memcmp"))) {
+      struct ir_op *lhs = build_ir_for_expr(irb, stmt, &call->arg_list.args[0]);
+      struct ir_op *rhs = build_ir_for_expr(irb, stmt, &call->arg_list.args[1]);
+      struct ir_op *len = build_ir_for_expr(irb, stmt, &call->arg_list.args[2]);
+
+      struct ir_op *op = ir_alloc_op(irb->func, *stmt);
+      return ir_mk_wk_memcmp(irb->func, op, lhs, rhs, len);
+    } else if (ustr_eq(builtin, MK_USTR("__builtin_unreachable"))) {
+      // TODO: unreachable in IR
+      return NULL;
     } else {
       BUG("unrecognised builtin '%.*s'", (int)builtin.len, builtin.str);
     }
@@ -3726,7 +3761,10 @@ static void gen_var_phis(struct ir_func_builder *irb,
     struct ir_op *op;
 
     struct var_key key = get_var_key(var, basicblock);
-    struct var_ref *ref = var_refs_get_for_basicblock(irb->var_refs, &key);
+    // FIXME: broken
+    // struct var_ref *ref = var_refs_get_for_basicblock(irb->var_refs, &key);
+    TODO("phi gen");
+    struct var_ref *ref;
 
     if (ref) {
       // DEBUG_ASSERT(ref->ty == VAR_REF_TY_SSA,
@@ -3858,7 +3896,6 @@ static void validate_op_tys_callback(struct ir_op **op,
 
   if (ir_op_produces_value(consumer)) {
     if (ir_var_ty_needs_cast_op(metadata->irb, &res_ty, &consumer->var_ty)) {
-      DEBUG_PRINT_IR(metadata->irb->func);
       BUG("op %zu uses op %zu with different type!", consumer->id, (*op)->id);
     }
   }
@@ -3872,7 +3909,7 @@ static struct ir_func *build_ir_for_function(struct ir_unit *unit,
                                              enum ir_build_flags flags) {
   ustr_t ident = def->var_declaration.var.identifier;
 
-  struct var_refs *var_refs = var_refs_create();
+  struct var_refs *var_refs = var_refs_create(unit->arena);
   struct ir_func b = {
       .unit = unit,
       .func_ty =
@@ -3926,7 +3963,7 @@ static struct ir_func *build_ir_for_function(struct ir_unit *unit,
   for (size_t i = 0; i < func_ty.num_params; i++) {
     const struct td_ty_param *param = &func_ty.params[i];
 
-    if (param->var_ty.ty == TD_VAR_TY_TY_VARIADIC || !param->identifier.len) {
+    if (param->var_ty.ty == TD_VAR_TY_TY_VARIADIC) {
       continue;
     }
 
@@ -3943,9 +3980,6 @@ static struct ir_func *build_ir_for_function(struct ir_unit *unit,
 
     if (param_var_ty.ty == IR_VAR_TY_TY_STRUCT ||
         param_var_ty.ty == IR_VAR_TY_TY_UNION) {
-      struct var_ref *ref =
-          var_refs_add(builder->var_refs, &key, VAR_REF_TY_LCL);
-
       // add a local, and let codegen magically fill it with the param
       struct ir_lcl *lcl = ir_add_local(builder->func, &param_var_ty);
       lcl->flags |= IR_LCL_FLAG_PARAM;
@@ -3956,14 +3990,17 @@ static struct ir_func *build_ir_for_function(struct ir_unit *unit,
       addr->flags |= IR_OP_FLAG_PARAM;
       addr->addr = (struct ir_op_addr){.ty = IR_OP_ADDR_TY_LCL, .lcl = lcl};
 
-      ref->lcl = lcl;
+      if (var.identifier.len) {
+        struct var_ref *ref =
+            var_refs_add(builder->var_refs, &key, VAR_REF_TY_LCL);
+
+        ref->lcl = lcl;
+      }
     } else {
       if (param_var_ty.ty == IR_VAR_TY_TY_ARRAY) {
         // arrays/aggregates are actually pointers
         param_var_ty = IR_VAR_TY_POINTER;
       }
-
-      build_ir_var(builder, &param_stmt, &var, &param_var_ty);
 
       struct ir_op *mov = ir_alloc_op(builder->func, param_stmt);
       mov->ty = IR_OP_TY_MOV;
@@ -3971,7 +4008,10 @@ static struct ir_func *build_ir_for_function(struct ir_unit *unit,
       mov->flags |= IR_OP_FLAG_PARAM;
       mov->mov.value = NULL;
 
-      var_assg(builder, after_params, mov, &var);
+      if (var.identifier.len) {
+        build_ir_var(builder, &param_stmt, &var, &param_var_ty);
+        var_assg(builder, after_params, mov, &var);
+      }
     }
   }
 
@@ -4541,7 +4581,8 @@ static struct ir_var_value build_ir_for_var_value_addr(
     struct var_key key = get_var_key(var, NULL);
     struct var_ref *ref = var_refs_get(irb->global_var_refs, &key);
 
-    DEBUG_ASSERT(ref, "var did not exist");
+    DEBUG_ASSERT(ref, "var '%.*s' (scope=%d) did not exist",
+                 USTR_SPEC(key.name), key.scope);
     DEBUG_ASSERT(ref->ty == VAR_REF_TY_GLB, "wasn't global");
 
     size_t offset_cnst = 0;
@@ -4878,7 +4919,7 @@ build_ir_for_translationunit(const struct target *target, struct typechk *tchk,
                           .last_global = NULL,
                           .glb_count = 0};
 
-  struct var_refs *global_var_refs = var_refs_create();
+  struct var_refs *global_var_refs = var_refs_create(iru->arena);
   // funcs do not necessarily have a seperate decl so we do it for defs too
 
   for (size_t i = 0; i < translation_unit->num_external_declarations; i++) {
