@@ -169,14 +169,14 @@ struct type_definition_textdoc_params {
 
 #define DE_FAIL(...) BUG(__VA_ARGS__)
 
-#define TRY_DE_OBJECT(from, to, ...)                                           \
+#define TRY_DE_OBJECT(from, to)                                                \
   do {                                                                         \
     if ((from)->ty != JSON_VALUE_TY_OBJECT) {                                  \
       DE_FAIL("expected object but found %s", json_value_ty_name((from)->ty)); \
       return false;                                                            \
     }                                                                          \
                                                                                \
-    (to) = __VA_ARGS__(from)->obj_val;                                         \
+    (to) = &(from)->obj_val;                                                   \
   } while (0)
 
 #define TRY_DE_INT(from, to)                                                   \
@@ -374,7 +374,7 @@ struct type_definition_textdoc_params {
     }                                                                          \
                                                                                \
     const struct json_array *arr = &val->arr_val;                              \
-    char *arr_vals = aralloc(ctx->arena, sizeof(*name) * arr->num_values); \
+    char *arr_vals = aralloc(ctx->arena, sizeof(*name) * arr->num_values);     \
     for (size_t i = 0; i < arr->num_values; i++) {                             \
       TRY_DE_##de_ty(&arr->values[i], (void *)&arr_vals[i * sizeof(*name)],    \
                      __VA_ARGS__);                                             \

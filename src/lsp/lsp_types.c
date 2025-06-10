@@ -15,7 +15,7 @@ TRY_DE_STRUCT(text_pos, pos) {
   *pos = (struct text_pos){0};
 
   const struct json_object *object;
-  TRY_DE_OBJECT(value, object, &);
+  TRY_DE_OBJECT(value, object);
 
   TRY_DE_UINT_FIELD(object, pos->line, "line", true);
   TRY_DE_UINT_FIELD(object, pos->col, "character", true);
@@ -29,7 +29,7 @@ TRY_DE_STRUCT(text_span, span) {
   *span = (struct text_span){0};
 
   const struct json_object *object;
-  TRY_DE_OBJECT(value, object, &);
+  TRY_DE_OBJECT(value, object);
 
   TRY_DE_TYPE_FIELD(object, text_pos, span->start, "start", true);
   TRY_DE_TYPE_FIELD(object, text_pos, span->end, "end", true);
@@ -41,7 +41,7 @@ TRY_DE_STRUCT(definition_textdoc_params, params) {
   *params = (struct definition_textdoc_params){0};
 
   const struct json_object *object;
-  TRY_DE_OBJECT(value, object, &);
+  TRY_DE_OBJECT(value, object);
 
   const struct json_object *doc;
   TRY_DE_OBJECT_FIELD(object, doc, "textDocument", true);
@@ -56,7 +56,7 @@ TRY_DE_STRUCT(type_definition_textdoc_params, params) {
   *params = (struct type_definition_textdoc_params){0};
 
   const struct json_object *object;
-  TRY_DE_OBJECT(value, object, &);
+  TRY_DE_OBJECT(value, object);
 
   const struct json_object *doc;
   TRY_DE_OBJECT_FIELD(object, doc, "textDocument", true);
@@ -71,7 +71,7 @@ TRY_DE_STRUCT(text_doc_change_ev, ev) {
   *ev = (struct text_doc_change_ev){0};
 
   const struct json_object *object;
-  TRY_DE_OBJECT(value, object, &);
+  TRY_DE_OBJECT(value, object);
 
   TRY_DE_STR_FIELD(object, ev->text, "text", true);
 
@@ -91,7 +91,7 @@ TRY_DE_STRUCT(didchange_textdoc_params, params) {
   *params = (struct didchange_textdoc_params){0};
 
   const struct json_object *object;
-  TRY_DE_OBJECT(value, object, &);
+  TRY_DE_OBJECT(value, object);
 
   const struct json_object *doc;
   TRY_DE_OBJECT_FIELD(object, doc, "textDocument", true);
@@ -109,7 +109,7 @@ TRY_DE_STRUCT(didopen_textdoc_params, params) {
   *params = (struct didopen_textdoc_params){0};
 
   const struct json_object *object;
-  TRY_DE_OBJECT(value, object, &);
+  TRY_DE_OBJECT(value, object);
 
   const struct json_object *doc;
   TRY_DE_OBJECT_FIELD(object, doc, "textDocument", true);
@@ -126,7 +126,7 @@ TRY_DE_STRUCT(didclose_textdoc_params, params) {
   *params = (struct didclose_textdoc_params){0};
 
   const struct json_object *object;
-  TRY_DE_OBJECT(value, object, &);
+  TRY_DE_OBJECT(value, object);
 
   const struct json_object *doc;
   TRY_DE_OBJECT_FIELD(object, doc, "textDocument", true);
@@ -156,7 +156,7 @@ TRY_DE_STRUCT(pub_diagnostics_caps, caps) {
   *caps = (struct pub_diagnostics_caps){0};
 
   const struct json_object *object;
-  TRY_DE_OBJECT(value, object, &);
+  TRY_DE_OBJECT(value, object);
 
   const struct json_object *tag_support;
   TRY_DE_OBJECT_FIELD(object, tag_support, "tagSupport", false);
@@ -180,7 +180,7 @@ TRY_DE_STRUCT(definition_caps, caps) {
   *caps = (struct definition_caps){0};
 
   const struct json_object *object;
-  TRY_DE_OBJECT(value, object, &);
+  TRY_DE_OBJECT(value, object);
 
   TRY_DE_BOOL_FIELD(object, caps->dynamic_registration, "dynamicRegistration",
                     false);
@@ -193,7 +193,7 @@ TRY_DE_STRUCT(type_definition_caps, caps) {
   *caps = (struct type_definition_caps){0};
 
   const struct json_object *object;
-  TRY_DE_OBJECT(value, object, &);
+  TRY_DE_OBJECT(value, object);
 
   TRY_DE_BOOL_FIELD(object, caps->dynamic_registration, "dynamicRegistration",
                     false);
@@ -206,7 +206,7 @@ TRY_DE_STRUCT(text_doc_caps, caps) {
   *caps = (struct text_doc_caps){0};
 
   const struct json_object *object;
-  TRY_DE_OBJECT(value, object, &);
+  TRY_DE_OBJECT(value, object);
 
   TRY_DE_TYPE_FIELD(object, pub_diagnostics_caps, caps->publish_diagnostics,
                     "publishDiagnostics", false);
@@ -222,7 +222,7 @@ TRY_DE_STRUCT(window_caps, caps) {
   *caps = (struct window_caps){0};
 
   const struct json_object *object;
-  TRY_DE_OBJECT(value, object, &);
+  TRY_DE_OBJECT(value, object);
 
   TRY_DE_BOOL_FIELD(object, caps->work_done_progress, "workDoneProgress",
                     false);
@@ -256,7 +256,7 @@ TRY_DE_STRUCT(general_caps, caps) {
   *caps = (struct general_caps){0};
 
   const struct json_object *object;
-  TRY_DE_OBJECT(value, object, &);
+  TRY_DE_OBJECT(value, object);
 
   const struct json_object *stale_req;
   TRY_DE_OBJECT_FIELD(object, stale_req, "staleRequestSupport", false);
@@ -279,7 +279,7 @@ TRY_DE_STRUCT(client_caps, caps) {
   *caps = (struct client_caps){0};
 
   const struct json_object *object;
-  TRY_DE_OBJECT(value, object, &);
+  TRY_DE_OBJECT(value, object);
 
   TRY_DE_TYPE_FIELD(object, text_doc_caps, caps->text_doc_caps, "textDocument",
                     false);
@@ -293,7 +293,7 @@ TRY_DE_STRUCT(init_params, params) {
   *params = (struct init_params){0};
 
   const struct json_object *object;
-  TRY_DE_OBJECT(value, object, &);
+  TRY_DE_OBJECT(value, object);
 
   TRY_DE_INT_FIELD(object, params->process_id, "processId", true);
 
